@@ -1,0 +1,84 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap');
+@import url('https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css');
+
+@import "tailwindcss";
+
+
+@theme {
+  --color-navy:       #071630;
+  --color-navy-mid:   #0c2a5e;
+  --color-navy-lite:  #1a3a6b;
+  --color-ink:        #040e1e;
+  --color-gold:       #d4af37;
+  --color-gold-lt:    #e8c84a;
+  --color-cream:      #f5f0e8;
+  --color-txt-lt:     #e8d9b0;
+  --color-txt-md:     #8aaccf;
+
+  --font-display: 'Cinzel', Georgia, serif;
+  --font-body:    'EB Garamond', Georgia, serif;
+}
+
+@layer base {
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: var(--font-body);
+    background-color: var(--color-cream);
+    color: var(--color-navy);
+    overflow-x: hidden;
+  }
+  a { text-decoration: none; }
+}
+
+@layer utilities {
+  .bg-grid-gold {
+    background-image:
+      linear-gradient(rgba(212,175,55,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(212,175,55,0.04) 1px, transparent 1px);
+    background-size: 60px 60px;
+  }
+  .gold-divider {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .gold-divider span {
+    display: block;
+    width: 56px;
+    height: 1px;
+    background: rgba(212,175,55,0.4);
+  }
+  .gold-divider .diamond {
+    display: block;
+    width: 8px;
+    height: 8px;
+    background: #d4af37;
+    transform: rotate(45deg);
+    flex-shrink: 0;
+  }
+}
+
+@keyframes fadeDown {
+  from { opacity: 0; transform: translateY(-20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulse-cross {
+  0%, 100% { transform: scale(1); }
+  50%       { transform: scale(1.1); }
+}
+
+.animate-fade-down   { animation: fadeDown 0.8s ease both; }
+.animate-fade-up     { animation: fadeUp 0.8s ease both; }
+.animate-pulse-cross { animation: pulse-cross 3s ease-in-out infinite; }
+
+.reveal         { opacity: 0; transform: translateY(28px); transition: opacity 0.7s ease, transform 0.7s ease; }
+.reveal.visible { opacity: 1; transform: translateY(0); }
+
+::-webkit-scrollbar       { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(212,175,55,0.2); border-radius: 4px; }

@@ -27,6 +27,7 @@ export default function MassesPage() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [expanded, setExpanded] = useState<number | null>(null)
+  const [transcribingId, setTranscribingId] = useState<number | null>(null)
 
   const [form, setForm] = useState({
     title: '',
@@ -187,6 +188,34 @@ export default function MassesPage() {
     } catch (err) {
       console.error('Save transcription error:', err)
       alert('Failed to save transcription.')
+    }
+  }
+
+  const runAITranscription = async (id: number) => {
+    if (!confirm('Start AI transcription? This may take several minutes.')) return
+
+    try {
+      setTranscribingId(id)
+
+      const res = await fetch(`http://127.0.0.1:5000/api/masses/${id}/transcribe-ai`, {
+        method: 'POST',
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        alert(data.error || 'AI transcription failed.')
+        return
+      }
+
+      alert('AI transcription completed successfully.')
+      await loadMasses()
+      setExpanded(id)
+    } catch (err) {
+      console.error('AI transcription error:', err)
+      alert('AI transcription failed. Make sure Flask, FFmpeg, and Faster Whisper are working.')
+    } finally {
+      setTranscribingId(null)
     }
   }
 
@@ -436,80 +465,87 @@ export default function MassesPage() {
               </tr>
             ) : (
               filtered.map(m => (
-                <>
-                  <tr key={m.id} className="border-b border-gold/10 last:border-0">
-                    <td className="px-5 py-3">
-                      <p className="font-display text-navy-mid text-[13px] font-semibold">
-                        {m.title}
-                      </p>
-                      <p className="font-body text-[#9ab0c4] text-[11px]">
-                        {m.category || 'No category'} · {m.duration || 'No duration'}
-                      </p>
-                    </td>
+                <tr key={m.id} className="border-b border-gold/10 last:border-0">
+                  <td className="px-5 py-3">
+                    <p className="font-display text-navy-mid text-[13px] font-semibold">
+                      {m.title}
+                    </p>
+                    <p className="font-body text-[#9ab0c4] text-[11px]">
+                      {m.category || 'No category'} · {m.duration || 'No duration'}
+                    </p>
+                  </td>
 
-                    <td className="px-5 py-3 font-body text-[#6b8caa] text-[12px] hidden md:table-cell">
-                      {m.date || 'No date'}
-                    </td>
+                  <td className="px-5 py-3 font-body text-[#6b8caa] text-[12px] hidden md:table-cell">
+                    {m.date || 'No date'}
+                  </td>
 
-                    <td className="px-5 py-3 font-body text-[#6b8caa] text-[12px] hidden lg:table-cell">
-                      {m.priest || 'N/A'}
-                    </td>
+                  <td className="px-5 py-3 font-body text-[#6b8caa] text-[12px] hidden lg:table-cell">
+                    {m.priest || 'N/A'}
+                  </td>
 
-                    <td className="px-5 py-3">
-                      <span className={`font-display text-[10px] tracking-wider border px-2 py-0.5 rounded-full ${
-                        STATUS_STYLE[m.status] || 'bg-white text-[#9ab0c4] border-gold/20'
-                      }`}>
-                        {m.status}
-                      </span>
-                    </td>
+                  <td className="px-5 py-3">
+                    <span className={`font-display text-[10px] tracking-wider border px-2 py-0.5 rounded-full ${
+                      STATUS_STYLE[m.status] || 'bg-white text-[#9ab0c4] border-gold/20'
+                    }`}>
+                      {m.status}
+                    </span>
+                  </td>
 
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-1 flex-wrap">
-                        {m.status !== 'Transcribed' && (
-                          <button
-                            onClick={() =>
-                              updateStatus(
-                                m.id,
-                                m.status === 'Pending' ? 'In Progress' : 'Transcribed'
-                              )
-                            }
-                            className="font-display text-[10px] tracking-wider text-gold border border-gold/30 px-2.5 py-1 rounded-lg bg-gold/5"
-                          >
-                            {m.status === 'Pending' ? 'Start' : 'Mark Done'}
-                          </button>
-                        )}
-
+                  <td className="px-5 py-3">
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {m.status !== 'Transcribed' && (
                         <button
-                          onClick={() => setExpanded(expanded === m.id ? null : m.id)}
-                          className="p-1.5 rounded-lg border border-gold/20 text-gold"
-                          aria-label="View"
+                          onClick={() =>
+                            updateStatus(
+                              m.id,
+                              m.status === 'Pending' ? 'In Progress' : 'Transcribed'
+                            )
+                          }
+                          className="font-display text-[10px] tracking-wider text-gold border border-gold/30 px-2.5 py-1 rounded-lg bg-gold/5"
                         >
-                          <i className={`ti ${expanded === m.id ? 'ti-chevron-up' : 'ti-eye'} text-[14px]`} />
+                          {m.status === 'Pending' ? 'Start' : 'Mark Done'}
                         </button>
+                      )}
 
-                        {m.filepath && (
-                          <a
-                            href={`http://127.0.0.1:5000/files/${m.filepath}`}
-                            target="_blank"
-                            className="p-1.5 rounded-lg border border-gold/20 text-[#6b8caa]"
-                          >
-                            <i className="ti ti-player-play text-[14px]" />
-                          </a>
-                        )}
-
+                      {m.filepath && (
                         <button
-                          onClick={() => deleteMass(m.id)}
-                          className="p-1.5 rounded-lg border border-red-200 text-red-600"
+                          onClick={() => runAITranscription(m.id)}
+                          disabled={transcribingId === m.id}
+                          className="font-display text-[10px] tracking-wider text-gold border border-gold/30 px-2.5 py-1 rounded-lg bg-gold/5 disabled:opacity-50"
                         >
-                          <i className="ti ti-trash text-[14px]" />
+                          {transcribingId === m.id ? 'Transcribing...' : 'AI Transcribe'}
                         </button>
-                      </div>
-                    </td>
-                  </tr>
+                      )}
 
-                  {expanded === m.id && (
-                    <tr>
-                      <td colSpan={5} className="px-5 py-4 bg-gold/5 border-b border-gold/10">
+                      <button
+                        onClick={() => setExpanded(expanded === m.id ? null : m.id)}
+                        className="p-1.5 rounded-lg border border-gold/20 text-gold"
+                        aria-label="View"
+                      >
+                        <i className={`ti ${expanded === m.id ? 'ti-chevron-up' : 'ti-eye'} text-[14px]`} />
+                      </button>
+
+                      {m.filepath && (
+                        <a
+                          href={`http://127.0.0.1:5000/files/${m.filepath}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1.5 rounded-lg border border-gold/20 text-[#6b8caa]"
+                        >
+                          <i className="ti ti-player-play text-[14px]" />
+                        </a>
+                      )}
+
+                      <button
+                        onClick={() => deleteMass(m.id)}
+                        className="p-1.5 rounded-lg border border-red-200 text-red-600"
+                      >
+                        <i className="ti ti-trash text-[14px]" />
+                      </button>
+                    </div>
+
+                    {expanded === m.id && (
+                      <div className="mt-4 bg-gold/5 border border-gold/10 rounded-xl p-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
                             <label className="block font-display text-[10px] tracking-widest uppercase text-[#9ab0c4] mb-1">
@@ -562,10 +598,10 @@ export default function MassesPage() {
                             Save Transcription & Summary
                           </button>
                         </div>
-                      </td>
-                    </tr>
-                  )}
-                </>
+                      </div>
+                    )}
+                  </td>
+                </tr>
               ))
             )}
           </tbody>

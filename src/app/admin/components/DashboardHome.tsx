@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import type { AdminPage } from '../types.ts'
-import { CERT_RECORDS, CERT_ICONS, INCOMING_REQUESTS, MASSES_LIST, STATUS_STYLE } from '../data/mockData'
+import { CERT_ICONS, STATUS_STYLE } from '../data/mockData'
 
 type ArchiveStats = {
   totalRecords: number
@@ -13,14 +13,71 @@ type ArchiveStats = {
   generatedCertificates: number
 }
 
+type CertificateRequest = {
+  id: number
+  requesterName: string
+  sacramentType: string
+  personName: string
+  purpose: string
+  status: string
+  createdAt: string
+}
+
+type MassRecord = {
+  id: number
+  title: string
+  priest: string
+  date: string
+  duration: string
+  status: string
+  category: string
+}
+
+const getDisplayType = (type: string) => {
+  if (type === 'death') return 'Death Certificate'
+  return type.charAt(0).toUpperCase() + type.slice(1)
+}
+
+const getCertIconKey = (type: string) => {
+  if (type === 'death') return 'Death Certificate'
+  return getDisplayType(type)
+}
+
 export default function DashboardHome({ setPage }: { setPage: (p: AdminPage) => void }) {
   const [stats, setStats] = useState<ArchiveStats | null>(null)
+  const [requests, setRequests] = useState<CertificateRequest[]>([])
+  const [masses, setMasses] = useState<MassRecord[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const loadDashboardData = async () => {
+    try {
+      setLoading(true)
+
+      const [statsRes, requestsRes, massesRes] = await Promise.all([
+        fetch('http://127.0.0.1:5000/api/archive/stats'),
+        fetch('http://127.0.0.1:5000/api/requests'),
+        fetch('http://127.0.0.1:5000/api/masses'),
+      ])
+
+      const statsData = statsRes.ok ? await statsRes.json() : null
+      const requestsData = requestsRes.ok ? await requestsRes.json() : { requests: [] }
+      const massesData = massesRes.ok ? await massesRes.json() : { masses: [] }
+
+      setStats(statsData)
+      setRequests(requestsData.requests || [])
+      setMasses(massesData.masses || [])
+    } catch (err) {
+      console.error('Admin dashboard load error:', err)
+      setStats(null)
+      setRequests([])
+      setMasses([])
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    fetch('http://127.0.0.1:5000/api/archive/stats')
-      .then(res => res.json())
-      .then(data => setStats(data))
-      .catch(err => console.error(err))
+    loadDashboardData()
   }, [])
 
   const realStats = [
@@ -50,17 +107,48 @@ export default function DashboardHome({ setPage }: { setPage: (p: AdminPage) => 
     },
   ]
 
+  const latestRequests = requests.slice(0, 4)
+
+  const pendingMasses = masses
+    .filter(m => m.status !== 'Transcribed')
+    .slice(0, 4)
+
+  const archiveCards = [
+    {
+      type: 'Baptismal',
+      count: stats?.baptismal ?? 0,
+      icon: 'ti-droplet',
+    },
+    {
+      type: 'Confirmation',
+      count: stats?.confirmation ?? 0,
+      icon: 'ti-shield-check',
+    },
+    {
+      type: 'Marriage',
+      count: stats?.marriage ?? 0,
+      icon: 'ti-rings',
+    },
+    {
+      type: 'Death Certificate',
+      count: stats?.death ?? 0,
+      icon: 'ti-candle',
+    },
+  ]
+
   return (
     <div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {realStats.map(({ label, value, icon, color }) => (
           <div key={label} className="bg-white border border-gold/20 rounded-xl p-5">
             <div className={`w-9 h-9 rounded-lg border flex items-center justify-center mb-3 ${color}`}>
-              <i className={`ti ${icon} text-[17px]`} aria-hidden="true" />
+              <i className={`ti ${icon} text-[17px]`} />
             </div>
+
             <p className="font-display text-[22px] font-semibold text-navy-mid leading-none mb-1">
               {value}
             </p>
+
             <p className="font-body text-[12px] text-[#6b8caa] leading-tight">
               {label}
             </p>
@@ -74,6 +162,7 @@ export default function DashboardHome({ setPage }: { setPage: (p: AdminPage) => 
             <h3 className="font-display text-navy-mid text-[14px] font-semibold">
               Latest Incoming Requests
             </h3>
+
             <button
               onClick={() => setPage('requests')}
               className="font-display text-[11px] tracking-wider text-gold"
@@ -82,27 +171,55 @@ export default function DashboardHome({ setPage }: { setPage: (p: AdminPage) => 
             </button>
           </div>
 
-          <div className="space-y-3">
-            {INCOMING_REQUESTS.slice(0, 4).map(r => (
-              <div key={r.id} className="flex items-center justify-between py-2 border-b border-gold/10 last:border-0">
-                <div className="flex items-center gap-2">
-                  <i className={`ti ${CERT_ICONS[r.type]} text-gold text-[15px]`} aria-hidden="true" />
-                  <div>
-                    <p className="font-display text-navy-mid text-[12px] font-semibold">
-                      {r.requester}
-                    </p>
-                    <p className="font-body text-[#9ab0c4] text-[11px]">
-                      {r.type} · {r.refNo}
-                    </p>
-                  </div>
-                </div>
+          {loading ? (
+            <p className="font-body text-[#9ab0c4] text-[13px] py-6 text-center">
+              Loading requests...
+            </p>
+          ) : latestRequests.length === 0 ? (
+            <p className="font-body text-[#9ab0c4] text-[13px] py-6 text-center">
+              No incoming requests yet.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {latestRequests.map(r => {
+                const displayType = getDisplayType(r.sacramentType)
+                const iconKey = getCertIconKey(r.sacramentType) as keyof typeof CERT_ICONS
 
-                <span className={`font-display text-[10px] tracking-wider border px-2 py-0.5 rounded-full ${STATUS_STYLE[r.status]}`}>
-                  {r.status}
-                </span>
-              </div>
-            ))}
-          </div>
+                return (
+                  <div
+                    key={r.id}
+                    className="flex items-center justify-between py-2 border-b border-gold/10 last:border-0"
+                  >
+                    <div className="flex items-center gap-2">
+                      <i
+                        className={`ti ${
+                          CERT_ICONS[iconKey] || 'ti-file-certificate'
+                        } text-gold text-[15px]`}
+                      />
+
+                      <div>
+                        <p className="font-display text-navy-mid text-[12px] font-semibold">
+                          {r.requesterName}
+                        </p>
+
+                        <p className="font-body text-[#9ab0c4] text-[11px]">
+                          {displayType} · IFI-REQ-{r.id.toString().padStart(4, '0')}
+                        </p>
+                      </div>
+                    </div>
+
+                    <span
+                      className={`font-display text-[10px] tracking-wider border px-2 py-0.5 rounded-full ${
+                        STATUS_STYLE[r.status] || 'bg-white text-[#9ab0c4] border-gold/20'
+                      }`}
+                    >
+                      {r.status}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         <div className="bg-white border border-gold/20 rounded-xl p-5">
@@ -110,6 +227,7 @@ export default function DashboardHome({ setPage }: { setPage: (p: AdminPage) => 
             <h3 className="font-display text-navy-mid text-[14px] font-semibold">
               Masses Pending Transcription
             </h3>
+
             <button
               onClick={() => setPage('masses')}
               className="font-display text-[11px] tracking-wider text-gold"
@@ -118,44 +236,63 @@ export default function DashboardHome({ setPage }: { setPage: (p: AdminPage) => 
             </button>
           </div>
 
-          <div className="space-y-3">
-            {MASSES_LIST.filter(m => m.status !== 'Transcribed').slice(0, 4).map(m => (
-              <div key={m.id} className="flex items-center justify-between py-2 border-b border-gold/10 last:border-0">
-                <div>
-                  <p className="font-display text-navy-mid text-[12px] font-semibold">
-                    {m.title}
-                  </p>
-                  <p className="font-body text-[#9ab0c4] text-[11px]">
-                    {m.priest} · {m.date}
-                  </p>
-                </div>
+          {loading ? (
+            <p className="font-body text-[#9ab0c4] text-[13px] py-6 text-center">
+              Loading mass records...
+            </p>
+          ) : pendingMasses.length === 0 ? (
+            <p className="font-body text-[#9ab0c4] text-[13px] py-6 text-center">
+              No masses pending transcription.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {pendingMasses.map(m => (
+                <div
+                  key={m.id}
+                  className="flex items-center justify-between py-2 border-b border-gold/10 last:border-0"
+                >
+                  <div>
+                    <p className="font-display text-navy-mid text-[12px] font-semibold">
+                      {m.title}
+                    </p>
 
-                <span className={`font-display text-[10px] tracking-wider border px-2 py-0.5 rounded-full ${STATUS_STYLE[m.status]}`}>
-                  {m.status}
-                </span>
-              </div>
-            ))}
-          </div>
+                    <p className="font-body text-[#9ab0c4] text-[11px]">
+                      {m.priest || 'No priest'} · {m.date || 'No date'}
+                    </p>
+                  </div>
+
+                  <span
+                    className={`font-display text-[10px] tracking-wider border px-2 py-0.5 rounded-full ${
+                      STATUS_STYLE[m.status] || 'bg-white text-[#9ab0c4] border-gold/20'
+                    }`}
+                  >
+                    {m.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
       <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
-        {(Object.keys(CERT_RECORDS) as (keyof typeof CERT_RECORDS)[]).map(type => (
+        {archiveCards.map(card => (
           <button
-            key={type}
+            key={card.type}
             onClick={() => setPage('archives')}
             className="bg-white border border-gold/20 rounded-xl p-4 flex items-center gap-3 text-left"
           >
             <div className="w-9 h-9 rounded-lg bg-gold/10 border border-gold/20 flex items-center justify-center flex-shrink-0">
-              <i className={`ti ${CERT_ICONS[type]} text-gold text-[17px]`} aria-hidden="true" />
+              <i className={`ti ${card.icon} text-gold text-[17px]`} />
             </div>
 
             <div>
               <p className="font-display text-navy-mid text-[11px] font-semibold">
-                {type}
+                {card.type}
               </p>
+
               <p className="font-body text-[#9ab0c4] text-[11px]">
-                {CERT_RECORDS[type].length} records
+                {card.count} records
               </p>
             </div>
           </button>

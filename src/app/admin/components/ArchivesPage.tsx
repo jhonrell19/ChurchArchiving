@@ -48,13 +48,23 @@ export default function ArchivesPage() {
   const [file, setFile] = useState<File | null>(null)
 
   const loadDocuments = async () => {
-    setLoading(true)
+    try {
+      setLoading(true)
 
-    const res = await fetch('http://127.0.0.1:5000/api/archive/documents')
-    const data = await res.json()
+      const res = await fetch('http://127.0.0.1:5000/api/archive/documents')
 
-    setDocuments(data.documents || [])
-    setLoading(false)
+      if (!res.ok) {
+        throw new Error('Failed to load archive documents')
+      }
+
+      const data = await res.json()
+      setDocuments(data.documents || [])
+    } catch (err) {
+      console.error('Archive load error:', err)
+      alert('Cannot load archive records. Make sure Flask is running on port 5000.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {
@@ -86,35 +96,40 @@ export default function ArchivesPage() {
 
     formData.append('file', file)
 
-    const res = await fetch('http://127.0.0.1:5000/api/archive/upload', {
-      method: 'POST',
-      body: formData,
-    })
+    try {
+      const res = await fetch('http://127.0.0.1:5000/api/archive/upload', {
+        method: 'POST',
+        body: formData,
+      })
 
-    const data = await res.json()
+      const data = await res.json()
 
-    if (!res.ok) {
-      alert(data.error || 'Upload failed')
-      return
+      if (!res.ok) {
+        alert(data.error || 'Upload failed')
+        return
+      }
+
+      alert('Record archived successfully')
+
+      setForm({
+        person_name: '',
+        sacrament_type: activeTab,
+        parish: '',
+        priest: '',
+        date_of_record: '',
+        book_number: '',
+        page_number: '',
+        certificate_number: '',
+        document_type: 'Scanned Certificate',
+      })
+
+      setFile(null)
+      setShowForm(false)
+      await loadDocuments()
+    } catch (err) {
+      console.error('Archive upload error:', err)
+      alert('Upload failed. Make sure Flask is running on port 5000.')
     }
-
-    alert('Record archived successfully')
-
-    setForm({
-      person_name: '',
-      sacrament_type: 'baptismal',
-      parish: '',
-      priest: '',
-      date_of_record: '',
-      book_number: '',
-      page_number: '',
-      certificate_number: '',
-      document_type: 'Scanned Certificate',
-    })
-
-    setFile(null)
-    setShowForm(false)
-    loadDocuments()
   }
 
   const records = documents.filter(doc =>
@@ -130,6 +145,9 @@ export default function ArchivesPage() {
   const countByType = (type: string) =>
     documents.filter(doc => doc.sacramentType === type).length
 
+  const activeLabel =
+    ARCHIVE_TYPES.find(type => type.value === activeTab)?.label || 'Archive'
+
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
@@ -138,7 +156,13 @@ export default function ArchivesPage() {
         </h2>
 
         <button
-          onClick={() => setShowForm(!showForm)}
+          onClick={() => {
+            setForm(prev => ({
+              ...prev,
+              sacrament_type: activeTab,
+            }))
+            setShowForm(!showForm)
+          }}
           className="flex items-center gap-1.5 font-display text-[11px] tracking-wider bg-navy text-gold px-4 py-2 rounded-lg"
         >
           <i className="ti ti-plus text-[13px]" />
@@ -316,7 +340,13 @@ export default function ArchivesPage() {
         {ARCHIVE_TYPES.map(type => (
           <button
             key={type.value}
-            onClick={() => setActiveTab(type.value)}
+            onClick={() => {
+              setActiveTab(type.value)
+              setForm(prev => ({
+                ...prev,
+                sacrament_type: type.value,
+              }))
+            }}
             className={`flex items-center gap-2 font-display text-[11px] tracking-wider px-4 py-2 rounded-lg border transition-all ${
               activeTab === type.value
                 ? 'bg-navy text-gold border-navy'
@@ -347,7 +377,7 @@ export default function ArchivesPage() {
         <table className="w-full">
           <thead>
             <tr className="border-b border-gold/10 bg-gold/5">
-              {['Cert No.', 'Name', 'Date', 'Book/Page', 'Priest', 'File', 'Actions'].map(h => (
+              {['No.', 'Certificate No.', 'Name', 'Date', 'Book/Page', 'Priest', 'File', 'Actions'].map(h => (
                 <th
                   key={h}
                   className="font-display text-[10px] tracking-widest uppercase text-[#9ab0c4] text-left px-5 py-3"
@@ -361,21 +391,30 @@ export default function ArchivesPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={7} className="font-body text-[#9ab0c4] text-[13px] text-center py-10">
+                <td colSpan={8} className="font-body text-[#9ab0c4] text-[13px] text-center py-10">
                   Loading archive records...
                 </td>
               </tr>
             ) : records.length === 0 ? (
               <tr>
-                <td colSpan={7} className="font-body text-[#9ab0c4] text-[13px] text-center py-10">
-                  No records found.
+                <td colSpan={8} className="font-body text-[#9ab0c4] text-[13px] text-center py-10">
+                  No {activeLabel.toLowerCase()} records found.
                 </td>
               </tr>
             ) : (
-              records.map(record => (
+              records.map((record, index) => (
                 <tr key={record.id} className="border-b border-gold/10 last:border-0">
+                  <td className="px-5 py-3">
+                    <p className="font-display text-navy-mid text-[12px] font-semibold">
+                      {index + 1}
+                    </p>
+                    <p className="font-body text-[#9ab0c4] text-[10px]">
+                      Archive ID: {record.id}
+                    </p>
+                  </td>
+
                   <td className="px-5 py-3 font-display text-gold text-[11px] tracking-wider">
-                    {record.certificateNumber || `#${record.id}`}
+                    {record.certificateNumber || 'N/A'}
                   </td>
 
                   <td className="px-5 py-3 font-body text-navy-mid text-[13px]">
@@ -403,6 +442,7 @@ export default function ArchivesPage() {
                       <a
                         href={`http://127.0.0.1:5000/files/${record.filepath}`}
                         target="_blank"
+                        rel="noopener noreferrer"
                         className="p-1.5 rounded-lg border border-gold/20 text-gold bg-gold/5"
                       >
                         <i className="ti ti-eye text-[14px]" />
@@ -421,6 +461,14 @@ export default function ArchivesPage() {
             )}
           </tbody>
         </table>
+      </div>
+
+      <div className="mt-4 bg-gold/5 border border-gold/20 rounded-xl p-4">
+        <p className="font-body text-[12px] text-[#4a6a8a] leading-relaxed">
+          <span className="font-display text-navy-mid">Note:</span>{' '}
+          The visible <span className="font-display">No.</span> restarts per selected archive category.
+          The <span className="font-display">Archive ID</span> is the real database primary key and is used when attaching a document to a certificate request.
+        </p>
       </div>
     </div>
   )

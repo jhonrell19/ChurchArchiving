@@ -10,8 +10,6 @@ type ArchiveDocument = {
   parish: string
   priest: string
   dateOfRecord: string
-  bookNumber: string
-  pageNumber: string
   certificateNumber: string
   documentType: string
   filename: string
@@ -39,8 +37,6 @@ export default function ArchivesPage() {
     parish: '',
     priest: '',
     date_of_record: '',
-    book_number: '',
-    page_number: '',
     certificate_number: '',
     document_type: 'Scanned Certificate',
   })
@@ -106,8 +102,8 @@ export default function ArchivesPage() {
       parish: '',
       priest: '',
       date_of_record: '',
-      book_number: '',
-      page_number: '',
+      
+      
       certificate_number: '',
       document_type: 'Scanned Certificate',
     })
@@ -122,7 +118,6 @@ export default function ArchivesPage() {
     (
       doc.personName?.toLowerCase().includes(search.toLowerCase()) ||
       doc.certificateNumber?.toLowerCase().includes(search.toLowerCase()) ||
-      doc.bookNumber?.toLowerCase().includes(search.toLowerCase()) ||
       doc.filename?.toLowerCase().includes(search.toLowerCase())
     )
   )
@@ -243,31 +238,7 @@ export default function ArchivesPage() {
               />
             </div>
 
-            <div>
-              <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1">
-                Book Number
-              </label>
-              <input
-                name="book_number"
-                value={form.book_number}
-                onChange={handleChange}
-                placeholder="Book 1"
-                className={inputCls}
-              />
-            </div>
-
-            <div>
-              <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1">
-                Page Number
-              </label>
-              <input
-                name="page_number"
-                value={form.page_number}
-                onChange={handleChange}
-                placeholder="Page 22"
-                className={inputCls}
-              />
-            </div>
+  
 
             <div>
               <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1">
@@ -347,7 +318,7 @@ export default function ArchivesPage() {
         <table className="w-full">
           <thead>
             <tr className="border-b border-gold/10 bg-gold/5">
-              {['Cert No.', 'Name', 'Date', 'Book/Page', 'Priest', 'File', 'Actions'].map(h => (
+              {['Cert No.', 'Name', 'Date',  'Priest', 'File', 'Actions'].map(h => (
                 <th
                   key={h}
                   className="font-display text-[10px] tracking-widest uppercase text-[#9ab0c4] text-left px-5 py-3"
@@ -386,9 +357,7 @@ export default function ArchivesPage() {
                     {record.dateOfRecord || 'No date'}
                   </td>
 
-                  <td className="px-5 py-3 font-body text-[#6b8caa] text-[12px]">
-                    {record.bookNumber || 'N/A'} / {record.pageNumber || 'N/A'}
-                  </td>
+                
 
                   <td className="px-5 py-3 font-body text-[#6b8caa] text-[12px]">
                     {record.priest || 'N/A'}

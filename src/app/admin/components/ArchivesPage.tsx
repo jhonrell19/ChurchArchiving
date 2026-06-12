@@ -10,8 +10,6 @@ type ArchiveDocument = {
   parish: string
   priest: string
   dateOfRecord: string
-  bookNumber: string
-  pageNumber: string
   certificateNumber: string
   documentType: string
   filename: string
@@ -124,6 +122,21 @@ export default function ArchivesPage() {
       console.error('Archive upload error:', err)
       alert('Upload failed. Make sure Flask is running on port 5000.')
     }
+
+    alert('Record archived successfully')
+
+    setForm({
+      person_name: '',
+      sacrament_type: 'baptismal',
+      parish: '',
+      priest: '',
+      date_of_record: '',
+      document_type: 'Scanned Certificate',
+    })
+
+    setFile(null)
+    setShowForm(false)
+    loadDocuments()
   }
 
 const records = documents.filter(doc =>

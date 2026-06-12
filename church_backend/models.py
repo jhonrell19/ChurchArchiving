@@ -20,6 +20,9 @@ class Document(db.Model):
     filename = db.Column(db.String(300))
     filepath = db.Column(db.String(500))
 
+    file_hash = db.Column(db.String(200), nullable=True)
+    department = db.Column(db.String(100), nullable=True)
+
     uploaded_by = db.Column(db.String(100))
     active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)

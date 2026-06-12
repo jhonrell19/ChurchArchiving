@@ -59,7 +59,7 @@ export default function RequestsPage() {
     try {
       setLoading(true)
 
-      const res = await fetch('http://127.0.0.1:5000/api/requests')
+      const res = await fetch('http://127.0.0.1:5000/api/requests?scope=main')
 
       if (!res.ok) {
         throw new Error('Failed to load requests')
@@ -80,7 +80,16 @@ export default function RequestsPage() {
   }, [])
 
   const updateStatus = async (id: number, status: string) => {
-    const remarks = prompt(`Remarks for ${status}:`) || ''
+    const remarks =
+  status === 'Approved'
+    ? 'Your request has been approved and is now being processed.'
+    : status === 'Rejected'
+    ? 'Your request has been rejected. Please contact the parish office for more information.'
+    : status === 'Ready'
+    ? 'Your requested document is ready for release.'
+    : status === 'Released'
+    ? 'Your requested document has been released.'
+    : ''
 
     try {
       const res = await fetch(`http://127.0.0.1:5000/api/requests/${id}/status`, {

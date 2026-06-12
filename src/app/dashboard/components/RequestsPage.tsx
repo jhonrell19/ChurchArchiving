@@ -3,7 +3,12 @@
 import { useEffect, useState } from 'react'
 import { REQUEST_ICONS, STATUS_STYLE, inputCls } from '../data/mockData'
 
-type RequestType = 'Baptismal' | 'Marriage' | 'Death Certificate' | 'Confirmation'
+type RequestType =
+  | 'Baptismal'
+  | 'Confirmation'
+  | 'Marriage'
+  | 'Burial Certificate'
+  | 'Land Agreement'
 
 type CertificateRequest = {
   id: number
@@ -22,19 +27,38 @@ type CertificateRequest = {
 
 const REQUEST_TYPES: RequestType[] = [
   'Baptismal',
-  'Marriage',
-  'Death Certificate',
   'Confirmation',
+  'Marriage',
+  'Burial Certificate',
+  'Land Agreement',
 ]
 
 const toBackendType = (type: RequestType) => {
-  if (type === 'Death Certificate') return 'death'
+  if (type === 'Burial Certificate') return 'burial'
+  if (type === 'Land Agreement') return 'land_agreement'
   return type.toLowerCase()
 }
 
-const toDisplayType = (type: string) => {
-  if (type === 'death') return 'Death Certificate'
-  return type.charAt(0).toUpperCase() + type.slice(1)
+const toDisplayType = (type: string): RequestType => {
+  if (type === 'baptismal') return 'Baptismal'
+  if (type === 'confirmation') return 'Confirmation'
+  if (type === 'marriage') return 'Marriage'
+  if (type === 'burial') return 'Burial Certificate'
+  if (type === 'land_agreement') return 'Land Agreement'
+
+  return 'Baptismal'
+}
+
+const getRequestIcon = (type: RequestType) => {
+  if (type === 'Burial Certificate') {
+    return REQUEST_ICONS['Death Certificate' as keyof typeof REQUEST_ICONS] || 'ti-candle'
+  }
+
+  if (type === 'Land Agreement') {
+    return 'ti-file-contract'
+  }
+
+  return REQUEST_ICONS[type as keyof typeof REQUEST_ICONS] || 'ti-file-certificate'
 }
 
 export default function RequestsPage() {
@@ -148,11 +172,12 @@ export default function RequestsPage() {
   return (
     <div>
       <h2 className="font-display text-navy-mid text-xl font-semibold mb-1">
-        Certificate Requests
+        Document Requests
       </h2>
 
       <p className="font-body text-[#6b8caa] text-[14px] mb-6">
-        Submit a request for parish certificates. The admin will be notified to process your request.
+        Submit a request for parish certificates, burial certificates, or land agreement copies.
+        The assigned admin will be notified to process your request.
       </p>
 
       {successMsg && (
@@ -218,7 +243,7 @@ export default function RequestsPage() {
                 }`}
               >
                 <i
-                  className={`ti ${REQUEST_ICONS[type]} text-[18px] ${
+                  className={`ti ${getRequestIcon(type)} text-[18px] ${
                     activeType === type ? 'text-gold' : 'text-[#9ab0c4]'
                   }`}
                 />
@@ -232,12 +257,12 @@ export default function RequestsPage() {
           <div className="lg:col-span-3 bg-white border border-gold/20 rounded-xl p-6">
             <div className="flex items-center gap-3 mb-5 pb-4 border-b border-gold/10">
               <div className="w-10 h-10 rounded-lg bg-gold/10 border border-gold/20 flex items-center justify-center">
-                <i className={`ti ${REQUEST_ICONS[activeType]} text-gold text-[18px]`} />
+                <i className={`ti ${getRequestIcon(activeType)} text-gold text-[18px]`} />
               </div>
 
               <div>
                 <p className="font-display text-navy-mid text-[14px] font-semibold">
-                  {activeType} Certificate Request
+                  {activeType} Request
                 </p>
                 <p className="font-body text-[#6b8caa] text-[12px]">
                   Fields marked * are required.
@@ -302,7 +327,7 @@ export default function RequestsPage() {
                 <input
                   value={formData.purpose}
                   onChange={e => handleChange('purpose', e.target.value)}
-                  placeholder="School, employment, marriage, etc."
+                  placeholder="School, employment, personal copy, etc."
                   className={inputCls}
                 />
               </div>
@@ -358,7 +383,7 @@ export default function RequestsPage() {
           ) : (
             <div className="space-y-4">
               {requests.map(req => {
-                const displayType = toDisplayType(req.sacramentType) as RequestType
+                const displayType = toDisplayType(req.sacramentType)
 
                 return (
                   <div key={req.id} className="bg-white border border-gold/20 rounded-xl p-5">
@@ -366,15 +391,13 @@ export default function RequestsPage() {
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg bg-gold/10 border border-gold/20 flex items-center justify-center flex-shrink-0">
                           <i
-                            className={`ti ${
-                              REQUEST_ICONS[displayType] || 'ti-file-certificate'
-                            } text-gold text-[17px]`}
+                            className={`ti ${getRequestIcon(displayType)} text-gold text-[17px]`}
                           />
                         </div>
 
                         <div>
                           <p className="font-display text-navy-mid text-[13px] font-semibold">
-                            {displayType} Certificate
+                            {displayType}
                           </p>
                           <p className="font-body text-[#9ab0c4] text-[11px] mt-0.5">
                             Ref: IFI-REQ-{req.id.toString().padStart(4, '0')} · Submitted{' '}

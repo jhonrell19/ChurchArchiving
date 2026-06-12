@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 
+import { useRouter } from 'next/navigation'
+
 type UserProfile = {
   id: number
   fullName: string
@@ -9,6 +11,9 @@ type UserProfile = {
   role: string
   createdAt: string
 }
+
+
+
 
 const getInitials = (name: string) => {
   if (!name) return 'U'
@@ -61,6 +66,17 @@ export default function ProfilePage() {
 
     loadProfile()
   }, [])
+
+const router = useRouter()
+
+const logout = async () => {
+  await fetch('/api/auth/logout', {
+    method: 'POST',
+  })
+
+  router.push('/login')
+}
+
 
   if (loading) {
     return (
@@ -171,6 +187,13 @@ export default function ProfilePage() {
           ))}
         </div>
       </div>
+
+<button
+  onClick={logout}
+  className="font-display text-[11px] tracking-wider text-red-500 border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-50"
+>
+  Logout
+</button>
 
       <div className="bg-gold/5 border border-gold/20 rounded-xl p-4 flex items-start gap-3">
         <i

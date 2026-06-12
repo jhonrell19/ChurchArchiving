@@ -34,9 +34,13 @@ export default function Navbar() {
 
   // --- HIDE ON DASHBOARD & ADMIN ROUTES ---
   // If the URL path starts with /dashboard or /admin, do not render the navbar.
-  if (pathname.startsWith('/dashboard') || pathname.startsWith('/admin')) {
-    return null
-  }
+  if (
+  pathname.startsWith('/dashboard') ||
+  pathname.startsWith('/admin') ||
+  pathname.startsWith('/burial-admin')
+) {
+  return null
+}
 
   // Now that we've checked !mounted, we know safely we are on the client side!
   const navBg = scrolled ? 'bg-navy/95 shadow-[0_4px_24px_rgba(0,0,0,0.3)]' : 'bg-navy'

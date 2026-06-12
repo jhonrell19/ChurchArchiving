@@ -1,6 +1,19 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
+
 export default function SettingsPage() {
+  const router = useRouter()
+
+const logout = async () => {
+  await fetch('/api/auth/logout', {
+    method: 'POST',
+  })
+
+  router.push('/login')
+}
+
+  
   const fields = [
     { label: 'Parish Name', value: 'Iglesia Filipina Independiente', icon: 'ti-church'  },
     { label: 'Location',    value: 'Maragondon, Cavite',             icon: 'ti-map-pin' },
@@ -24,6 +37,13 @@ export default function SettingsPage() {
             <button className="p-1.5 rounded-lg border border-gold/20 text-[#9ab0c4]"><i className="ti ti-edit text-[14px]" /></button>
           </div>
         ))}
+
+        <button
+  onClick={logout}
+  className="font-display text-[11px] tracking-wider text-red-500 border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-50"
+>
+  Logout
+</button>
       </div>
     </div>
   )

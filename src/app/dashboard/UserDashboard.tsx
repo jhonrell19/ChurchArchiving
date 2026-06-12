@@ -54,15 +54,6 @@ export default function UserDashboard() {
               {NAV.find(n => n.id === page)?.label}
             </h1>
           </div>
-          <div className="flex items-center gap-3">
-            <button className="relative p-1.5 rounded-lg border border-gold/20 bg-gold/5" aria-label="Notifications">
-              <i className="ti ti-bell text-gold text-[17px]" aria-hidden="true" />
-              <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-gold rounded-full" />
-            </button>
-            <div className="w-8 h-8 rounded-full bg-navy border border-gold/30 flex items-center justify-center">
-              <span className="font-display text-gold text-[11px] font-semibold">JD</span>
-            </div>
-          </div>
         </header>
         <main className="flex-1 p-6 overflow-auto">
           {page === 'home'           && <HomePage setPage={setPage} />}

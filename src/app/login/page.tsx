@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
-type Role = 'guest' | 'admin'
+type Role = 'guest' | 'admin' | 'burial_admin'
 
 export default function LoginPage() {
   const [role, setRole]       = useState<Role>('guest')
@@ -42,11 +42,14 @@ export default function LoginPage() {
 
     setLoading(false)
 
-    router.push(
-  data.user.role === 'admin'
-    ? '/admin'
-    : '/dashboard'
-)
+    if (data.user.role === 'admin') {
+  router.push('/admin')
+} else if (data.user.role === 'burial_admin') {
+  router.push('/burial-admin')
+} else {
+  router.push('/dashboard')
+}
+
   } catch (error) {
     alert('Something went wrong')
     setLoading(false)
@@ -83,7 +86,7 @@ export default function LoginPage() {
 
         {/* Role Tabs */}
         <div className="flex rounded-lg border border-gold/20 overflow-hidden mb-8">
-          {(['guest', 'admin'] as Role[]).map((r) => (
+          {(['guest', 'admin', 'burial_admin'] as Role[]).map((r) => (
             <button
               key={r}
               type="button"
@@ -95,7 +98,11 @@ export default function LoginPage() {
                   : 'bg-transparent text-gold/50 hover:text-gold/80'
                 }`}
             >
-              {r === 'guest' ? '✦ Guest' : '⬡ Admin'}
+              {r === 'guest'
+  ? '✦ Guest'
+  : r === 'admin'
+  ? '⬡ Main Admin'
+  : '✝ Burial Admin'}
             </button>
           ))}
         </div>
@@ -103,8 +110,10 @@ export default function LoginPage() {
         {/* Role description */}
         <p className="font-body text-[12px] text-txt-md/60 text-center mb-6 leading-relaxed min-h-[36px]">
           {role === 'guest'
-            ? 'Access parish announcements, schedules, and public resources.'
-            : 'Full parish management — records, finances, and staff tools.'}
+  ? 'Access parish announcements, schedules, and public resources.'
+  : role === 'admin'
+  ? 'Manage baptismal, confirmation, marriage records, masses, and parish announcements.'
+  : 'Manage burial records, deceased documents, land agreements, and burial office requests.'}
         </p>
 
         {/* Form */}
@@ -124,10 +133,12 @@ export default function LoginPage() {
               <label className="font-display text-[10px] tracking-[1.5px] uppercase text-gold/50">
                 Password
               </label>
-              <button type="button"
-                className="font-display text-[9px] tracking-wider uppercase text-gold/40 hover:text-gold transition-colors">
-                Forgot password?
-              </button>
+              <Link
+  href="/forgot-password"
+  className="font-display text-[9px] tracking-wider uppercase text-gold/40 hover:text-gold transition-colors"
+>
+  Forgot password?
+</Link>
             </div>
             <input
               type="password" name="password" value={form.password} onChange={change}
@@ -146,8 +157,12 @@ export default function LoginPage() {
               }`}
           >
             {loading
-              ? 'Signing in…'
-              : role === 'admin' ? 'Sign In as Admin' : 'Sign In as Guest'}
+  ? 'Signing in…'
+  : role === 'guest'
+  ? 'Sign In as Guest'
+  : role === 'admin'
+  ? 'Sign In as Main Admin'
+  : 'Sign In as Burial Admin'}
           </button>
         </form>
 
@@ -155,7 +170,7 @@ export default function LoginPage() {
         <div className="flex items-center gap-3 my-7">
           <span className="flex-1 h-px bg-gold/15" />
           <span className="font-display text-[9px] tracking-widest uppercase text-gold/30">
-            {role === 'admin' ? 'Staff & Clergy Only' : 'Parish Access'}
+            {role === 'guest' ? 'Parish Access' : 'Authorized Staff Only'}
           </span>
           <span className="flex-1 h-px bg-gold/15" />
         </div>

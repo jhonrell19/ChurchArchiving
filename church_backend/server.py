@@ -34,6 +34,46 @@ db.init_app(app)
 with app.app_context():
     db.create_all()
 
+MAIN_ADMIN_TYPES = ["baptismal", "confirmation", "marriage"]
+BURIAL_ADMIN_TYPES = ["burial", "land_agreement"]
+
+PREFIX_MAP = {
+    "baptismal": "BAP",
+    "confirmation": "CNF",
+    "marriage": "MRG",
+    "burial": "BRL",
+    "land_agreement": "LAG",
+}
+
+def get_department(sacrament_type):
+    if sacrament_type in BURIAL_ADMIN_TYPES:
+        return "burial"
+    return "main"
+
+def get_allowed_types(scope):
+    if scope == "burial":
+        return BURIAL_ADMIN_TYPES
+    if scope == "main":
+        return MAIN_ADMIN_TYPES
+    return MAIN_ADMIN_TYPES + BURIAL_ADMIN_TYPES
+
+def calculate_file_hash(file):
+    import hashlib
+
+    hasher = hashlib.sha256()
+
+    file.stream.seek(0)
+
+    while True:
+        chunk = file.stream.read(8192)
+        if not chunk:
+            break
+        hasher.update(chunk)
+
+    file.stream.seek(0)
+
+    return hasher.hexdigest()
+
 
 def highlight_best(text):
     sentences = text.split(".")
@@ -311,30 +351,53 @@ def api_upload_document():
         parish = request.form.get("parish")
         priest = request.form.get("priest")
         date_of_record = request.form.get("date_of_record")
-        book_number = request.form.get("book_number")
-        page_number = request.form.get("page_number")
         document_type = request.form.get("document_type")
 
         if not person_name or not sacrament_type:
-            return {"error": "Person name and sacrament type are required"}, 400
+            return {"error": "Person name and document type are required"}, 400
 
-        prefix_map = {
-            "baptismal": "BAP",
-            "confirmation": "CNF",
-            "marriage": "MRG",
-            "death": "DTH",
-        }
+        allowed_types = MAIN_ADMIN_TYPES + BURIAL_ADMIN_TYPES
 
-        prefix = prefix_map.get(sacrament_type, "DOC")
+        if sacrament_type not in allowed_types:
+            return {"error": "Invalid document category"}, 400
+
+        file_hash = calculate_file_hash(file)
+
+        duplicate_file = Document.query.filter_by(
+            file_hash=file_hash,
+            active=True
+        ).first()
+
+        if duplicate_file:
+            return {
+                "error": f"Duplicate file detected. This file already exists as {duplicate_file.certificate_number or 'Archive ID ' + str(duplicate_file.id)}."
+            }, 409
+
+        possible_duplicate = Document.query.filter(
+            Document.active == True,
+            Document.sacrament_type == sacrament_type,
+            Document.person_name.ilike(person_name),
+            Document.date_of_record == date_of_record
+        ).first()
+
+        if possible_duplicate:
+            return {
+                "error": f"Possible duplicate record found: {possible_duplicate.person_name} ({possible_duplicate.certificate_number or 'Archive ID ' + str(possible_duplicate.id)}). Please review the existing record first."
+            }, 409
+
+        prefix = PREFIX_MAP.get(sacrament_type, "DOC")
         year = date_of_record[:4] if date_of_record else "2026"
 
-        existing_count = Document.query.filter_by(
-            sacrament_type=sacrament_type,
-            active=True
+        existing_count = Document.query.filter(
+            Document.active == True,
+            Document.sacrament_type == sacrament_type,
+            Document.certificate_number.like(f"{prefix}-{year}-%")
         ).count()
 
         next_number = existing_count + 1
         certificate_number = f"{prefix}-{year}-{next_number:03d}"
+
+        department = get_department(sacrament_type)
 
         upload_folder = os.path.join("uploads", sacrament_type)
         os.makedirs(upload_folder, exist_ok=True)
@@ -350,12 +413,12 @@ def api_upload_document():
             parish=parish,
             priest=priest,
             date_of_record=date_of_record,
-            book_number=book_number,
-            page_number=page_number,
             certificate_number=certificate_number,
             document_type=document_type,
             filename=filename,
             filepath=filepath,
+            file_hash=file_hash,
+            department=department,
             uploaded_by="Admin"
         )
 
@@ -378,6 +441,7 @@ def api_upload_document():
                 "personName": new_document.person_name,
                 "sacramentType": new_document.sacrament_type,
                 "certificateNumber": new_document.certificate_number,
+                "department": new_document.department,
                 "filename": new_document.filename,
                 "filepath": new_document.filepath
             }
@@ -427,7 +491,13 @@ def api_archive_stats():
 
 @app.route("/api/archive/documents")
 def api_archive_documents():
-    documents = Document.query.filter_by(active=True).order_by(
+    scope = request.args.get("scope")
+    allowed_types = get_allowed_types(scope)
+
+    documents = Document.query.filter(
+        Document.active == True,
+        Document.sacrament_type.in_(allowed_types)
+    ).order_by(
         Document.person_name.asc()
     ).all()
 
@@ -442,6 +512,7 @@ def api_archive_documents():
                 "dateOfRecord": d.date_of_record,
                 "certificateNumber": d.certificate_number,
                 "documentType": d.document_type,
+                "department": d.department,
                 "filename": d.filename,
                 "filepath": d.filepath,
                 "uploadedBy": d.uploaded_by,
@@ -553,7 +624,12 @@ def api_create_request():
 @app.route("/api/requests", methods=["GET"])
 def api_get_requests():
     try:
-        requests_list = CertificateRequest.query.order_by(
+        scope = request.args.get("scope")
+        allowed_types = get_allowed_types(scope)
+
+        requests_list = CertificateRequest.query.filter(
+            CertificateRequest.sacrament_type.in_(allowed_types)
+        ).order_by(
             CertificateRequest.id.desc()
         ).all()
 
@@ -1187,6 +1263,108 @@ def api_transcribe_mass_ai(mass_id):
 
     except Exception as e:
         return {"error": str(e)}, 500
+
+
+@app.route("/api/archive/deleted-documents")
+def api_deleted_documents():
+    try:
+        scope = request.args.get("scope")
+        allowed_types = get_allowed_types(scope)
+
+        documents = Document.query.filter(
+            Document.active == False,
+            Document.sacrament_type.in_(allowed_types)
+        ).order_by(
+            Document.id.desc()
+        ).all()
+
+        return {
+            "documents": [
+                {
+                    "id": d.id,
+                    "personName": d.person_name,
+                    "sacramentType": d.sacrament_type,
+                    "parish": d.parish,
+                    "priest": d.priest,
+                    "dateOfRecord": d.date_of_record,
+                    "certificateNumber": d.certificate_number,
+                    "documentType": d.document_type,
+                    "department": d.department,
+                    "filename": d.filename,
+                    "filepath": d.filepath,
+                    "uploadedBy": d.uploaded_by,
+                }
+                for d in documents
+            ]
+        }
+
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+
+@app.route("/api/archive/documents/<int:document_id>/delete", methods=["PATCH"])
+def api_soft_delete_document(document_id):
+    try:
+        document = Document.query.get(document_id)
+
+        if not document:
+            return {"error": "Document not found"}, 404
+
+        document.active = False
+        db.session.commit()
+
+        log = AuditLog(
+            user="Admin",
+            action=f"Moved archive document #{document.id} to recycle bin",
+            document_id=document.id
+        )
+
+        db.session.add(log)
+        db.session.commit()
+
+        return {
+            "message": "Document moved to recycle bin successfully",
+            "document": {
+                "id": document.id,
+                "active": document.active
+            }
+        }
+
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+
+@app.route("/api/archive/documents/<int:document_id>/restore", methods=["PATCH"])
+def api_restore_document(document_id):
+    try:
+        document = Document.query.get(document_id)
+
+        if not document:
+            return {"error": "Document not found"}, 404
+
+        document.active = True
+        db.session.commit()
+
+        log = AuditLog(
+            user="Admin",
+            action=f"Restored archive document #{document.id} from recycle bin",
+            document_id=document.id
+        )
+
+        db.session.add(log)
+        db.session.commit()
+
+        return {
+            "message": "Document restored successfully",
+            "document": {
+                "id": document.id,
+                "active": document.active
+            }
+        }
+
+    except Exception as e:
+        return {"error": str(e)}, 500
+
 
 if __name__ == "__main__":
     app.run(debug=True)

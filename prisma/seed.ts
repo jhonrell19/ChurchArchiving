@@ -10,33 +10,66 @@ const prisma = new PrismaClient({
   adapter,
 });
 
-async function main() {
-  const email = "admin@ifimaragondon.com";
-  const password = "Admin12345";
-
+async function createUser(
+  fullName: string,
+  email: string,
+  password: string,
+  role: string
+) {
   const hashedPassword = await bcrypt.hash(password, 10);
 
-  const existingAdmin = await prisma.user.findUnique({
+  const existingUser = await prisma.user.findUnique({
     where: { email },
   });
 
-  if (existingAdmin) {
-    console.log("Admin already exists");
+  if (existingUser) {
+    await prisma.user.update({
+      where: { email },
+      data: {
+        fullName,
+        role,
+      },
+    });
+
+    console.log(`${role} already exists, role updated: ${email}`);
     return;
   }
 
   await prisma.user.create({
     data: {
-      fullName: "Parish Administrator",
+      fullName,
       email,
       password: hashedPassword,
-      role: "admin",
+      role,
     },
   });
 
-  console.log("Admin account created");
-  console.log("Email:", email);
-  console.log("Password:", password);
+  console.log(`${role} account created: ${email}`);
+}
+
+async function main() {
+  await createUser(
+    "Parish Administrator",
+    "admin@ifimaragondon.com",
+    "Admin12345",
+    "admin"
+  );
+
+  await createUser(
+    "Burial Office Administrator",
+    "burial@ifimaragondon.com",
+    "Burial12345",
+    "burial_admin"
+  );
+
+  console.log("");
+  console.log("Main Admin Account:");
+  console.log("Email: admin@ifimaragondon.com");
+  console.log("Password: Admin12345");
+  console.log("");
+  console.log("Burial Admin Account:");
+  console.log("Email: burial@ifimaragondon.com");
+  console.log("Password: Burial12345");
 }
 
 main()

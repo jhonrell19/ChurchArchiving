@@ -21,7 +21,6 @@ const ARCHIVE_TYPES = [
   { label: 'Baptismal', value: 'baptismal', icon: 'ti-droplet' },
   { label: 'Confirmation', value: 'confirmation', icon: 'ti-shield-check' },
   { label: 'Marriage', value: 'marriage', icon: 'ti-rings' },
-  { label: 'Death Certificate', value: 'death', icon: 'ti-candle' },
 ]
 
 export default function ArchivesPage() {
@@ -46,7 +45,7 @@ export default function ArchivesPage() {
     try {
       setLoading(true)
 
-      const res = await fetch('http://127.0.0.1:5000/api/archive/documents')
+      const res = await fetch('http://127.0.0.1:5000/api/archive/documents?scope=main')
 
       if (!res.ok) {
         throw new Error('Failed to load archive documents')
@@ -139,6 +138,33 @@ export default function ArchivesPage() {
     loadDocuments()
   }
 
+const deleteDocument = async (id: number) => {
+  const confirmDelete = confirm('Move this document to Recycle Bin?')
+
+  if (!confirmDelete) {
+    return
+  }
+
+  try {
+    const res = await fetch(`http://127.0.0.1:5000/api/archive/documents/${id}/delete`, {
+      method: 'PATCH',
+    })
+
+    const data = await res.json()
+
+    if (!res.ok) {
+      alert(data.error || 'Failed to delete document.')
+      return
+    }
+
+    alert('Document moved to Recycle Bin.')
+    await loadDocuments()
+  } catch (err) {
+    console.error('Delete document error:', err)
+    alert('Failed to delete document. Make sure Flask is running on port 5000.')
+  }
+}
+
 const records = documents.filter(doc =>
   doc.sacramentType === activeTab &&
   (
@@ -209,16 +235,15 @@ const records = documents.filter(doc =>
                 Sacrament Type *
               </label>
               <select
-                name="sacrament_type"
-                value={form.sacrament_type}
-                onChange={handleChange}
-                className={inputCls}
-              >
-                <option value="baptismal">Baptismal</option>
-                <option value="confirmation">Confirmation</option>
-                <option value="marriage">Marriage</option>
-                <option value="death">Death Certificate</option>
-              </select>
+  name="sacrament_type"
+  value={form.sacrament_type}
+  onChange={handleChange}
+  className={inputCls}
+>
+  <option value="baptismal">Baptismal Certificate</option>
+  <option value="confirmation">Confirmation Certificate</option>
+  <option value="marriage">Marriage Certificate</option>
+</select>
             </div>
 
             <div>
@@ -426,6 +451,14 @@ const records = documents.filter(doc =>
                       >
                         <i className="ti ti-printer text-[14px]" />
                       </button>
+
+                    <button
+  onClick={() => deleteDocument(record.id)}
+  className="p-1.5 rounded-lg border border-red-200 text-red-500 bg-red-50"
+  title="Move to Recycle Bin"
+>
+  <i className="ti ti-trash text-[14px]" />
+</button>
                     </div>
                   </td>
                 </tr>

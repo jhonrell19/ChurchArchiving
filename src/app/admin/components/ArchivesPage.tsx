@@ -34,16 +34,13 @@ export default function ArchivesPage() {
   const [showForm, setShowForm] = useState(false)
 
   const [form, setForm] = useState({
-    person_name: '',
-    sacrament_type: 'baptismal',
-    parish: '',
-    priest: '',
-    date_of_record: '',
-    book_number: '',
-    page_number: '',
-    certificate_number: '',
-    document_type: 'Scanned Certificate',
-  })
+  person_name: '',
+  sacrament_type: 'baptismal',
+  parish: '',
+  priest: '',
+  date_of_record: '',
+  document_type: 'Scanned Certificate',
+})
 
   const [file, setFile] = useState<File | null>(null)
 
@@ -112,16 +109,13 @@ export default function ArchivesPage() {
       alert('Record archived successfully')
 
       setForm({
-        person_name: '',
-        sacrament_type: activeTab,
-        parish: '',
-        priest: '',
-        date_of_record: '',
-        book_number: '',
-        page_number: '',
-        certificate_number: '',
-        document_type: 'Scanned Certificate',
-      })
+  person_name: '',
+  sacrament_type: activeTab,
+  parish: '',
+  priest: '',
+  date_of_record: '',
+  document_type: 'Scanned Certificate',
+})
 
       setFile(null)
       setShowForm(false)
@@ -132,15 +126,14 @@ export default function ArchivesPage() {
     }
   }
 
-  const records = documents.filter(doc =>
-    doc.sacramentType === activeTab &&
-    (
-      doc.personName?.toLowerCase().includes(search.toLowerCase()) ||
-      doc.certificateNumber?.toLowerCase().includes(search.toLowerCase()) ||
-      doc.bookNumber?.toLowerCase().includes(search.toLowerCase()) ||
-      doc.filename?.toLowerCase().includes(search.toLowerCase())
-    )
+const records = documents.filter(doc =>
+  doc.sacramentType === activeTab &&
+  (
+    doc.personName?.toLowerCase().includes(search.toLowerCase()) ||
+    doc.certificateNumber?.toLowerCase().includes(search.toLowerCase()) ||
+    doc.filename?.toLowerCase().includes(search.toLowerCase())
   )
+)
 
   const countByType = (type: string) =>
     documents.filter(doc => doc.sacramentType === type).length
@@ -267,44 +260,14 @@ export default function ArchivesPage() {
               />
             </div>
 
-            <div>
-              <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1">
-                Book Number
-              </label>
-              <input
-                name="book_number"
-                value={form.book_number}
-                onChange={handleChange}
-                placeholder="Book 1"
-                className={inputCls}
-              />
-            </div>
-
-            <div>
-              <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1">
-                Page Number
-              </label>
-              <input
-                name="page_number"
-                value={form.page_number}
-                onChange={handleChange}
-                placeholder="Page 22"
-                className={inputCls}
-              />
-            </div>
-
-            <div>
-              <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1">
-                Certificate Number
-              </label>
-              <input
-                name="certificate_number"
-                value={form.certificate_number}
-                onChange={handleChange}
-                placeholder="BAP-2026-001"
-                className={inputCls}
-              />
-            </div>
+          <div>
+  <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1">
+    Certificate Number
+  </label>
+  <div className="font-body text-[#6b8caa] text-[12px] border border-gold/20 rounded-lg px-3 py-2 bg-gold/5">
+    Auto-generated after saving
+  </div>
+</div>
 
             <div className="md:col-span-3">
               <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1">
@@ -377,7 +340,7 @@ export default function ArchivesPage() {
         <table className="w-full">
           <thead>
             <tr className="border-b border-gold/10 bg-gold/5">
-              {['No.', 'Certificate No.', 'Name', 'Date', 'Book/Page', 'Priest', 'File', 'Actions'].map(h => (
+              {['No.', 'Certificate No.', 'Name', 'Date', 'Priest', 'File', 'Actions'].map(h => (
                 <th
                   key={h}
                   className="font-display text-[10px] tracking-widest uppercase text-[#9ab0c4] text-left px-5 py-3"
@@ -423,10 +386,6 @@ export default function ArchivesPage() {
 
                   <td className="px-5 py-3 font-body text-[#6b8caa] text-[12px]">
                     {record.dateOfRecord || 'No date'}
-                  </td>
-
-                  <td className="px-5 py-3 font-body text-[#6b8caa] text-[12px]">
-                    {record.bookNumber || 'N/A'} / {record.pageNumber || 'N/A'}
                   </td>
 
                   <td className="px-5 py-3 font-body text-[#6b8caa] text-[12px]">

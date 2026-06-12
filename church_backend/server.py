@@ -299,31 +299,49 @@ def view_file(filepath):
     )
 
 @app.route("/api/archive/upload", methods=["POST"])
-def api_archive_upload():
+def api_upload_document():
     try:
+        file = request.files.get("file")
+
+        if not file:
+            return {"error": "No file uploaded"}, 400
+
         person_name = request.form.get("person_name")
         sacrament_type = request.form.get("sacrament_type")
         parish = request.form.get("parish")
         priest = request.form.get("priest")
         date_of_record = request.form.get("date_of_record")
-
         book_number = request.form.get("book_number")
         page_number = request.form.get("page_number")
-        certificate_number = request.form.get("certificate_number")
         document_type = request.form.get("document_type")
-
-        file = request.files.get("file")
 
         if not person_name or not sacrament_type:
             return {"error": "Person name and sacrament type are required"}, 400
 
-        if not file:
-            return {"error": "Scanned file is required"}, 400
+        prefix_map = {
+            "baptismal": "BAP",
+            "confirmation": "CNF",
+            "marriage": "MRG",
+            "death": "DTH",
+        }
 
-        folder = f"uploads/{sacrament_type}"
-        os.makedirs(folder, exist_ok=True)
+        prefix = prefix_map.get(sacrament_type, "DOC")
+        year = date_of_record[:4] if date_of_record else "2026"
 
-        filepath = os.path.join(folder, file.filename)
+        existing_count = Document.query.filter_by(
+            sacrament_type=sacrament_type,
+            active=True
+        ).count()
+
+        next_number = existing_count + 1
+        certificate_number = f"{prefix}-{year}-{next_number:03d}"
+
+        upload_folder = os.path.join("uploads", sacrament_type)
+        os.makedirs(upload_folder, exist_ok=True)
+
+        filename = file.filename
+        filepath = os.path.join(upload_folder, filename)
+
         file.save(filepath)
 
         new_document = Document(
@@ -336,7 +354,7 @@ def api_archive_upload():
             page_number=page_number,
             certificate_number=certificate_number,
             document_type=document_type,
-            filename=file.filename,
+            filename=filename,
             filepath=filepath,
             uploaded_by="Admin"
         )
@@ -346,7 +364,7 @@ def api_archive_upload():
 
         log = AuditLog(
             user="Admin",
-            action=f"Archived {sacrament_type} record for {person_name}",
+            action=f"Uploaded {sacrament_type} archive record: {person_name} ({certificate_number})",
             document_id=new_document.id
         )
 
@@ -354,16 +372,16 @@ def api_archive_upload():
         db.session.commit()
 
         return {
-            "message": "Record archived successfully",
+            "message": "Document uploaded successfully",
             "document": {
                 "id": new_document.id,
                 "personName": new_document.person_name,
                 "sacramentType": new_document.sacrament_type,
-                "dateOfRecord": new_document.date_of_record,
+                "certificateNumber": new_document.certificate_number,
                 "filename": new_document.filename,
                 "filepath": new_document.filepath
             }
-        }
+        }, 201
 
     except Exception as e:
         return {"error": str(e)}, 500
@@ -422,6 +440,8 @@ def api_archive_documents():
                 "parish": d.parish,
                 "priest": d.priest,
                 "dateOfRecord": d.date_of_record,
+                "certificateNumber": d.certificate_number,
+                "documentType": d.document_type,
                 "filename": d.filename,
                 "filepath": d.filepath,
                 "uploadedBy": d.uploaded_by,
@@ -447,6 +467,8 @@ def api_archive_documents_by_type(sacrament_type):
                 "parish": d.parish,
                 "priest": d.priest,
                 "dateOfRecord": d.date_of_record,
+                "certificateNumber": d.certificate_number,
+                "documentType": d.document_type,
                 "filename": d.filename,
                 "filepath": d.filepath,
                 "uploadedBy": d.uploaded_by,

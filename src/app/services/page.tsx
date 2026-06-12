@@ -9,12 +9,12 @@ const SCHEDULE = [
 ]
 
 const SACRAMENTS = [
-  { icon: '💧', title: 'Baptism',           desc: 'The sacrament of initiation into the Christian faith. Contact the parish office to schedule and learn about preparation requirements.' },
-  { icon: '💍', title: 'Matrimony',          desc: 'A sacred covenant before God and the community. Couples are encouraged to inquire at least three months in advance.' },
-  { icon: '🛡️', title: 'Confirmation',       desc: 'The strengthening of baptismal grace through the Holy Spirit. Classes and preparation schedules are announced annually.' },
-  { icon: '✝️', title: 'Holy Eucharist',     desc: 'The central act of Christian worship. Celebrated every Sunday at our scheduled masses, open to all baptized members.' },
-  { icon: '🕊️', title: 'Burial & Last Rites',desc: 'In times of loss, the Church accompanies families with prayer, comfort, and the celebration of the departed\'s life.' },
-  { icon: '⭐', title: 'Special Blessings',  desc: 'House blessings, vehicle blessings, and other special rites may be arranged by contacting the parish priest directly.' },
+  { title: 'Baptism',            desc: 'The sacrament of initiation into the Christian faith. Contact the parish office to schedule and learn about preparation requirements.' },
+  { title: 'Matrimony',          desc: 'A sacred covenant before God and the community. Couples are encouraged to inquire at least three months in advance.' },
+  { title: 'Confirmation',       desc: 'The strengthening of baptismal grace through the Holy Spirit. Classes and preparation schedules are announced annually.' },
+  { title: 'Holy Eucharist',     desc: 'The central act of Christian worship. Celebrated every Sunday at our scheduled masses, open to all baptized members.' },
+  { title: 'Burial & Last Rites',desc: 'In times of loss, the Church accompanies families with prayer, comfort, and the celebration of the departed\'s life.' },
+  { title: 'Special Blessings',  desc: 'House blessings, vehicle blessings, and other special rites may be arranged by contacting the parish priest directly.' },
 ]
 
 const MINISTRIES = [
@@ -65,14 +65,12 @@ export default function ServicesPage() {
               <div
                 key={i}
                 className="flex items-center justify-between px-7 py-5
-                  border-b border-gold/10 last:border-b-0
-                  hover:bg-gold/5 hover:pl-9 transition-all duration-300 group"
+                  border-b border-gold/10 last:border-b-0"
               >
                 <span className="font-display text-gold text-sm tracking-wide w-32">{day}</span>
                 <span className="font-body text-txt-md text-[15px] flex-1 text-center">{time}</span>
                 <span className="font-display text-[10px] tracking-widest uppercase
-                  bg-gold/15 text-gold border border-gold/30 px-4 py-1 rounded-full
-                  group-hover:bg-gold group-hover:text-navy transition-all duration-300">
+                  bg-gold/15 text-gold border border-gold/30 px-4 py-1 rounded-full">
                   {tag}
                 </span>
               </div>
@@ -94,19 +92,11 @@ export default function ServicesPage() {
             <div className="gold-divider"><span /><span className="diamond" /><span /></div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {SACRAMENTS.map(({ icon, title, desc }) => (
+            {SACRAMENTS.map(({ title, desc }) => (
               <div
                 key={title}
-                className="bg-white border border-gold/30 rounded-xl p-8 text-center
-                  hover:-translate-y-2 hover:shadow-[0_16px_40px_rgba(12,42,94,0.12)]
-                  hover:border-gold transition-all duration-300 group"
+                className="bg-white border border-gold/30 rounded-xl p-8 text-center"
               >
-                <div className="w-16 h-16 rounded-full bg-gold/10 border border-gold/30
-                  flex items-center justify-center mx-auto mb-5 text-3xl
-                  group-hover:bg-gold/20 group-hover:scale-110 group-hover:-rotate-6
-                  transition-all duration-300">
-                  {icon}
-                </div>
                 <h3 className="font-display font-semibold text-navy-mid text-sm tracking-wide mb-3">{title}</h3>
                 <p className="font-body text-[15px] text-[#4a6a8a] leading-relaxed">{desc}</p>
               </div>
@@ -129,8 +119,7 @@ export default function ServicesPage() {
             {MINISTRIES.map(({ name, desc }) => (
               <div
                 key={name}
-                className="border border-gold/20 rounded-xl p-6
-                  hover:bg-gold/5 hover:border-gold/40 transition-all duration-200"
+                className="border border-gold/20 rounded-xl p-6"
               >
                 <h3 className="font-display text-gold text-sm tracking-wide mb-2">{name}</h3>
                 <p className="font-body text-txt-md text-[15px] leading-relaxed">{desc}</p>

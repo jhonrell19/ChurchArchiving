@@ -9,7 +9,6 @@ type ArchiveStats = {
   baptismal: number
   marriage: number
   confirmation: number
-  death: number
   generatedCertificates: number
 }
 
@@ -33,15 +32,10 @@ type MassRecord = {
   category: string
 }
 
-const getDisplayType = (type: string) => {
-  if (type === 'death') return 'Death Certificate'
-  return type.charAt(0).toUpperCase() + type.slice(1)
-}
+const getDisplayType = (type: string) =>
+  type.charAt(0).toUpperCase() + type.slice(1)
 
-const getCertIconKey = (type: string) => {
-  if (type === 'death') return 'Death Certificate'
-  return getDisplayType(type)
-}
+const getCertIconKey = (type: string) => getDisplayType(type)
 
 export default function DashboardHome({ setPage }: { setPage: (p: AdminPage) => void }) {
   const [stats, setStats] = useState<ArchiveStats | null>(null)
@@ -54,9 +48,9 @@ export default function DashboardHome({ setPage }: { setPage: (p: AdminPage) => 
       setLoading(true)
 
       const [statsRes, requestsRes, massesRes] = await Promise.all([
-        fetch('http://127.0.0.1:5000/api/archive/stats'),
-        fetch('http://127.0.0.1:5000/api/requests'),
-        fetch('http://127.0.0.1:5000/api/masses'),
+        fetch('/api/backend/api/archive/stats'),
+        fetch('/api/backend/api/requests'),
+        fetch('/api/backend/api/masses'),
       ])
 
       const statsData = statsRes.ok ? await statsRes.json() : null
@@ -100,10 +94,10 @@ export default function DashboardHome({ setPage }: { setPage: (p: AdminPage) => 
       color: 'text-green-600 bg-green-50 border-green-200',
     },
     {
-      label: 'Death Records',
-      value: stats?.death ?? 0,
-      icon: 'ti-candle',
-      color: 'text-red-600 bg-red-50 border-red-200',
+      label: 'Confirmation Records',
+      value: stats?.confirmation ?? 0,
+      icon: 'ti-shield-check',
+      color: 'text-purple-600 bg-purple-50 border-purple-200',
     },
   ]
 
@@ -114,27 +108,22 @@ export default function DashboardHome({ setPage }: { setPage: (p: AdminPage) => 
     .slice(0, 4)
 
   const archiveCards = [
-    {
-      type: 'Baptismal',
-      count: stats?.baptismal ?? 0,
-      icon: 'ti-droplet',
-    },
-    {
-      type: 'Confirmation',
-      count: stats?.confirmation ?? 0,
-      icon: 'ti-shield-check',
-    },
-    {
-      type: 'Marriage',
-      count: stats?.marriage ?? 0,
-      icon: 'ti-rings',
-    },
-    {
-      type: 'Death Certificate',
-      count: stats?.death ?? 0,
-      icon: 'ti-candle',
-    },
-  ]
+  {
+    type: 'Baptismal',
+    count: stats?.baptismal ?? 0,
+    icon: 'ti-droplet',
+  },
+  {
+    type: 'Confirmation',
+    count: stats?.confirmation ?? 0,
+    icon: 'ti-shield-check',
+  },
+  {
+    type: 'Marriage',
+    count: stats?.marriage ?? 0,
+    icon: 'ti-rings',
+  },
+]
 
   return (
     <div>

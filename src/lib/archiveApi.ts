@@ -1,4 +1,4 @@
-const API_URL = 'http://127.0.0.1:5000'
+const API_URL = '/api/backend'
 
 export async function getArchiveStats() {
   const res = await fetch(`${API_URL}/api/archive/stats`, {

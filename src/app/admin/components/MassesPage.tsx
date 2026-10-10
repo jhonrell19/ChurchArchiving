@@ -49,7 +49,7 @@ export default function MassesPage() {
     try {
       setLoading(true)
 
-      const res = await fetch('http://127.0.0.1:5000/api/masses')
+      const res = await fetch('/api/backend/api/masses')
 
       if (!res.ok) {
         throw new Error('Failed to load masses')
@@ -59,7 +59,7 @@ export default function MassesPage() {
       setMasses(data.masses || [])
     } catch (err) {
       console.error('Load masses error:', err)
-      alert('Cannot load mass records. Make sure Flask is running on port 5000.')
+      alert('Cannot load mass records. The parish backend service is unavailable.')
     } finally {
       setLoading(false)
     }
@@ -100,7 +100,7 @@ export default function MassesPage() {
         formData.append('file', file)
       }
 
-      const res = await fetch('http://127.0.0.1:5000/api/masses', {
+      const res = await fetch('/api/backend/api/masses', {
         method: 'POST',
         body: formData,
       })
@@ -134,7 +134,7 @@ export default function MassesPage() {
 
   const updateStatus = async (id: number, status: MassStatus) => {
     try {
-      const res = await fetch(`http://127.0.0.1:5000/api/masses/${id}/status`, {
+      const res = await fetch(`/api/backend/api/masses/${id}/status`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -165,7 +165,7 @@ export default function MassesPage() {
     }
 
     try {
-      const res = await fetch(`http://127.0.0.1:5000/api/masses/${id}/transcription`, {
+      const res = await fetch(`/api/backend/api/masses/${id}/transcription`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -197,7 +197,7 @@ export default function MassesPage() {
     try {
       setTranscribingId(id)
 
-      const res = await fetch(`http://127.0.0.1:5000/api/masses/${id}/transcribe-ai`, {
+      const res = await fetch(`/api/backend/api/masses/${id}/transcribe-ai`, {
         method: 'POST',
       })
 
@@ -223,7 +223,7 @@ export default function MassesPage() {
     if (!confirm('Delete this mass record?')) return
 
     try {
-      const res = await fetch(`http://127.0.0.1:5000/api/masses/${id}`, {
+      const res = await fetch(`/api/backend/api/masses/${id}`, {
         method: 'DELETE',
       })
 
@@ -527,7 +527,7 @@ export default function MassesPage() {
 
                       {m.filepath && (
                         <a
-                          href={`http://127.0.0.1:5000/files/${m.filepath}`}
+                          href={`/api/backend/files/${m.filepath}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="p-1.5 rounded-lg border border-gold/20 text-[#6b8caa]"

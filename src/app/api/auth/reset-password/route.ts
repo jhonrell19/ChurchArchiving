@@ -59,6 +59,11 @@ export async function POST(req: Request) {
       },
     });
 
+    // Invalidate every active login after a password change.
+    await prisma.session.deleteMany({
+      where: { userId: user.id },
+    });
+
     return NextResponse.json({
       message: "Password reset successfully",
     });

@@ -37,7 +37,7 @@ export default function RecycleBinPage({ scope }: RecycleBinPageProps) {
     try {
       setLoading(true)
 
-      const res = await fetch(`http://127.0.0.1:5000/api/archive/deleted-documents?scope=${scope}`)
+      const res = await fetch(`/api/backend/api/archive/deleted-documents?scope=${scope}`)
 
       if (!res.ok) {
         throw new Error('Failed to load recycle bin')
@@ -47,7 +47,7 @@ export default function RecycleBinPage({ scope }: RecycleBinPageProps) {
       setDocuments(data.documents || [])
     } catch (err) {
       console.error('Recycle bin load error:', err)
-      alert('Cannot load recycle bin. Make sure Flask is running on port 5000.')
+      alert('Cannot load recycle bin. The parish backend service is unavailable.')
     } finally {
       setLoading(false)
     }
@@ -65,7 +65,7 @@ export default function RecycleBinPage({ scope }: RecycleBinPageProps) {
     }
 
     try {
-      const res = await fetch(`http://127.0.0.1:5000/api/archive/documents/${id}/restore`, {
+      const res = await fetch(`/api/backend/api/archive/documents/${id}/restore`, {
         method: 'PATCH',
       })
 
@@ -80,7 +80,7 @@ export default function RecycleBinPage({ scope }: RecycleBinPageProps) {
       await loadDeletedDocuments()
     } catch (err) {
       console.error('Restore document error:', err)
-      alert('Failed to restore document. Make sure Flask is running on port 5000.')
+      alert('Failed to restore document. The parish backend service is unavailable.')
     }
   }
 
@@ -152,7 +152,7 @@ export default function RecycleBinPage({ scope }: RecycleBinPageProps) {
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-2">
                       <a
-                        href={`http://127.0.0.1:5000/files/${doc.filepath}`}
+                        href={`/api/backend/files/${doc.filepath}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="p-1.5 rounded-lg border border-gold/20 text-gold bg-gold/5"

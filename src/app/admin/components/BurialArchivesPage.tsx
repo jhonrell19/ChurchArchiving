@@ -44,7 +44,7 @@ const [form, setForm] = useState({
     try {
       setLoading(true)
 
-      const res = await fetch('http://127.0.0.1:5000/api/archive/documents?scope=burial')
+      const res = await fetch('/api/backend/api/archive/documents?scope=burial')
 
       if (!res.ok) {
         throw new Error('Failed to load archive documents')
@@ -54,7 +54,7 @@ const [form, setForm] = useState({
       setDocuments(data.documents || [])
     } catch (err) {
       console.error('Archive load error:', err)
-      alert('Cannot load archive records. Make sure Flask is running on port 5000.')
+      alert('Cannot load archive records. The parish backend service is unavailable.')
     } finally {
       setLoading(false)
     }
@@ -90,7 +90,7 @@ const [form, setForm] = useState({
     formData.append('file', file)
 
     try {
-      const res = await fetch('http://127.0.0.1:5000/api/archive/upload', {
+      const res = await fetch('/api/backend/api/archive/upload', {
         method: 'POST',
         body: formData,
       })
@@ -118,23 +118,9 @@ const [form, setForm] = useState({
       await loadDocuments()
     } catch (err) {
       console.error('Archive upload error:', err)
-      alert('Upload failed. Make sure Flask is running on port 5000.')
+      alert('Upload failed. The parish backend service is unavailable.')
     }
 
-    alert('Record archived successfully')
-
-    setForm({
-      person_name: '',
-      sacrament_type: 'baptismal',
-      parish: '',
-      priest: '',
-      date_of_record: '',
-      document_type: 'Scanned Certificate',
-    })
-
-    setFile(null)
-    setShowForm(false)
-    loadDocuments()
   }
 
 const deleteDocument = async (id: number) => {
@@ -145,7 +131,7 @@ const deleteDocument = async (id: number) => {
   }
 
   try {
-    const res = await fetch(`http://127.0.0.1:5000/api/archive/documents/${id}/delete`, {
+    const res = await fetch(`/api/backend/api/archive/documents/${id}/delete`, {
       method: 'PATCH',
     })
 
@@ -160,7 +146,7 @@ const deleteDocument = async (id: number) => {
     await loadDocuments()
   } catch (err) {
     console.error('Delete document error:', err)
-    alert('Failed to delete document. Make sure Flask is running on port 5000.')
+    alert('Failed to delete document. The parish backend service is unavailable.')
   }
 } 
 
@@ -435,7 +421,7 @@ const records = documents.filter(doc =>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-2">
                       <a
-                        href={`http://127.0.0.1:5000/files/${record.filepath}`}
+                        href={`/api/backend/files/${record.filepath}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="p-1.5 rounded-lg border border-gold/20 text-gold bg-gold/5"
@@ -444,7 +430,7 @@ const records = documents.filter(doc =>
                       </a>
 
                       <button
-                        onClick={() => window.open(`http://127.0.0.1:5000/files/${record.filepath}`, '_blank')}
+                        onClick={() => window.open(`/api/backend/files/${record.filepath}`, '_blank')}
                         className="p-1.5 rounded-lg border border-gold/20 text-[#6b8caa]"
                       >
                         <i className="ti ti-printer text-[14px]" />

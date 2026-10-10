@@ -27,7 +27,7 @@ export default function AnnouncementsPage() {
     try {
       setLoading(true)
 
-      const res = await fetch('http://127.0.0.1:5000/api/announcements')
+      const res = await fetch('/api/backend/api/announcements')
 
       if (!res.ok) {
         throw new Error('Failed to load announcements')
@@ -37,7 +37,7 @@ export default function AnnouncementsPage() {
       setAnnouncements(data.announcements || [])
     } catch (err) {
       console.error('Load announcements error:', err)
-      alert('Cannot load announcements. Make sure Flask is running on port 5000.')
+      alert('Cannot load announcements. The parish backend service is unavailable.')
     } finally {
       setLoading(false)
     }
@@ -65,7 +65,7 @@ export default function AnnouncementsPage() {
     }
 
     try {
-      const res = await fetch('http://127.0.0.1:5000/api/announcements', {
+      const res = await fetch('/api/backend/api/announcements', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -100,7 +100,7 @@ export default function AnnouncementsPage() {
     if (!confirm('Delete this announcement?')) return
 
     try {
-      const res = await fetch(`http://127.0.0.1:5000/api/announcements/${id}`, {
+      const res = await fetch(`/api/backend/api/announcements/${id}`, {
         method: 'DELETE',
       })
 

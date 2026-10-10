@@ -1,70 +1,87 @@
-import { NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
-import { prisma } from "@/lib/prisma";
+import { NextResponse } from 'next/server'
+import bcrypt from 'bcryptjs'
+import { prisma } from '@/lib/prisma'
+import {
+  createSession,
+  SESSION_COOKIE,
+  SESSION_MAX_AGE_SECONDS,
+} from '@/lib/auth'
 
 export async function POST(req: Request) {
   try {
-    const { email, password, role } = await req.json();
+    const body = await req.json().catch(() => null)
+    const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : ''
+    const password = typeof body?.password === 'string' ? body.password : ''
 
-    const user = await prisma.user.findUnique({
-      where: { email },
-    });
+    if (!email || !password) {
+      return NextResponse.json(
+        { message: 'Email and password are required.' },
+        { status: 400 }
+      )
+    }
+
+    const user = await prisma.user.findUnique({ where: { email } })
 
     if (!user) {
       return NextResponse.json(
-        { message: "Invalid email or password" },
+        { message: 'Invalid email or password.' },
         { status: 401 }
-      );
+      )
     }
 
-    if (role && user.role !== role) {
-      return NextResponse.json(
-        { message: "Role does not match this account" },
-        { status: 403 }
-      );
-    }
-
-    const validPassword = await bcrypt.compare(password, user.password);
+    const validPassword = await bcrypt.compare(password, user.password)
 
     if (!validPassword) {
       return NextResponse.json(
-        { message: "Invalid email or password" },
+        { message: 'Invalid email or password.' },
         { status: 401 }
-      );
+      )
     }
 
-    const token = jwt.sign(
+    const { token } = await createSession(user.id)
+
+    const response = NextResponse.json(
       {
-        id: user.id,
-        email: user.email,
-        role: user.role,
+        message: 'Login successful.',
+        user: {
+          id: user.id,
+          email: user.email,
+          role: user.role,
+          firstName: user.firstName,
+          surname: user.surname,
+        },
       },
-      process.env.JWT_SECRET as string,
-      { expiresIn: "1d" }
-    );
+      {
+        headers: {
+          'Cache-Control': 'no-store',
+        },
+      }
+    )
 
-    const response = NextResponse.json({
-      message: "Login successful",
-      user: {
-        id: user.id,
-        fullName: user.fullName,
-        email: user.email,
-        role: user.role,
-      },
-    });
-
-    response.cookies.set("token", token, {
+    response.cookies.set(SESSION_COOKIE, token, {
       httpOnly: true,
-      path: "/",
-      maxAge: 60 * 60 * 24,
-    });
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: SESSION_MAX_AGE_SECONDS,
+    })
 
-    return response;
-  } catch {
+    // Remove the legacy JWT cookie so old ADMIN tokens cannot keep affecting tests.
+    response.cookies.set('token', '', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      expires: new Date(0),
+    })
+
+    return response
+  } catch (error) {
+    console.error('LOGIN ERROR:', error)
+
     return NextResponse.json(
-      { message: "Login failed" },
+      { message: 'Login failed.' },
       { status: 500 }
-    );
+    )
   }
 }

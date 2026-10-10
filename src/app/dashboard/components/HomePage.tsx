@@ -49,7 +49,7 @@ export default function HomePage({ setPage }: { setPage: (p: Page) => void }) {
     try {
       setLoading(true)
 
-      const res = await fetch('http://127.0.0.1:5000/api/user/dashboard-summary')
+      const res = await fetch('/api/backend/api/user/dashboard-summary')
 
       if (!res.ok) {
         throw new Error('Failed to load dashboard')
@@ -186,7 +186,7 @@ export default function HomePage({ setPage }: { setPage: (p: Page) => void }) {
 
                     {m.filepath && (
                       <a
-                        href={`http://127.0.0.1:5000/files/${m.filepath}`}
+                        href={`/api/backend/files/${m.filepath}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1.5 mt-3 font-display text-[10px] tracking-wider text-gold border border-gold/30 px-3 py-1.5 rounded-lg bg-gold/5"

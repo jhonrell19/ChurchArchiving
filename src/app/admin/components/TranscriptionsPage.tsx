@@ -26,7 +26,7 @@ export default function TranscriptionsPage() {
     try {
       setLoading(true)
 
-      const res = await fetch('http://127.0.0.1:5000/api/transcriptions')
+      const res = await fetch('/api/backend/api/transcriptions')
 
       if (!res.ok) {
         throw new Error('Failed to load transcriptions')
@@ -36,7 +36,7 @@ export default function TranscriptionsPage() {
       setTranscriptions(data.transcriptions || [])
     } catch (err) {
       console.error('Load admin transcriptions error:', err)
-      alert('Cannot load transcriptions. Make sure Flask is running on port 5000.')
+      alert('Cannot load transcriptions. The parish backend service is unavailable.')
       setTranscriptions([])
     } finally {
       setLoading(false)
@@ -136,7 +136,7 @@ export default function TranscriptionsPage() {
 
                 {t.transcriptFilepath && (
                   <a
-                    href={`http://127.0.0.1:5000/download/${t.transcriptFilepath}`}
+                    href={`/api/backend/download/${t.transcriptFilepath}`}
                     className="flex items-center gap-1.5 font-display text-[11px] tracking-wider text-[#6b8caa] border border-gold/15 px-3 py-1.5 rounded-lg"
                   >
                     <i className="ti ti-download text-[13px]" />

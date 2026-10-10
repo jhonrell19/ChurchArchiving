@@ -1,63 +1,48 @@
-import { NextResponse } from "next/server";
-import jwt from "jsonwebtoken";
-import { prisma } from "@/lib/prisma";
+import { NextResponse } from 'next/server'
+import { getCurrentUser } from '@/lib/auth'
 
-type TokenPayload = {
-  id: number;
-  email: string;
-  role: string;
-};
-
-export async function GET(req: Request) {
+export async function GET() {
   try {
-    const cookieHeader = req.headers.get("cookie") || "";
-
-    const tokenCookie = cookieHeader
-      .split(";")
-      .map(cookie => cookie.trim())
-      .find(cookie => cookie.startsWith("token="));
-
-    if (!tokenCookie) {
-      return NextResponse.json(
-        { message: "Not authenticated" },
-        { status: 401 }
-      );
-    }
-
-    const token = tokenCookie.split("=")[1];
-
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET as string
-    ) as TokenPayload;
-
-    const user = await prisma.user.findUnique({
-      where: {
-        id: decoded.id,
-      },
-      select: {
-        id: true,
-        fullName: true,
-        email: true,
-        role: true,
-        createdAt: true,
-      },
-    });
+    const user = await getCurrentUser()
 
     if (!user) {
       return NextResponse.json(
-        { message: "User not found" },
-        { status: 404 }
-      );
+        { message: 'Please log in again.' },
+        {
+          status: 401,
+          headers: { 'Cache-Control': 'no-store' },
+        }
+      )
     }
 
-    return NextResponse.json({
-      user,
-    });
-  } catch {
+    const fullName = [user.firstName, user.middleName, user.surname]
+      .filter(Boolean)
+      .join(' ')
+      .trim()
+
     return NextResponse.json(
-      { message: "Invalid or expired session" },
-      { status: 401 }
-    );
+      {
+        user: {
+          id: user.id,
+          firstName: user.firstName,
+          middleName: user.middleName,
+          surname: user.surname,
+          phoneNumber: user.phoneNumber,
+          address: user.address,
+          email: user.email,
+          role: user.role,
+          createdAt: user.createdAt,
+          fullName: fullName || user.email,
+        },
+      },
+      { headers: { 'Cache-Control': 'no-store' } }
+    )
+  } catch (error) {
+    console.error('PROFILE ERROR:', error)
+
+    return NextResponse.json(
+      { message: 'Unable to load profile information.' },
+      { status: 500 }
+    )
   }
 }

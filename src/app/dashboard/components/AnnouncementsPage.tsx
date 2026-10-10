@@ -20,7 +20,7 @@ export default function AnnouncementsPage() {
     try {
       setLoading(true)
 
-      const res = await fetch('http://127.0.0.1:5000/api/announcements')
+      const res = await fetch('/api/backend/api/announcements')
 
       if (!res.ok) {
         throw new Error('Failed to load announcements')

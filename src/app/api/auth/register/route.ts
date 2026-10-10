@@ -1,53 +1,107 @@
-import { NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
-import { prisma } from "@/lib/prisma";
+import { NextResponse } from 'next/server'
+import bcrypt from 'bcryptjs'
+import { prisma } from '@/lib/prisma'
 
 export async function POST(req: Request) {
   try {
-    const { fullName, email, password, role } = await req.json();
+    const {
+      firstName,
+      middleName,
+      surname,
+      phoneNumber,
+      address,
+      email,
+      password,
+      confirmPassword,
+    } = await req.json()
 
-    if (!fullName || !email || !password) {
+    // Check required fields
+    if (
+      !firstName ||
+      !surname ||
+      !phoneNumber ||
+      !address ||
+      !email ||
+      !password ||
+      !confirmPassword
+    ) {
       return NextResponse.json(
-        { message: "All fields are required" },
+        { message: 'Please complete all required fields.' },
         { status: 400 }
-      );
+      )
     }
 
+    // Normalize email
+    const normalizedEmail = email.trim().toLowerCase()
+
+    // Password confirmation
+    if (password !== confirmPassword) {
+      return NextResponse.json(
+        { message: 'Passwords do not match.' },
+        { status: 400 }
+      )
+    }
+
+    // Basic password requirement
+    if (password.length < 8) {
+      return NextResponse.json(
+        { message: 'Password must contain at least 8 characters.' },
+        { status: 400 }
+      )
+    }
+
+    // Check whether email already exists
     const existingUser = await prisma.user.findUnique({
-      where: { email },
-    });
+      where: {
+        email: normalizedEmail,
+      },
+    })
 
     if (existingUser) {
       return NextResponse.json(
-        { message: "Email already registered" },
-        { status: 400 }
-      );
+        { message: 'Email is already registered.' },
+        { status: 409 }
+      )
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // Hash password before storing it
+    const hashedPassword = await bcrypt.hash(password, 12)
 
+    // IMPORTANT:
+    // Public registration ALWAYS creates a normal USER.
     const user = await prisma.user.create({
       data: {
-        fullName,
-        email,
+        firstName: firstName.trim(),
+        middleName: middleName?.trim() || null,
+        surname: surname.trim(),
+        phoneNumber: phoneNumber.trim(),
+        address: address.trim(),
+        email: normalizedEmail,
         password: hashedPassword,
-        role: role || "guest",
-      },
-    });
 
-    return NextResponse.json({
-      message: "Registered successfully",
-      user: {
-        id: user.id,
-        fullName: user.fullName,
-        email: user.email,
-        role: user.role,
+        role: 'USER',
       },
-    });
-  } catch {
+    })
+
     return NextResponse.json(
-      { message: "Register failed" },
+      {
+        message: 'Account created successfully.',
+        user: {
+          id: user.id,
+          firstName: user.firstName,
+          surname: user.surname,
+          email: user.email,
+          role: user.role,
+        },
+      },
+      { status: 201 }
+    )
+  } catch (error) {
+    console.error('REGISTER ERROR:', error)
+
+    return NextResponse.json(
+      { message: 'Unable to create account.' },
       { status: 500 }
-    );
+    )
   }
 }

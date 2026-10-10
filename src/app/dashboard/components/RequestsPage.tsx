@@ -79,7 +79,7 @@ export default function RequestsPage() {
 
   const loadRequests = async () => {
     try {
-      const res = await fetch('http://127.0.0.1:5000/api/requests')
+      const res = await fetch('/api/backend/api/requests')
 
       if (!res.ok) {
         throw new Error('Failed to load requests')
@@ -122,7 +122,7 @@ export default function RequestsPage() {
     try {
       setLoading(true)
 
-      const res = await fetch('http://127.0.0.1:5000/api/requests', {
+      const res = await fetch('/api/backend/api/requests', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -163,7 +163,7 @@ export default function RequestsPage() {
       setTimeout(() => setSuccessMsg(null), 6000)
     } catch (err) {
       console.error('Submit request error:', err)
-      alert('Cannot submit request. Make sure Flask is running on port 5000.')
+      alert('Cannot submit request. The parish backend service is unavailable.')
     } finally {
       setLoading(false)
     }
@@ -456,7 +456,7 @@ export default function RequestsPage() {
                         </div>
 
                         <a
-                          href={`http://127.0.0.1:5000/files/${req.generatedFile}`}
+                          href={`/api/backend/files/${req.generatedFile}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-2 font-display text-[11px] tracking-wider bg-navy text-gold px-4 py-2 rounded-lg"

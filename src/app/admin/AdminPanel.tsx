@@ -50,7 +50,7 @@ export default function AdminPanel() {
 
   const loadPendingRequests = async () => {
     try {
-      const res = await fetch('http://127.0.0.1:5000/api/requests?scope=main')
+      const res = await fetch('/api/backend/api/requests?scope=main')
 
       if (!res.ok) {
         throw new Error('Failed to load request count')

@@ -29,7 +29,7 @@ export default function ArchivesPage() {
     try {
       setLoading(true)
 
-      const res = await fetch('http://127.0.0.1:5000/api/masses')
+      const res = await fetch('/api/backend/api/masses')
 
       if (!res.ok) {
         throw new Error('Failed to load mass archives')
@@ -189,7 +189,7 @@ export default function ArchivesPage() {
                 <div className="flex gap-2 flex-wrap">
                   {m.filepath ? (
                     <a
-                      href={`http://127.0.0.1:5000/files/${m.filepath}`}
+                      href={`/api/backend/files/${m.filepath}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1.5 font-display text-[10px] tracking-wider text-gold border border-gold/30 px-3 py-1.5 rounded-lg bg-gold/5"

@@ -10,7 +10,8 @@ const logout = async () => {
     method: 'POST',
   })
 
-  router.push('/login')
+  router.replace('/login')
+  router.refresh()
 }
 
   

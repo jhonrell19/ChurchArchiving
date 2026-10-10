@@ -5,21 +5,25 @@ from flask import (
     redirect,
     send_from_directory,
     jsonify,
+    g,
 )
 
-from flask_cors import CORS
 from docxtpl import DocxTemplate
 from models import db, Document, AuditLog, CertificateRequest, MassRecord, Announcement
 from faster_whisper import WhisperModel
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
+from werkzeug.utils import secure_filename
 import subprocess
 import os
+from dotenv import load_dotenv
+
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 app = Flask(__name__)
-CORS(app)
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///archive.db"
-app.config["SECRET_KEY"] = "churchsecret"
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("ARCHIVE_DATABASE_URL", "sqlite:///archive.db")
+app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY", "dev-only-change-me")
+INTERNAL_API_KEY = os.environ.get("FLASK_INTERNAL_KEY")
 
 MASS_UPLOAD_FOLDER = "uploads/masses"
 TRANSCRIPTION_FOLDER = "uploads/transcriptions"
@@ -44,6 +48,87 @@ PREFIX_MAP = {
     "burial": "BRL",
     "land_agreement": "LAG",
 }
+
+
+def _is_protected_backend_path():
+    return (
+        request.path.startswith("/api/")
+        or request.path.startswith("/files/")
+        or request.path.startswith("/download/")
+    )
+
+
+@app.before_request
+def protect_backend_boundary():
+    if not _is_protected_backend_path():
+        return None
+
+    if not INTERNAL_API_KEY:
+        app.logger.error("FLASK_INTERNAL_KEY is not configured")
+        return {"error": "Backend security is not configured"}, 500
+
+    if request.headers.get("X-Internal-Key") != INTERNAL_API_KEY:
+        return {"error": "Unauthorized"}, 401
+
+    g.user_id = request.headers.get("X-User-Id")
+    g.user_role = request.headers.get("X-User-Role")
+    g.user_email = request.headers.get("X-User-Email")
+    g.user_name = request.headers.get("X-User-Name")
+    g.user_phone = request.headers.get("X-User-Phone")
+
+    if g.user_role not in {"USER", "ADMIN", "BURIAL_ADMIN"}:
+        return {"error": "Invalid authenticated role"}, 401
+
+    return None
+
+
+def require_roles(*roles):
+    if getattr(g, "user_role", None) not in roles:
+        return {"error": "Forbidden"}, 403
+    return None
+
+
+def allowed_types_for_current_role():
+    role = getattr(g, "user_role", None)
+    if role == "ADMIN":
+        return MAIN_ADMIN_TYPES
+    if role == "BURIAL_ADMIN":
+        return BURIAL_ADMIN_TYPES
+    if role == "USER":
+        return MAIN_ADMIN_TYPES + BURIAL_ADMIN_TYPES
+    return []
+
+
+def staff_can_access_request(cert_request):
+    return cert_request.sacrament_type in allowed_types_for_current_role()
+
+
+def can_access_filepath(filepath):
+    normalized = filepath.replace("\\", "/").lstrip("/")
+    role = getattr(g, "user_role", None)
+    path_variants = {filepath, normalized, normalized.replace("/", "\\")}
+
+    if role == "ADMIN":
+        if normalized.startswith("uploads/masses/") or normalized.startswith("uploads/transcriptions/"):
+            return True
+        document = Document.query.filter(Document.filepath.in_(path_variants)).first()
+        return bool(document and document.sacrament_type in MAIN_ADMIN_TYPES)
+
+    if role == "BURIAL_ADMIN":
+        document = Document.query.filter(Document.filepath.in_(path_variants)).first()
+        return bool(document and document.sacrament_type in BURIAL_ADMIN_TYPES)
+
+    if role == "USER":
+        if normalized.startswith("uploads/masses/") or normalized.startswith("uploads/transcriptions/"):
+            return True
+        owned_request = CertificateRequest.query.filter(
+            CertificateRequest.requester_email == getattr(g, "user_email", None),
+            CertificateRequest.generated_file.in_(path_variants),
+            CertificateRequest.status.in_(["Ready", "Released"])
+        ).first()
+        return owned_request is not None
+
+    return False
 
 def get_department(sacrament_type):
     if sacrament_type in BURIAL_ADMIN_TYPES:
@@ -187,7 +272,10 @@ def upload():
         folder = f"uploads/{sacrament_type}"
         os.makedirs(folder, exist_ok=True)
 
-        filepath = os.path.join(folder, file.filename)
+        safe_filename = secure_filename(file.filename)
+        if not safe_filename:
+            return "Invalid filename", 400
+        filepath = os.path.join(folder, safe_filename)
         file.save(filepath)
 
         new_document = Document(
@@ -196,9 +284,9 @@ def upload():
             parish=parish,
             priest=priest,
             date_of_record=date_of_record,
-            filename=file.filename,
+            filename=safe_filename,
             filepath=filepath,
-            uploaded_by="Admin"
+            uploaded_by=getattr(g, "user_email", None) or "Admin"
         )
 
         db.session.add(new_document)
@@ -332,6 +420,8 @@ def download_generated(filename):
 
 @app.route("/files/<path:filepath>")
 def view_file(filepath):
+    if not can_access_filepath(filepath):
+        return {"error": "Forbidden"}, 403
     return send_from_directory(
         ".",
         filepath,
@@ -340,6 +430,9 @@ def view_file(filepath):
 
 @app.route("/api/archive/upload", methods=["POST"])
 def api_upload_document():
+    denied = require_roles("ADMIN", "BURIAL_ADMIN")
+    if denied:
+        return denied
     try:
         file = request.files.get("file")
 
@@ -356,7 +449,7 @@ def api_upload_document():
         if not person_name or not sacrament_type:
             return {"error": "Person name and document type are required"}, 400
 
-        allowed_types = MAIN_ADMIN_TYPES + BURIAL_ADMIN_TYPES
+        allowed_types = allowed_types_for_current_role()
 
         if sacrament_type not in allowed_types:
             return {"error": "Invalid document category"}, 400
@@ -402,7 +495,9 @@ def api_upload_document():
         upload_folder = os.path.join("uploads", sacrament_type)
         os.makedirs(upload_folder, exist_ok=True)
 
-        filename = file.filename
+        filename = secure_filename(file.filename)
+        if not filename:
+            return {"error": "Invalid filename"}, 400
         filepath = os.path.join(upload_folder, filename)
 
         file.save(filepath)
@@ -426,7 +521,7 @@ def api_upload_document():
         db.session.commit()
 
         log = AuditLog(
-            user="Admin",
+            user=getattr(g, "user_email", None) or "Admin",
             action=f"Uploaded {sacrament_type} archive record: {person_name} ({certificate_number})",
             document_id=new_document.id
         )
@@ -452,54 +547,48 @@ def api_upload_document():
     
 @app.route("/api/archive/stats")
 def api_archive_stats():
-    total_records = Document.query.filter_by(active=True).count()
+    denied = require_roles("ADMIN", "BURIAL_ADMIN")
+    if denied:
+        return denied
 
-    baptismal = Document.query.filter_by(
-        active=True,
-        sacrament_type="baptismal"
-    ).count()
+    allowed_types = allowed_types_for_current_role()
+    base = Document.query.filter(
+        Document.active == True,
+        Document.sacrament_type.in_(allowed_types)
+    )
 
-    marriage = Document.query.filter_by(
-        active=True,
-        sacrament_type="marriage"
-    ).count()
-
-    confirmation = Document.query.filter_by(
-        active=True,
-        sacrament_type="confirmation"
-    ).count()
-
-    death = Document.query.filter_by(
-        active=True,
-        sacrament_type="death"
-    ).count()
-
-    generated = Document.query.filter_by(
-        active=True,
-        uploaded_by="User Request"
-    ).count()
+    def count_type(name):
+        if name not in allowed_types:
+            return 0
+        return Document.query.filter_by(active=True, sacrament_type=name).count()
 
     return {
-        "totalRecords": total_records,
-        "baptismal": baptismal,
-        "marriage": marriage,
-        "confirmation": confirmation,
-        "death": death,
-        "generatedCertificates": generated
+        "totalRecords": base.count(),
+        "baptismal": count_type("baptismal"),
+        "marriage": count_type("marriage"),
+        "confirmation": count_type("confirmation"),
+        "burial": count_type("burial"),
+        "landAgreement": count_type("land_agreement"),
+        "generatedCertificates": Document.query.filter(
+            Document.active == True,
+            Document.sacrament_type.in_(allowed_types),
+            Document.uploaded_by == "User Request"
+        ).count()
     }
 
 
 @app.route("/api/archive/documents")
 def api_archive_documents():
-    scope = request.args.get("scope")
-    allowed_types = get_allowed_types(scope)
+    denied = require_roles("ADMIN", "BURIAL_ADMIN")
+    if denied:
+        return denied
+
+    allowed_types = allowed_types_for_current_role()
 
     documents = Document.query.filter(
         Document.active == True,
         Document.sacrament_type.in_(allowed_types)
-    ).order_by(
-        Document.person_name.asc()
-    ).all()
+    ).order_by(Document.person_name.asc()).all()
 
     return {
         "documents": [
@@ -524,6 +613,13 @@ def api_archive_documents():
 
 @app.route("/api/archive/documents/<sacrament_type>")
 def api_archive_documents_by_type(sacrament_type):
+    denied = require_roles("ADMIN", "BURIAL_ADMIN")
+    if denied:
+        return denied
+
+    if sacrament_type not in allowed_types_for_current_role():
+        return {"error": "Forbidden category"}, 403
+
     documents = Document.query.filter_by(
         active=True,
         sacrament_type=sacrament_type
@@ -548,8 +644,12 @@ def api_archive_documents_by_type(sacrament_type):
         ]
     }
 
+
 @app.route("/api/archive/audit-logs")
 def api_audit_logs():
+    denied = require_roles("ADMIN")
+    if denied:
+        return denied
     logs = AuditLog.query.order_by(AuditLog.id.desc()).limit(20).all()
 
     return {
@@ -566,18 +666,24 @@ def api_audit_logs():
 
 @app.route("/api/requests", methods=["POST"])
 def api_create_request():
+    denied = require_roles("USER")
+    if denied:
+        return denied
     try:
         data = request.get_json()
 
-        requester_name = data.get("requesterName")
-        requester_email = data.get("requesterEmail")
-        contact_number = data.get("contactNumber")
+        requester_name = getattr(g, "user_name", None) or data.get("requesterName")
+        requester_email = getattr(g, "user_email", None)
+        contact_number = getattr(g, "user_phone", None) or data.get("contactNumber")
         sacrament_type = data.get("sacramentType")
         person_name = data.get("personName")
         purpose = data.get("purpose")
 
         if not requester_name or not sacrament_type or not person_name:
             return {"error": "Requester name, sacrament type, and person name are required"}, 400
+
+        if sacrament_type not in allowed_types_for_current_role():
+            return {"error": "Invalid request category"}, 400
 
         new_request = CertificateRequest(
             requester_name=requester_name,
@@ -624,14 +730,18 @@ def api_create_request():
 @app.route("/api/requests", methods=["GET"])
 def api_get_requests():
     try:
-        scope = request.args.get("scope")
-        allowed_types = get_allowed_types(scope)
+        role = getattr(g, "user_role", None)
 
-        requests_list = CertificateRequest.query.filter(
-            CertificateRequest.sacrament_type.in_(allowed_types)
-        ).order_by(
-            CertificateRequest.id.desc()
-        ).all()
+        if role == "USER":
+            requests_list = CertificateRequest.query.filter_by(
+                requester_email=getattr(g, "user_email", None)
+            ).order_by(CertificateRequest.id.desc()).all()
+        elif role in {"ADMIN", "BURIAL_ADMIN"}:
+            requests_list = CertificateRequest.query.filter(
+                CertificateRequest.sacrament_type.in_(allowed_types_for_current_role())
+            ).order_by(CertificateRequest.id.desc()).all()
+        else:
+            return {"error": "Forbidden"}, 403
 
         return {
             "requests": [
@@ -653,7 +763,6 @@ def api_get_requests():
                 for r in requests_list
             ]
         }
-
     except Exception as e:
         return {"error": str(e)}, 500
 
@@ -664,6 +773,16 @@ def api_get_single_request(request_id):
 
     if not cert_request:
         return {"error": "Request not found"}, 404
+
+    role = getattr(g, "user_role", None)
+    if role == "USER":
+        if cert_request.requester_email != getattr(g, "user_email", None):
+            return {"error": "Forbidden"}, 403
+    elif role in {"ADMIN", "BURIAL_ADMIN"}:
+        if not staff_can_access_request(cert_request):
+            return {"error": "Forbidden"}, 403
+    else:
+        return {"error": "Forbidden"}, 403
 
     return {
         "request": {
@@ -686,11 +805,17 @@ def api_get_single_request(request_id):
 
 @app.route("/api/requests/<int:request_id>/status", methods=["PATCH"])
 def api_update_request_status(request_id):
+    denied = require_roles("ADMIN", "BURIAL_ADMIN")
+    if denied:
+        return denied
     try:
         cert_request = CertificateRequest.query.get(request_id)
 
         if not cert_request:
             return {"error": "Request not found"}, 404
+
+        if not staff_can_access_request(cert_request):
+            return {"error": "Forbidden"}, 403
 
         data = request.get_json()
 
@@ -710,7 +835,7 @@ def api_update_request_status(request_id):
         db.session.commit()
 
         log = AuditLog(
-            user="Admin",
+            user=getattr(g, "user_email", None) or "Admin",
             action=f"Updated request #{cert_request.id} status to {status}",
             document_id=cert_request.matched_document_id
         )
@@ -733,11 +858,17 @@ def api_update_request_status(request_id):
 
 @app.route("/api/requests/<int:request_id>/attach-document", methods=["PATCH"])
 def api_attach_document_to_request(request_id):
+    denied = require_roles("ADMIN", "BURIAL_ADMIN")
+    if denied:
+        return denied
     try:
         cert_request = CertificateRequest.query.get(request_id)
 
         if not cert_request:
             return {"error": "Request not found"}, 404
+
+        if not staff_can_access_request(cert_request):
+            return {"error": "Forbidden"}, 403
 
         data = request.get_json()
         document_id = data.get("documentId")
@@ -750,6 +881,12 @@ def api_attach_document_to_request(request_id):
         if not document or not document.active:
             return {"error": "Archive document not found"}, 404
 
+        if document.sacrament_type not in allowed_types_for_current_role():
+            return {"error": "Forbidden document"}, 403
+
+        if document.sacrament_type != cert_request.sacrament_type:
+            return {"error": "Document category does not match the request"}, 400
+
         cert_request.matched_document_id = document.id
         cert_request.generated_file = document.filepath
         cert_request.status = "Ready"
@@ -758,7 +895,7 @@ def api_attach_document_to_request(request_id):
         db.session.commit()
 
         log = AuditLog(
-            user="Admin",
+            user=getattr(g, "user_email", None) or "Admin",
             action=f"Attached archive document #{document.id} to request #{cert_request.id}",
             document_id=document.id
         )
@@ -783,6 +920,8 @@ def api_attach_document_to_request(request_id):
 
 @app.route("/download/<path:filepath>")
 def download_file(filepath):
+    if not can_access_filepath(filepath):
+        return {"error": "Forbidden"}, 403
     return send_from_directory(
         ".",
         filepath,
@@ -791,6 +930,9 @@ def download_file(filepath):
 
 @app.route("/api/masses", methods=["GET"])
 def api_get_masses():
+    denied = require_roles("USER", "ADMIN")
+    if denied:
+        return denied
     try:
         masses = MassRecord.query.filter_by(active=True).order_by(
             MassRecord.id.desc()
@@ -826,6 +968,9 @@ def api_get_masses():
 
 @app.route("/api/masses", methods=["POST"])
 def api_create_mass():
+    denied = require_roles("ADMIN")
+    if denied:
+        return denied
     try:
         title = request.form.get("title")
         priest = request.form.get("priest")
@@ -846,7 +991,9 @@ def api_create_mass():
             folder = "uploads/masses"
             os.makedirs(folder, exist_ok=True)
 
-            filename = file.filename
+            filename = secure_filename(file.filename)
+            if not filename:
+                return {"error": "Invalid filename"}, 400
             filepath = os.path.join(folder, filename)
             file.save(filepath)
 
@@ -894,6 +1041,9 @@ def api_create_mass():
 
 @app.route("/api/masses/<int:mass_id>/status", methods=["PATCH"])
 def api_update_mass_status(mass_id):
+    denied = require_roles("ADMIN")
+    if denied:
+        return denied
     try:
         mass = MassRecord.query.get(mass_id)
 
@@ -925,6 +1075,9 @@ def api_update_mass_status(mass_id):
 
 @app.route("/api/masses/<int:mass_id>/transcription", methods=["PATCH"])
 def api_update_mass_transcription(mass_id):
+    denied = require_roles("ADMIN")
+    if denied:
+        return denied
     try:
         mass = MassRecord.query.get(mass_id)
 
@@ -968,6 +1121,9 @@ def api_update_mass_transcription(mass_id):
 
 @app.route("/api/masses/<int:mass_id>", methods=["DELETE"])
 def api_delete_mass(mass_id):
+    denied = require_roles("ADMIN")
+    if denied:
+        return denied
     try:
         mass = MassRecord.query.get(mass_id)
 
@@ -987,6 +1143,9 @@ def api_delete_mass(mass_id):
 
 @app.route("/api/transcriptions", methods=["GET"])
 def api_get_transcriptions():
+    denied = require_roles("USER", "ADMIN")
+    if denied:
+        return denied
     try:
         masses = MassRecord.query.filter(
             MassRecord.active == True,
@@ -1018,6 +1177,9 @@ def api_get_transcriptions():
 
 @app.route("/api/announcements", methods=["GET"])
 def api_get_announcements():
+    denied = require_roles("USER", "ADMIN")
+    if denied:
+        return denied
     try:
         announcements = Announcement.query.filter_by(active=True).order_by(
             Announcement.id.desc()
@@ -1043,6 +1205,9 @@ def api_get_announcements():
 
 @app.route("/api/announcements", methods=["POST"])
 def api_create_announcement():
+    denied = require_roles("ADMIN")
+    if denied:
+        return denied
     try:
         data = request.get_json()
 
@@ -1090,6 +1255,9 @@ def api_create_announcement():
 
 @app.route("/api/announcements/<int:announcement_id>", methods=["DELETE"])
 def api_delete_announcement(announcement_id):
+    denied = require_roles("ADMIN")
+    if denied:
+        return denied
     try:
         announcement = Announcement.query.get(announcement_id)
 
@@ -1109,6 +1277,9 @@ def api_delete_announcement(announcement_id):
 
 @app.route("/api/user/dashboard-summary")
 def api_user_dashboard_summary():
+    denied = require_roles("USER")
+    if denied:
+        return denied
     try:
         total_masses = MassRecord.query.filter_by(active=True).count()
 
@@ -1181,6 +1352,9 @@ def api_user_dashboard_summary():
 
 @app.route("/api/masses/<int:mass_id>/transcribe-ai", methods=["POST"])
 def api_transcribe_mass_ai(mass_id):
+    denied = require_roles("ADMIN")
+    if denied:
+        return denied
     try:
         mass = MassRecord.query.get(mass_id)
 
@@ -1267,9 +1441,11 @@ def api_transcribe_mass_ai(mass_id):
 
 @app.route("/api/archive/deleted-documents")
 def api_deleted_documents():
+    denied = require_roles("ADMIN", "BURIAL_ADMIN")
+    if denied:
+        return denied
     try:
-        scope = request.args.get("scope")
-        allowed_types = get_allowed_types(scope)
+        allowed_types = allowed_types_for_current_role()
 
         documents = Document.query.filter(
             Document.active == False,
@@ -1304,11 +1480,17 @@ def api_deleted_documents():
 
 @app.route("/api/archive/documents/<int:document_id>/delete", methods=["PATCH"])
 def api_soft_delete_document(document_id):
+    denied = require_roles("ADMIN", "BURIAL_ADMIN")
+    if denied:
+        return denied
     try:
         document = Document.query.get(document_id)
 
         if not document:
             return {"error": "Document not found"}, 404
+
+        if document.sacrament_type not in allowed_types_for_current_role():
+            return {"error": "Forbidden"}, 403
 
         document.active = False
         db.session.commit()
@@ -1336,11 +1518,17 @@ def api_soft_delete_document(document_id):
 
 @app.route("/api/archive/documents/<int:document_id>/restore", methods=["PATCH"])
 def api_restore_document(document_id):
+    denied = require_roles("ADMIN", "BURIAL_ADMIN")
+    if denied:
+        return denied
     try:
         document = Document.query.get(document_id)
 
         if not document:
             return {"error": "Document not found"}, 404
+
+        if document.sacrament_type not in allowed_types_for_current_role():
+            return {"error": "Forbidden"}, 403
 
         document.active = True
         db.session.commit()
@@ -1367,4 +1555,4 @@ def api_restore_document(document_id):
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="127.0.0.1", port=5000, debug=os.environ.get("FLASK_DEBUG") == "1")

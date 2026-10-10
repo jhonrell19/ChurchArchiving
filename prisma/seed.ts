@@ -1,81 +1,66 @@
-import { PrismaClient } from "@prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
-import bcrypt from "bcryptjs";
+import { PrismaClient } from '@prisma/client'
+import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3'
+import bcrypt from 'bcryptjs'
 
 const adapter = new PrismaBetterSqlite3({
-  url: process.env.DATABASE_URL || "file:./dev.db",
-});
+  url: process.env.DATABASE_URL || 'file:./dev.db',
+})
 
-const prisma = new PrismaClient({
-  adapter,
-});
+const prisma = new PrismaClient({ adapter })
 
-async function createUser(
-  fullName: string,
+async function upsertStaff(
   email: string,
   password: string,
-  role: string
+  role: 'ADMIN' | 'BURIAL_ADMIN',
+  firstName: string,
+  surname: string
 ) {
-  const hashedPassword = await bcrypt.hash(password, 10);
+  const hashedPassword = await bcrypt.hash(password, 12)
 
-  const existingUser = await prisma.user.findUnique({
+  await prisma.user.upsert({
     where: { email },
-  });
-
-  if (existingUser) {
-    await prisma.user.update({
-      where: { email },
-      data: {
-        fullName,
-        role,
-      },
-    });
-
-    console.log(`${role} already exists, role updated: ${email}`);
-    return;
-  }
-
-  await prisma.user.create({
-    data: {
-      fullName,
+    update: {
+      firstName,
+      surname,
+      password: hashedPassword,
+      role,
+    },
+    create: {
+      firstName,
+      surname,
       email,
       password: hashedPassword,
       role,
     },
-  });
-
-  console.log(`${role} account created: ${email}`);
+  })
 }
 
 async function main() {
-  await createUser(
-    "Parish Administrator",
-    "admin@ifimaragondon.com",
-    "Admin12345",
-    "admin"
-  );
+  await upsertStaff(
+    'admin@ifimaragondon.com',
+    'Admin12345',
+    'ADMIN',
+    'Main',
+    'Administrator'
+  )
 
-  await createUser(
-    "Burial Office Administrator",
-    "burial@ifimaragondon.com",
-    "Burial12345",
-    "burial_admin"
-  );
+  await upsertStaff(
+    'burial@ifimaragondon.com',
+    'Burial12345',
+    'BURIAL_ADMIN',
+    'Burial',
+    'Administrator'
+  )
 
-  console.log("");
-  console.log("Main Admin Account:");
-  console.log("Email: admin@ifimaragondon.com");
-  console.log("Password: Admin12345");
-  console.log("");
-  console.log("Burial Admin Account:");
-  console.log("Email: burial@ifimaragondon.com");
-  console.log("Password: Burial12345");
+  console.log('Development staff accounts are ready.')
+  console.log('IMPORTANT: change these passwords before production deployment.')
 }
 
 main()
-  .catch((e) => {
-    console.error(e);
+  .catch(error => {
+    console.error(error)
+    process.exit(1)
   })
   .finally(async () => {
-    await prisma.$disconnect();
-  });
+    await prisma.$disconnect()
+  })

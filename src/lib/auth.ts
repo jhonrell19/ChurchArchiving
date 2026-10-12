@@ -72,6 +72,7 @@ export async function getCurrentUser() {
           address: true,
           email: true,
           role: true,
+          emailVerified: true,
           createdAt: true,
           updatedAt: true,
         },

@@ -1,78 +1,46 @@
-import { NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
-import { prisma } from "@/lib/prisma";
-
-type ResetTokenPayload = {
-  id: number;
-  email: string;
-  purpose: string;
-};
+import { NextResponse } from 'next/server'
+import bcrypt from 'bcryptjs'
+import { prisma } from '@/lib/prisma'
+import { hashAccountToken } from '@/lib/accountTokens'
+import { validatePassword } from '@/lib/validation'
 
 export async function POST(req: Request) {
   try {
-    const { token, newPassword } = await req.json();
+    const body = await req.json().catch(() => null)
+    const token = typeof body?.token === 'string' ? body.token : ''
+    const newPassword = typeof body?.newPassword === 'string' ? body.newPassword : ''
 
     if (!token || !newPassword) {
+      return NextResponse.json({ message: 'Token and new password are required.' }, { status: 400 })
+    }
+
+    const passwordErrors = validatePassword(newPassword)
+    if (passwordErrors.length) {
       return NextResponse.json(
-        { message: "Token and new password are required" },
+        { message: `Password must contain ${passwordErrors.join(', ')}.` },
         { status: 400 }
-      );
+      )
     }
 
-    if (newPassword.length < 8) {
-      return NextResponse.json(
-        { message: "Password must be at least 8 characters long" },
-        { status: 400 }
-      );
+    const record = await prisma.passwordResetToken.findUnique({
+      where: { tokenHash: hashAccountToken(token) },
+    })
+
+    if (!record || record.expiresAt.getTime() <= Date.now()) {
+      if (record) await prisma.passwordResetToken.delete({ where: { id: record.id } }).catch(() => undefined)
+      return NextResponse.json({ message: 'Reset link is invalid or expired.' }, { status: 400 })
     }
 
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET as string
-    ) as ResetTokenPayload;
+    const hashedPassword = await bcrypt.hash(newPassword, 12)
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: record.userId }, data: { password: hashedPassword } }),
+      prisma.session.deleteMany({ where: { userId: record.userId } }),
+      prisma.passwordResetToken.deleteMany({ where: { userId: record.userId } }),
+    ])
 
-    if (decoded.purpose !== "password_reset") {
-      return NextResponse.json(
-        { message: "Invalid reset token" },
-        { status: 400 }
-      );
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { email: decoded.email },
-    });
-
-    if (!user) {
-      return NextResponse.json(
-        { message: "Account not found" },
-        { status: 404 }
-      );
-    }
-
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-
-    await prisma.user.update({
-      where: { email: decoded.email },
-      data: {
-        password: hashedPassword,
-      },
-    });
-
-    // Invalidate every active login after a password change.
-    await prisma.session.deleteMany({
-      where: { userId: user.id },
-    });
-
-    return NextResponse.json({
-      message: "Password reset successfully",
-    });
+    return NextResponse.json({ message: 'Password reset successfully.' })
   } catch (error) {
-    console.error("Reset password error:", error);
-
-    return NextResponse.json(
-      { message: "Reset link is invalid or expired" },
-      { status: 400 }
-    );
+    console.error('RESET PASSWORD ERROR:', error)
+    return NextResponse.json({ message: 'Unable to reset password.' }, { status: 500 })
   }
 }

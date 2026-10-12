@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { STATUS_STYLE, inputCls, selectCls } from '../data/mockData'
+import { STATUS_STYLE, inputCls, selectCls } from '../data/ui'
 
 type MassStatus = 'Pending' | 'In Progress' | 'Transcribed'
 
@@ -58,7 +58,7 @@ export default function MassesPage() {
       const data = await res.json()
       setMasses(data.masses || [])
     } catch (err) {
-      console.error('Load masses error:', err)
+      console.warn('Load masses error:', err)
       alert('Cannot load mass records. The parish backend service is unavailable.')
     } finally {
       setLoading(false)
@@ -66,7 +66,7 @@ export default function MassesPage() {
   }
 
   useEffect(() => {
-    loadMasses()
+    queueMicrotask(() => void loadMasses())
   }, [])
 
   const handleChange = (
@@ -127,7 +127,7 @@ export default function MassesPage() {
       setShowForm(false)
       await loadMasses()
     } catch (err) {
-      console.error('Create mass error:', err)
+      console.warn('Create mass error:', err)
       alert('Failed to create mass record.')
     }
   }
@@ -151,7 +151,7 @@ export default function MassesPage() {
 
       await loadMasses()
     } catch (err) {
-      console.error('Update mass status error:', err)
+      console.warn('Update mass status error:', err)
       alert('Failed to update mass status.')
     }
   }
@@ -186,7 +186,7 @@ export default function MassesPage() {
       alert('Transcription and summary saved.')
       await loadMasses()
     } catch (err) {
-      console.error('Save transcription error:', err)
+      console.warn('Save transcription error:', err)
       alert('Failed to save transcription.')
     }
   }
@@ -212,7 +212,7 @@ export default function MassesPage() {
       await loadMasses()
       setExpanded(id)
     } catch (err) {
-      console.error('AI transcription error:', err)
+      console.warn('AI transcription error:', err)
       alert('AI transcription failed. Make sure Flask, FFmpeg, and Faster Whisper are working.')
     } finally {
       setTranscribingId(null)
@@ -236,7 +236,7 @@ export default function MassesPage() {
 
       await loadMasses()
     } catch (err) {
-      console.error('Delete mass error:', err)
+      console.warn('Delete mass error:', err)
       alert('Failed to delete mass record.')
     }
   }

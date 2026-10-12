@@ -31,6 +31,7 @@ export async function GET() {
           address: user.address,
           email: user.email,
           role: user.role,
+          emailVerified: user.emailVerified,
           createdAt: user.createdAt,
           fullName: fullName || user.email,
         },

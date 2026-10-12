@@ -46,7 +46,7 @@ export default function RecycleBinPage({ scope }: RecycleBinPageProps) {
       const data = await res.json()
       setDocuments(data.documents || [])
     } catch (err) {
-      console.error('Recycle bin load error:', err)
+      console.warn('Recycle bin load error:', err)
       alert('Cannot load recycle bin. The parish backend service is unavailable.')
     } finally {
       setLoading(false)
@@ -54,7 +54,7 @@ export default function RecycleBinPage({ scope }: RecycleBinPageProps) {
   }
 
   useEffect(() => {
-    loadDeletedDocuments()
+    queueMicrotask(() => void loadDeletedDocuments())
   }, [])
 
   const restoreDocument = async (id: number) => {
@@ -79,7 +79,7 @@ export default function RecycleBinPage({ scope }: RecycleBinPageProps) {
       alert('Document restored successfully.')
       await loadDeletedDocuments()
     } catch (err) {
-      console.error('Restore document error:', err)
+      console.warn('Restore document error:', err)
       alert('Failed to restore document. The parish backend service is unavailable.')
     }
   }

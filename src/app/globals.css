@@ -5,15 +5,15 @@
 
 
 @theme {
-  --color-navy:       #071630;
-  --color-navy-mid:   #0c2a5e;
-  --color-navy-lite:  #1a3a6b;
-  --color-ink:        #040e1e;
+  --color-navy:       #17365d;
+  --color-navy-mid:   #28527a;
+  --color-navy-lite:  #5f82a6;
+  --color-ink:        #24364b;
   --color-gold:       #d4af37;
   --color-gold-lt:    #e8c84a;
-  --color-cream:      #f5f0e8;
-  --color-txt-lt:     #e8d9b0;
-  --color-txt-md:     #8aaccf;
+  --color-cream:      #fffaf0;
+  --color-txt-lt:     #fffdf8;
+  --color-txt-md:     #66788c;
 
   --font-display: 'Cinzel', Georgia, serif;
   --font-body:    'EB Garamond', Georgia, serif;
@@ -82,3 +82,47 @@
 ::-webkit-scrollbar       { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(212,175,55,0.2); border-radius: 4px; }
+
+.font-body {
+  font-weight: 500;
+}
+
+/* Improve pale blue/gray text on white and cream backgrounds */
+.text-\[\#9ab0c4\] {
+  color: #5f7387 !important;
+}
+
+.text-\[\#7890a6\] {
+  color: #526a80 !important;
+}
+
+.text-\[\#6b8caa\] {
+  color: #486277 !important;
+}
+
+/* Make faded gold text easier to read on dark/navy areas */
+.text-gold\/30 {
+  color: rgb(212 175 55 / 0.68) !important;
+}
+
+.text-gold\/40 {
+  color: rgb(212 175 55 / 0.78) !important;
+}
+
+.text-gold\/50 {
+  color: rgb(212 175 55 / 0.88) !important;
+}
+
+/* Inputs and search bars */
+input::placeholder,
+textarea::placeholder {
+  color: #71869a;
+  opacity: 1;
+}
+
+/* Small interface labels need slightly more weight */
+.font-display.text-\[9px\],
+.font-display.text-\[10px\],
+.font-display.text-\[11px\] {
+  font-weight: 600;
+}

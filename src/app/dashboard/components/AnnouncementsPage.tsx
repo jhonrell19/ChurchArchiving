@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { BADGE_COLOR } from '../data/mockData'
+import { BADGE_COLOR } from '../data/ui'
 
 type Announcement = {
   id: number
@@ -29,7 +29,7 @@ export default function AnnouncementsPage() {
       const data = await res.json()
       setAnnouncements(data.announcements || [])
     } catch (err) {
-      console.error('Load announcements error:', err)
+      console.warn('Load announcements error:', err)
       setAnnouncements([])
     } finally {
       setLoading(false)
@@ -37,7 +37,7 @@ export default function AnnouncementsPage() {
   }
 
   useEffect(() => {
-    loadAnnouncements()
+    queueMicrotask(() => void loadAnnouncements())
   }, [])
 
   return (

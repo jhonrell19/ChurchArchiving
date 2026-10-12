@@ -22,6 +22,8 @@ class Document(db.Model):
 
     file_hash = db.Column(db.String(200), nullable=True)
     department = db.Column(db.String(100), nullable=True)
+    ocr_text = db.Column(db.Text, nullable=True)
+    extracted_metadata = db.Column(db.Text, nullable=True)
 
     uploaded_by = db.Column(db.String(100))
     active = db.Column(db.Boolean, default=True)
@@ -40,22 +42,125 @@ class AuditLog(db.Model):
 class CertificateRequest(db.Model):
     id = db.Column(db.Integer, primary_key=True)
 
-    requester_name = db.Column(db.String(200), nullable=False)
-    requester_email = db.Column(db.String(200))
-    contact_number = db.Column(db.String(100))
+    # REAL OWNER OF THE REQUEST
+    requester_user_id = db.Column(
+        db.Integer,
+        nullable=True,
+        index=True
+    )
 
-    sacrament_type = db.Column(db.String(100), nullable=False)
-    person_name = db.Column(db.String(200), nullable=False)
-    purpose = db.Column(db.String(300))
+    requester_name = db.Column(
+        db.String(200),
+        nullable=False
+    )
 
-    status = db.Column(db.String(50), default="Pending")
-    remarks = db.Column(db.String(500))
+    requester_email = db.Column(
+        db.String(200)
+    )
 
-    matched_document_id = db.Column(db.Integer, nullable=True)
-    generated_file = db.Column(db.String(500), nullable=True)
+    contact_number = db.Column(
+        db.String(100)
+    )
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    requester_address = db.Column(
+        db.String(500)
+    )
+
+    sacrament_type = db.Column(
+        db.String(100),
+        nullable=False
+    )
+
+    person_name = db.Column(
+        db.String(200),
+        nullable=False
+    )
+
+    purpose = db.Column(
+        db.String(300)
+    )
+
+    record_date_hint = db.Column(db.String(100), nullable=True)
+    record_details = db.Column(db.String(500), nullable=True)
+
+    # REGULAR / URGENT
+    is_urgent = db.Column(
+        db.Boolean,
+        default=False,
+        nullable=False
+    )
+
+    # DEMO PAYMENT VALUES
+    # Stored as whole Philippine pesos for now.
+    base_fee = db.Column(
+        db.Integer,
+        default=0,
+        nullable=False
+    )
+
+    urgent_fee = db.Column(
+        db.Integer,
+        default=0,
+        nullable=False
+    )
+
+    total_fee = db.Column(
+        db.Integer,
+        default=0,
+        nullable=False
+    )
+
+    payment_status = db.Column(
+        db.String(30),
+        default="Unpaid",
+        nullable=False
+    )
+
+    payment_method = db.Column(
+        db.String(50),
+        nullable=True
+    )
+
+    payment_reference = db.Column(
+        db.String(100),
+        nullable=True
+    )
+
+    paid_at = db.Column(
+        db.DateTime,
+        nullable=True
+    )
+
+    # REQUEST PROCESSING
+    status = db.Column(
+        db.String(50),
+        default="Pending"
+    )
+
+    remarks = db.Column(
+        db.String(500)
+    )
+
+    matched_document_id = db.Column(
+        db.Integer,
+        nullable=True
+    )
+
+    generated_file = db.Column(
+        db.String(500),
+        nullable=True
+    )
+
+    created_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow
+    )
+
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow
+    )
 
 class MassRecord(db.Model):
     id = db.Column(db.Integer, primary_key=True)

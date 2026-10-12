@@ -13,6 +13,8 @@ const HOP_BY_HOP_HEADERS = new Set([
   'upgrade',
   'host',
   'cookie',
+  'content-length',
+  'accept-encoding',
 ])
 
 function isAllowed(role: Role, method: string, path: string) {
@@ -20,6 +22,10 @@ function isAllowed(role: Role, method: string, path: string) {
 
   if (path.startsWith('files/') || path.startsWith('download/')) {
     return true
+  }
+
+  if (path === 'api/health') {
+    return m === 'GET'
   }
 
   if (path.startsWith('api/user/')) {
@@ -36,8 +42,22 @@ function isAllowed(role: Role, method: string, path: string) {
     return m === 'GET' && ['USER', 'ADMIN', 'BURIAL_ADMIN'].includes(role)
   }
 
-  if (/^api\/requests\/\d+\/(status|attach-document)$/.test(path)) {
+if (
+  /^api\/requests\/\d+\/demo-pay$/.test(path)
+) {
+  return m === 'POST' && role === 'USER'
+}
+
+  if (/^api\/requests\/\d+\/(status|attach-document|select-record)$/.test(path)) {
     return m === 'PATCH' && ['ADMIN', 'BURIAL_ADMIN'].includes(role)
+  }
+
+  if (/^api\/requests\/\d+\/(release-document|generate-document)$/.test(path)) {
+    return m === 'POST' && ['ADMIN', 'BURIAL_ADMIN'].includes(role)
+  }
+
+  if (/^api\/requests\/\d+\/download$/.test(path)) {
+    return m === 'GET' && ['USER', 'ADMIN', 'BURIAL_ADMIN'].includes(role)
   }
 
   if (path.startsWith('api/archive/')) {
@@ -135,6 +155,11 @@ async function forward(request: NextRequest, context: { params: Promise<{ path: 
   headers.set('x-user-email', user.email)
   headers.set('x-user-name', fullName || user.email)
   headers.set('x-user-phone', user.phoneNumber || '')
+
+  headers.set(
+  'x-user-address',
+  user.address || ''
+)
 
   try {
     const body = ['GET', 'HEAD'].includes(request.method.toUpperCase())

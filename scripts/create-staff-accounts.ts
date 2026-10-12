@@ -24,6 +24,7 @@ async function main() {
       update: {
         password: adminPassword,
         role: 'ADMIN',
+        emailVerified: true,
       },
 
       create: {
@@ -40,6 +41,7 @@ async function main() {
         password: adminPassword,
 
         role: 'ADMIN',
+        emailVerified: true,
       },
 
     })
@@ -66,6 +68,7 @@ async function main() {
       update: {
         password: burialPassword,
         role: 'BURIAL_ADMIN',
+        emailVerified: true,
       },
 
       create: {
@@ -82,6 +85,7 @@ async function main() {
         password: burialPassword,
 
         role: 'BURIAL_ADMIN',
+        emailVerified: true,
       },
 
     })

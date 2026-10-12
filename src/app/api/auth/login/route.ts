@@ -1,45 +1,32 @@
 import { NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
-import {
-  createSession,
-  SESSION_COOKIE,
-  SESSION_MAX_AGE_SECONDS,
-} from '@/lib/auth'
+import { createSession, SESSION_COOKIE, SESSION_MAX_AGE_SECONDS } from '@/lib/auth'
+import { normalizeEmail } from '@/lib/validation'
 
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => null)
-    const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : ''
+    const email = normalizeEmail(body?.email)
     const password = typeof body?.password === 'string' ? body.password : ''
 
     if (!email || !password) {
-      return NextResponse.json(
-        { message: 'Email and password are required.' },
-        { status: 400 }
-      )
+      return NextResponse.json({ message: 'Email and password are required.' }, { status: 400 })
     }
 
     const user = await prisma.user.findUnique({ where: { email } })
-
-    if (!user) {
-      return NextResponse.json(
-        { message: 'Invalid email or password.' },
-        { status: 401 }
-      )
+    if (!user || !(await bcrypt.compare(password, user.password))) {
+      return NextResponse.json({ message: 'Invalid email or password.' }, { status: 401 })
     }
 
-    const validPassword = await bcrypt.compare(password, user.password)
-
-    if (!validPassword) {
+    if (user.role === 'USER' && !user.emailVerified) {
       return NextResponse.json(
-        { message: 'Invalid email or password.' },
-        { status: 401 }
+        { message: 'Please verify your email address before signing in.', verificationRequired: true },
+        { status: 403 }
       )
     }
 
     const { token } = await createSession(user.id)
-
     const response = NextResponse.json(
       {
         message: 'Login successful.',
@@ -49,13 +36,10 @@ export async function POST(req: Request) {
           role: user.role,
           firstName: user.firstName,
           surname: user.surname,
+          emailVerified: user.emailVerified,
         },
       },
-      {
-        headers: {
-          'Cache-Control': 'no-store',
-        },
-      }
+      { headers: { 'Cache-Control': 'no-store' } }
     )
 
     response.cookies.set(SESSION_COOKIE, token, {
@@ -65,8 +49,6 @@ export async function POST(req: Request) {
       path: '/',
       maxAge: SESSION_MAX_AGE_SECONDS,
     })
-
-    // Remove the legacy JWT cookie so old ADMIN tokens cannot keep affecting tests.
     response.cookies.set('token', '', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -74,14 +56,9 @@ export async function POST(req: Request) {
       path: '/',
       expires: new Date(0),
     })
-
     return response
   } catch (error) {
     console.error('LOGIN ERROR:', error)
-
-    return NextResponse.json(
-      { message: 'Login failed.' },
-      { status: 500 }
-    )
+    return NextResponse.json({ message: 'Login failed.' }, { status: 500 })
   }
 }

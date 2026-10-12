@@ -24,6 +24,7 @@ async function upsertStaff(
       surname,
       password: hashedPassword,
       role,
+      emailVerified: true,
     },
     create: {
       firstName,
@@ -31,6 +32,7 @@ async function upsertStaff(
       email,
       password: hashedPassword,
       role,
+      emailVerified: true,
     },
   })
 }

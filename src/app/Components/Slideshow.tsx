@@ -5,8 +5,7 @@ import Link from 'next/link'
 
 const SLIDES = [
   {
-    landscape: '/images/Land1.png',
-    portrait:  '/images/Por1.jpg',
+    background: 'from-[#0d2a47] via-[#17456f] to-[#d8b35c]',
     label: 'Welcome',
     title: 'Iglesia Filipina Independiente',
     verse: '"For God so loved the world that he gave his one and only Son." — John 3:16',
@@ -14,8 +13,7 @@ const SLIDES = [
     href:  '/services',
   },
   {
-    landscape: '/images/Land2.jpg',
-    portrait:  '/images/Por2.jpg',
+    background: 'from-[#17365a] via-[#345f82] to-[#efe4c7]',
     label: 'Our Church',
     title: 'A Place of Faith & Tradition',
     verse: '"The Lord is my shepherd; I shall not want." — Psalm 23:1',
@@ -23,8 +21,7 @@ const SLIDES = [
     href:  '/about',
   },
   {
-    landscape: '/images/Land3.jpg',
-    portrait:  '/images/Por1.jpg',
+    background: 'from-[#122b46] via-[#24577f] to-[#cfaa4d]',
     label: 'Worship With Us',
     title: 'Sunday Mass Every Week',
     verse: '"Where two or three gather in my name, there am I." — Matthew 18:20',
@@ -32,8 +29,7 @@ const SLIDES = [
     href:  '/services',
   },
   {
-    landscape: '/images/Land4.jpg',
-    portrait:  '/images/Por2.jpg',
+    background: 'from-[#1c3b5b] via-[#567995] to-[#f4ead2]',
     label: 'Community',
     title: 'Growing Together in Christ',
     verse: '"Love one another as I have loved you." — John 13:34',
@@ -45,18 +41,9 @@ const SLIDES = [
 export default function Slideshow() {
   const [cur, setCur]           = useState(0)
   const [mounted, setMounted]   = useState(false)
-  const [isPortrait, setIsPortrait] = useState(false)
 
   useEffect(() => {
-    setMounted(true)
-
-    // Set initial orientation
-    const check = () => setIsPortrait(window.innerHeight > window.innerWidth)
-    check()
-
-    // Listen for orientation/resize changes
-    window.addEventListener('resize', check)
-    return () => window.removeEventListener('resize', check)
+    queueMicrotask(() => setMounted(true))
   }, [])
 
   const goTo = useCallback((n: number) => {
@@ -78,14 +65,11 @@ export default function Slideshow() {
       {SLIDES.map((s, i) => (
         <div
           key={i}
-          className={`absolute inset-0 flex items-center justify-center
-            bg-center bg-cover transition-opacity duration-1000
+          className={`absolute inset-0 flex items-center justify-center bg-gradient-to-br
+            ${s.background} transition-opacity duration-1000
             ${i === cur ? 'opacity-100' : 'opacity-0'}`}
-          style={{
-            backgroundImage: `url(${isPortrait ? s.portrait : s.landscape})`
-          }}
         >
-          <div className="absolute inset-0 bg-navy/65" />
+          <div className="absolute inset-0 bg-white/10" />
           <div className="absolute inset-0 bg-grid-gold pointer-events-none" />
 
           <div className="relative z-10 text-center px-6 max-w-2xl">

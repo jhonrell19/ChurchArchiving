@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { inputCls } from '../data/mockData'
+import { inputCls } from '../data/ui'
 
 type ArchiveDocument = {
   id: number
@@ -35,10 +35,16 @@ const [form, setForm] = useState({
   parish: '',
   priest: '',
   date_of_record: '',
+  book_number: '',
+  page_number: '',
   document_type: 'Scanned Certificate',
 })
 
   const [file, setFile] = useState<File | null>(null)
+  const [runOcr, setRunOcr] = useState(true)
+  const [ocrLoading, setOcrLoading] = useState(false)
+  const [ocrText, setOcrText] = useState('')
+  const [ocrSuggestions, setOcrSuggestions] = useState<Record<string, string>>({})
 
   const loadDocuments = async () => {
     try {
@@ -53,7 +59,7 @@ const [form, setForm] = useState({
       const data = await res.json()
       setDocuments(data.documents || [])
     } catch (err) {
-      console.error('Archive load error:', err)
+      console.warn('Archive load error:', err)
       alert('Cannot load archive records. The parish backend service is unavailable.')
     } finally {
       setLoading(false)
@@ -61,7 +67,7 @@ const [form, setForm] = useState({
   }
 
   useEffect(() => {
-    loadDocuments()
+    queueMicrotask(() => void loadDocuments())
   }, [])
 
   const handleChange = (
@@ -88,6 +94,7 @@ const [form, setForm] = useState({
     })
 
     formData.append('file', file)
+    formData.append('runOcr', runOcr ? 'true' : 'false')
 
     try {
       const res = await fetch('/api/backend/api/archive/upload', {
@@ -110,18 +117,52 @@ const [form, setForm] = useState({
   parish: '',
   priest: '',
   date_of_record: '',
+  book_number: '',
+  page_number: '',
   document_type: 'Scanned Certificate',
 })
 
       setFile(null)
+      setOcrText('')
+      setOcrSuggestions({})
       setShowForm(false)
       await loadDocuments()
     } catch (err) {
-      console.error('Archive upload error:', err)
+      console.warn('Archive upload error:', err)
       alert('Upload failed. The parish backend service is unavailable.')
     }
 
   }
+
+const previewOcr = async () => {
+  if (!file) {
+    alert('Choose a scanned PDF or image first.')
+    return
+  }
+
+  const formData = new FormData()
+  formData.append('file', file)
+
+  try {
+    setOcrLoading(true)
+    const res = await fetch('/api/backend/api/archive/ocr-preview', {
+      method: 'POST',
+      body: formData,
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      alert(data.error || 'OCR preview failed.')
+      return
+    }
+    setOcrText(data.text || '')
+    setOcrSuggestions(data.suggestions || {})
+  } catch (error) {
+    console.warn('OCR preview error:', error)
+    alert('OCR preview is unavailable right now.')
+  } finally {
+    setOcrLoading(false)
+  }
+}
 
 const deleteDocument = async (id: number) => {
   const confirmDelete = confirm('Move this document to Recycle Bin?')
@@ -145,7 +186,7 @@ const deleteDocument = async (id: number) => {
     alert('Document moved to Recycle Bin.')
     await loadDocuments()
   } catch (err) {
-    console.error('Delete document error:', err)
+    console.warn('Delete document error:', err)
     alert('Failed to delete document. The parish backend service is unavailable.')
   }
 } 
@@ -271,6 +312,32 @@ const records = documents.filter(doc =>
 
             <div>
               <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1">
+                Book Number
+              </label>
+              <input
+                name="book_number"
+                value={form.book_number}
+                onChange={handleChange}
+                placeholder="Book / Volume"
+                className={inputCls}
+              />
+            </div>
+
+            <div>
+              <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1">
+                Page Number
+              </label>
+              <input
+                name="page_number"
+                value={form.page_number}
+                onChange={handleChange}
+                placeholder="Page"
+                className={inputCls}
+              />
+            </div>
+
+            <div>
+              <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1">
                 Document Type
               </label>
               <input
@@ -302,6 +369,50 @@ const records = documents.filter(doc =>
                 required
                 className={inputCls}
               />
+              <div className="mt-3 flex items-center gap-3 flex-wrap">
+                <label className="flex items-center gap-2 font-body text-[12px] text-slate-600">
+                  <input type="checkbox" checked={runOcr} onChange={e => setRunOcr(e.target.checked)} />
+                  Extract OCR text when saving
+                </label>
+                <button
+                  type="button"
+                  onClick={() => void previewOcr()}
+                  disabled={!file || ocrLoading}
+                  className="font-display text-[10px] tracking-wider border border-blue-200 text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg disabled:opacity-50"
+                >
+                  {ocrLoading ? 'Reading scan...' : 'Preview OCR'}
+                </button>
+              </div>
+              {(ocrText || Object.keys(ocrSuggestions).length > 0) && (
+                <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 p-3">
+                  <p className="font-display text-[10px] tracking-wider text-blue-800 mb-1">OCR PREVIEW — VERIFY BEFORE USING</p>
+                  {Object.keys(ocrSuggestions).length > 0 && (
+                    <div className="mb-2">
+                      <p className="font-body text-[11px] text-blue-700">
+                        Suggestions: {Object.entries(ocrSuggestions).map(([key, value]) => `${key}: ${value}`).join(' · ')}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setForm(prev => ({
+                            ...prev,
+                            person_name: ocrSuggestions.possibleName || prev.person_name,
+                            date_of_record: /^\d{4}-\d{2}-\d{2}$/.test(ocrSuggestions.dateHint || '')
+                              ? ocrSuggestions.dateHint
+                              : prev.date_of_record,
+                          }))
+                        }
+                        className="mt-2 font-display text-[9px] tracking-wider bg-blue-600 text-white px-2.5 py-1.5 rounded-lg"
+                      >
+                        Use Safe Suggestions
+                      </button>
+                    </div>
+                  )}
+                  <p className="font-body text-[11px] text-slate-600 whitespace-pre-wrap max-h-32 overflow-auto">
+                    {ocrText || 'No text recognized.'}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 

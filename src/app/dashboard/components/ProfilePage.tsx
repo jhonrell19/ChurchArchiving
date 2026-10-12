@@ -72,7 +72,7 @@ export default function ProfilePage() {
 
         setUser(data.user)
       } catch (err) {
-        console.error('Profile load error:', err)
+        console.warn('Profile load error:', err)
         setError(err instanceof Error ? err.message : 'Unable to load profile.')
       } finally {
         setLoading(false)

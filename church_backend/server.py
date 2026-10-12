@@ -1,815 +1,2695 @@
 from flask import (
+
     Flask,
+
     render_template,
+
     request,
+
     redirect,
+
     send_from_directory,
+
     jsonify,
+
     g,
+
 )
 
+
+
+
+
+from datetime import datetime
+
 from docxtpl import DocxTemplate
+
 from models import db, Document, AuditLog, CertificateRequest, MassRecord, Announcement
+
 from faster_whisper import WhisperModel
+
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+
 from reportlab.lib.styles import getSampleStyleSheet
+
 from werkzeug.utils import secure_filename
+
 import subprocess
+import threading
+
 import os
+import posixpath
+import json
+import re
+from collections import Counter
+
+from sqlalchemy import func, text
 from dotenv import load_dotenv
 
-load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
+
+
+BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(BACKEND_DIR)
+
+load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
+
+
 
 app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("ARCHIVE_DATABASE_URL", "sqlite:///archive.db")
+
+# Use one deterministic archive database path in development.  A relative
+# SQLite URI can be surprisingly easy to point at the wrong instance folder
+# when the backend is started in different ways, so resolve it explicitly.
+ARCHIVE_DB_PATH = os.path.join(BACKEND_DIR, "instance", "archive.db")
+os.makedirs(os.path.dirname(ARCHIVE_DB_PATH), exist_ok=True)
+
+_archive_db_override = os.environ.get("ARCHIVE_DATABASE_URL")
+if _archive_db_override:
+    app.config["SQLALCHEMY_DATABASE_URI"] = _archive_db_override
+else:
+    app.config["SQLALCHEMY_DATABASE_URI"] = (
+        "sqlite:///" + ARCHIVE_DB_PATH.replace("\\", "/")
+    )
+
 app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY", "dev-only-change-me")
+
 INTERNAL_API_KEY = os.environ.get("FLASK_INTERNAL_KEY")
 
-MASS_UPLOAD_FOLDER = "uploads/masses"
-TRANSCRIPTION_FOLDER = "uploads/transcriptions"
+
+
+MASS_UPLOAD_FOLDER = os.path.join(BACKEND_DIR, "uploads", "masses")
+
+TRANSCRIPTION_FOLDER = os.path.join(BACKEND_DIR, "uploads", "transcriptions")
+
+
 
 os.makedirs(MASS_UPLOAD_FOLDER, exist_ok=True)
+
 os.makedirs(TRANSCRIPTION_FOLDER, exist_ok=True)
 
-model = WhisperModel("base", device="cpu", compute_type="int8")
+
+
+_whisper_model = None
+_whisper_model_lock = threading.Lock()
+
+
+def get_whisper_model():
+    """Load Faster-Whisper only when AI transcription is actually requested.
+
+    Keeping model initialization out of module startup allows the Flask API to
+    start even when the AI model needs extra time to initialize or download.
+    """
+    global _whisper_model
+
+    if _whisper_model is None:
+        with _whisper_model_lock:
+            if _whisper_model is None:
+                app.logger.info("Loading Faster-Whisper base model...")
+                _whisper_model = WhisperModel(
+                    "base",
+                    device="cpu",
+                    compute_type="int8",
+                )
+                app.logger.info("Faster-Whisper model loaded.")
+
+    return _whisper_model
+
+
 
 db.init_app(app)
 
-with app.app_context():
-    db.create_all()
 
-MAIN_ADMIN_TYPES = ["baptismal", "confirmation", "marriage"]
-BURIAL_ADMIN_TYPES = ["burial", "land_agreement"]
+REQUEST_SCHEMA_COLUMNS = {
+    "requester_user_id": "INTEGER",
+    "requester_address": "VARCHAR(500)",
+    "is_urgent": "BOOLEAN NOT NULL DEFAULT 0",
+    "base_fee": "INTEGER NOT NULL DEFAULT 0",
+    "urgent_fee": "INTEGER NOT NULL DEFAULT 0",
+    "total_fee": "INTEGER NOT NULL DEFAULT 0",
+    "payment_status": "VARCHAR(30) NOT NULL DEFAULT 'Unpaid'",
+    "payment_method": "VARCHAR(50)",
+    "payment_reference": "VARCHAR(100)",
+    "paid_at": "DATETIME",
+    "record_date_hint": "VARCHAR(100)",
+    "record_details": "VARCHAR(500)",
+}
 
-PREFIX_MAP = {
-    "baptismal": "BAP",
-    "confirmation": "CNF",
-    "marriage": "MRG",
-    "burial": "BRL",
-    "land_agreement": "LAG",
+DOCUMENT_SCHEMA_COLUMNS = {
+    "file_hash": "VARCHAR(200)",
+    "department": "VARCHAR(100)",
+    "ocr_text": "TEXT",
+    "extracted_metadata": "TEXT",
 }
 
 
+def ensure_runtime_schema():
+    """Bring the SQLite schema used by *this Flask process* up to date.
+
+    This is intentionally idempotent.  It prevents a restored/older
+    archive.db from being opened by the app with models that expect newer
+    columns.  It also eliminates ambiguity about which archive.db was
+    migrated because the ALTER statements run through Flask-SQLAlchemy's
+    own engine.
+    """
+
+    def column_names(connection, table_name):
+        rows = connection.execute(
+            text(f"PRAGMA table_info({table_name})")
+        ).fetchall()
+        return {row[1] for row in rows}
+
+    with db.engine.begin() as connection:
+        for table_name, required_columns in (
+            ("certificate_request", REQUEST_SCHEMA_COLUMNS),
+            ("document", DOCUMENT_SCHEMA_COLUMNS),
+        ):
+            existing = column_names(connection, table_name)
+
+            for column_name, definition in required_columns.items():
+                if column_name not in existing:
+                    app.logger.warning(
+                        "Adding missing database column %s.%s",
+                        table_name,
+                        column_name,
+                    )
+                    connection.execute(
+                        text(
+                            f"ALTER TABLE {table_name} "
+                            f"ADD COLUMN {column_name} {definition}"
+                        )
+                    )
+
+        connection.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS "
+                "ix_certificate_request_requester_user_id "
+                "ON certificate_request(requester_user_id)"
+            )
+        )
+        connection.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_document_file_hash "
+                "ON document(file_hash)"
+            )
+        )
+
+        # Keep records created by the older prototype visible in the new
+        # Burial Admin category.
+        connection.execute(
+            text(
+                "UPDATE document SET sacrament_type = 'burial' "
+                "WHERE sacrament_type = 'death'"
+            )
+        )
+        connection.execute(
+            text(
+                "UPDATE certificate_request SET sacrament_type = 'burial' "
+                "WHERE sacrament_type = 'death'"
+            )
+        )
+
+        connection.execute(
+            text(
+                """
+                UPDATE certificate_request
+                SET generated_file = NULL,
+                    status = CASE WHEN status = 'Ready' THEN 'Approved' ELSE status END
+                WHERE matched_document_id IS NOT NULL
+                  AND generated_file IS NOT NULL
+                  AND REPLACE(generated_file, '\\', '/') = (
+                      SELECT REPLACE(document.filepath, '\\', '/')
+                      FROM document
+                      WHERE document.id = certificate_request.matched_document_id
+                  )
+                  AND REPLACE(generated_file, '\\', '/') NOT LIKE 'uploads/releases/%'
+                """
+            )
+        )
+
+        connection.execute(
+            text(
+                """
+                UPDATE certificate_request
+                SET status = CASE
+                    WHEN matched_document_id IS NOT NULL THEN 'Approved'
+                    ELSE 'Pending'
+                END
+                WHERE status = 'Released'
+                  AND (payment_status != 'Paid' OR generated_file IS NULL)
+                """
+            )
+        )
+
+        connection.execute(
+            text(
+                """
+                UPDATE document
+                SET department = 'main'
+                WHERE sacrament_type IN ('baptismal', 'confirmation', 'marriage')
+                  AND (department IS NULL OR TRIM(department) = '')
+                """
+            )
+        )
+        connection.execute(
+            text(
+                """
+                UPDATE document
+                SET department = 'burial'
+                WHERE sacrament_type IN ('burial', 'land_agreement')
+                  AND (department IS NULL OR TRIM(department) = '')
+                """
+            )
+        )
+
+    # Drop any pooled SQLite connection that may have cached the old schema
+    # before the ALTER TABLE statements.  All request handlers will open a
+    # fresh connection after this point.
+    db.session.remove()
+    db.engine.dispose()
+
+    with db.engine.connect() as connection:
+        request_columns = column_names(connection, "certificate_request")
+        missing = set(REQUEST_SCHEMA_COLUMNS) - request_columns
+        if missing:
+            raise RuntimeError(
+                "Archive database migration failed. Missing columns: "
+                + ", ".join(sorted(missing))
+            )
+
+        # Execute the exact column access that previously failed so startup
+        # stops immediately if Flask is somehow pointed at the wrong file.
+        connection.execute(
+            text(
+                "SELECT requester_user_id "
+                "FROM certificate_request LIMIT 1"
+            )
+        ).fetchall()
+
+
+with app.app_context():
+    db.create_all()
+    ensure_runtime_schema()
+    print(f"[Smart Parish] Archive DB: {db.engine.url.database}")
+    print("[Smart Parish] Request schema verified: requester_user_id OK")
+
+
+MAIN_ADMIN_TYPES = ["baptismal", "confirmation", "marriage"]
+
+BURIAL_ADMIN_TYPES = ["burial", "land_agreement"]
+
+
+
+PREFIX_MAP = {
+
+    "baptismal": "BAP",
+
+    "confirmation": "CNF",
+
+    "marriage": "MRG",
+
+    "burial": "BRL",
+
+    "land_agreement": "LAG",
+
+}
+
+DEMO_BASE_FEES = {
+
+    "baptismal": 100,
+
+    "confirmation": 100,
+
+    "marriage": 100,
+
+    "burial": 100,
+
+    "land_agreement": 100,
+
+}
+
+
+
+DEMO_URGENT_FEE = 50
+
+
+
+def current_user_id():
+
+    try:
+
+        return int(g.user_id)
+
+    except (TypeError, ValueError):
+
+        return None
+
+
+
+def serialize_request(r):
+    matched_document = None
+
+    if r.matched_document_id:
+        source = db.session.get(Document, r.matched_document_id)
+        if source:
+            matched_document = {
+                "id": source.id,
+                "personName": source.person_name,
+                "sacramentType": source.sacrament_type,
+                "dateOfRecord": source.date_of_record,
+                "bookNumber": source.book_number,
+                "pageNumber": source.page_number,
+                "certificateNumber": source.certificate_number,
+                "filename": source.filename,
+                "filepath": source.filepath,
+            }
+
+    return {
+
+        "id": r.id,
+
+
+
+        "requesterUserId":
+
+            r.requester_user_id,
+
+
+
+        "requesterName":
+
+            r.requester_name,
+
+
+
+        "requesterEmail":
+
+            r.requester_email,
+
+
+
+        "contactNumber":
+
+            r.contact_number,
+
+
+
+        "requesterAddress":
+
+            r.requester_address,
+
+
+
+        "sacramentType":
+
+            r.sacrament_type,
+
+
+
+        "personName":
+
+            r.person_name,
+
+
+
+        "purpose":
+
+            r.purpose,
+
+        "recordDateHint": r.record_date_hint,
+
+        "recordDetails": r.record_details,
+
+        "isUrgent":
+
+            bool(r.is_urgent),
+
+
+
+        "baseFee":
+
+            r.base_fee,
+
+
+
+        "urgentFee":
+
+            r.urgent_fee,
+
+
+
+        "totalFee":
+
+            r.total_fee,
+
+
+
+        "paymentStatus":
+
+            r.payment_status,
+
+
+
+        "paymentMethod":
+
+            r.payment_method,
+
+
+
+        "paymentReference":
+
+            r.payment_reference,
+
+
+
+        "paidAt":
+
+            r.paid_at.isoformat()
+
+            if r.paid_at
+
+            else None,
+
+
+
+        "status":
+
+            r.status,
+
+
+
+        "remarks":
+
+            r.remarks,
+
+
+
+        "matchedDocumentId":
+
+            r.matched_document_id,
+
+
+
+        "matchedDocument":
+
+            matched_document,
+
+
+
+        "generatedFile":
+
+            r.generated_file,
+
+
+
+        "createdAt":
+
+            r.created_at.isoformat()
+
+            if r.created_at
+
+            else None,
+
+
+
+        "updatedAt":
+
+            r.updated_at.isoformat()
+
+            if r.updated_at
+
+            else None,
+
+    }
+
+
+
 def _is_protected_backend_path():
+
     return (
+
         request.path.startswith("/api/")
+
         or request.path.startswith("/files/")
+
         or request.path.startswith("/download/")
+
     )
 
 
+
+
+
 @app.before_request
+
 def protect_backend_boundary():
+
     if not _is_protected_backend_path():
+
         return None
 
+
+
     if not INTERNAL_API_KEY:
+
         app.logger.error("FLASK_INTERNAL_KEY is not configured")
+
         return {"error": "Backend security is not configured"}, 500
 
+
+
     if request.headers.get("X-Internal-Key") != INTERNAL_API_KEY:
+
         return {"error": "Unauthorized"}, 401
 
+
+
     g.user_id = request.headers.get("X-User-Id")
+
     g.user_role = request.headers.get("X-User-Role")
+
     g.user_email = request.headers.get("X-User-Email")
+
     g.user_name = request.headers.get("X-User-Name")
+
     g.user_phone = request.headers.get("X-User-Phone")
 
+
+
+    g.user_address = request.headers.get("X-User-Address")
+
+
+
     if g.user_role not in {"USER", "ADMIN", "BURIAL_ADMIN"}:
+
         return {"error": "Invalid authenticated role"}, 401
 
+
+
     return None
+
+
+
 
 
 def require_roles(*roles):
+
     if getattr(g, "user_role", None) not in roles:
+
         return {"error": "Forbidden"}, 403
+
     return None
 
 
+
+
+
 def allowed_types_for_current_role():
+
     role = getattr(g, "user_role", None)
+
     if role == "ADMIN":
+
         return MAIN_ADMIN_TYPES
+
     if role == "BURIAL_ADMIN":
+
         return BURIAL_ADMIN_TYPES
+
     if role == "USER":
+
         return MAIN_ADMIN_TYPES + BURIAL_ADMIN_TYPES
+
     return []
 
 
+
+
+
 def staff_can_access_request(cert_request):
+
     return cert_request.sacrament_type in allowed_types_for_current_role()
 
 
+
+
+
+def normalize_path(filepath):
+
+    raw = (filepath or "").replace("\\", "/").strip()
+
+    # Collapse duplicate separators and traversal segments such as ../.
+    return posixpath.normpath("/" + raw).lstrip("/")
+
+
+def backend_storage_path(filepath):
+
+    normalized = normalize_path(filepath)
+
+    return os.path.join(
+        BACKEND_DIR,
+        *normalized.split("/")
+    )
+
+
 def can_access_filepath(filepath):
-    normalized = filepath.replace("\\", "/").lstrip("/")
+
     role = getattr(g, "user_role", None)
-    path_variants = {filepath, normalized, normalized.replace("/", "\\")}
 
+    normalized = normalize_path(filepath)
+
+    if not normalized or normalized == ".":
+        return False
+
+    # Historical Windows records can contain backslashes in SQLite.
+    document_path_matches = (
+        func.replace(Document.filepath, "\\", "/") == normalized
+    )
+
+    request_path_matches = (
+        func.replace(CertificateRequest.generated_file, "\\", "/") == normalized
+    )
+
+    # MAIN ADMIN
     if role == "ADMIN":
-        if normalized.startswith("uploads/masses/") or normalized.startswith("uploads/transcriptions/"):
-            return True
-        document = Document.query.filter(Document.filepath.in_(path_variants)).first()
-        return bool(document and document.sacrament_type in MAIN_ADMIN_TYPES)
 
+        if (
+            normalized.startswith("uploads/masses/")
+            or normalized.startswith("uploads/transcriptions/")
+        ):
+            return True
+
+        document = (
+            Document.query
+            .filter(document_path_matches)
+            .first()
+        )
+
+        if document and document.sacrament_type in MAIN_ADMIN_TYPES:
+            return True
+
+        release_request = (
+            CertificateRequest.query
+            .filter(
+                request_path_matches,
+                CertificateRequest.sacrament_type.in_(MAIN_ADMIN_TYPES),
+            )
+            .first()
+        )
+
+        return release_request is not None
+
+    # BURIAL ADMIN
     if role == "BURIAL_ADMIN":
-        document = Document.query.filter(Document.filepath.in_(path_variants)).first()
-        return bool(document and document.sacrament_type in BURIAL_ADMIN_TYPES)
 
-    if role == "USER":
-        if normalized.startswith("uploads/masses/") or normalized.startswith("uploads/transcriptions/"):
+        document = (
+            Document.query
+            .filter(document_path_matches)
+            .first()
+        )
+
+        if document and document.sacrament_type in BURIAL_ADMIN_TYPES:
             return True
-        owned_request = CertificateRequest.query.filter(
-            CertificateRequest.requester_email == getattr(g, "user_email", None),
-            CertificateRequest.generated_file.in_(path_variants),
-            CertificateRequest.status.in_(["Ready", "Released"])
-        ).first()
+
+        release_request = (
+            CertificateRequest.query
+            .filter(
+                request_path_matches,
+                CertificateRequest.sacrament_type.in_(BURIAL_ADMIN_TYPES),
+            )
+            .first()
+        )
+
+        return release_request is not None
+
+    # PARISHIONER / USER
+    if role == "USER":
+
+        user_id = current_user_id()
+
+        if not user_id:
+            return False
+
+        # Users may view public parish Mass media/transcript files, but never
+        # sacramental archive source scans.
+        mass_file_match = (
+            MassRecord.query
+            .filter(
+                MassRecord.active == True,
+                (func.replace(MassRecord.filepath, "\\", "/") == normalized)
+                | (func.replace(MassRecord.transcript_filepath, "\\", "/") == normalized),
+            )
+            .first()
+        )
+        if mass_file_match:
+            return True
+
+        # Final certificate downloads remain private to the request owner and
+        # are available only after payment and release.
+        owned_request = (
+            CertificateRequest.query
+            .filter(
+                CertificateRequest.requester_user_id == user_id,
+                request_path_matches,
+                CertificateRequest.status == "Released",
+                CertificateRequest.payment_status == "Paid",
+            )
+            .first()
+        )
+
         return owned_request is not None
 
     return False
 
+
 def get_department(sacrament_type):
+
     if sacrament_type in BURIAL_ADMIN_TYPES:
+
         return "burial"
+
     return "main"
 
+
+
 def get_allowed_types(scope):
+
     if scope == "burial":
+
         return BURIAL_ADMIN_TYPES
+
     if scope == "main":
+
         return MAIN_ADMIN_TYPES
+
     return MAIN_ADMIN_TYPES + BURIAL_ADMIN_TYPES
 
+
+
 def calculate_file_hash(file):
+
     import hashlib
+
+
 
     hasher = hashlib.sha256()
 
+
+
     file.stream.seek(0)
+
+
 
     while True:
+
         chunk = file.stream.read(8192)
+
         if not chunk:
+
             break
+
         hasher.update(chunk)
 
+
+
     file.stream.seek(0)
+
+
 
     return hasher.hexdigest()
 
 
-def highlight_best(text):
-    sentences = text.split(".")
-    if not sentences:
-        return text
 
-    best = max(sentences, key=len)
-    return best.strip()
+
+
+
+def extract_text_from_path(file_path):
+    """Extract OCR text from image/PDF files when optional OCR tools exist.
+
+    Requires pytesseract + Pillow. PDF OCR also uses PyMuPDF. The function
+    deliberately raises a readable RuntimeError when the local OCR engine is
+    not installed so the archive workflow can continue without silently
+    pretending OCR succeeded.
+    """
+    try:
+        import pytesseract
+        from PIL import Image
+    except ImportError as exc:
+        raise RuntimeError(
+            "OCR Python packages are not installed. Run: pip install pytesseract Pillow PyMuPDF"
+        ) from exc
+
+    extension = os.path.splitext(file_path)[1].lower()
+    texts = []
+
+    if extension in {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"}:
+        try:
+            texts.append(pytesseract.image_to_string(Image.open(file_path)))
+        except pytesseract.TesseractNotFoundError as exc:
+            raise RuntimeError(
+                "Tesseract OCR is not installed or not available on PATH."
+            ) from exc
+    elif extension == ".pdf":
+        try:
+            import fitz
+        except ImportError as exc:
+            raise RuntimeError("PDF OCR requires PyMuPDF. Run: pip install PyMuPDF") from exc
+
+        document = fitz.open(file_path)
+        try:
+            for page_index in range(min(len(document), 10)):
+                page = document.load_page(page_index)
+                pix = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
+                image = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                texts.append(pytesseract.image_to_string(image))
+        finally:
+            document.close()
+    else:
+        raise RuntimeError("OCR supports PDF, JPG, JPEG, PNG, BMP, and TIFF files.")
+
+    return "\n".join(part.strip() for part in texts if part and part.strip()).strip()
+
+
+def infer_archive_metadata_from_ocr(text_value):
+    """Return conservative metadata suggestions from OCR text.
+
+    Suggestions never overwrite staff-entered values automatically; the admin
+    remains responsible for verification because church scans can contain OCR
+    mistakes.
+    """
+    text_value = text_value or ""
+    lines = [line.strip() for line in text_value.splitlines() if line.strip()]
+    result = {}
+
+    certificate_match = re.search(
+        r"(?:certificate|cert(?:ificate)?\s*no\.?|no\.)\s*[:#-]?\s*([A-Z0-9-]{4,30})",
+        text_value,
+        flags=re.IGNORECASE,
+    )
+    if certificate_match:
+        result["certificateNumber"] = certificate_match.group(1).strip()
+
+    date_match = re.search(
+        r"\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{2}-\d{2})\b",
+        text_value,
+    )
+    if date_match:
+        result["dateHint"] = date_match.group(1)
+
+    if lines:
+        # A name suggestion is intentionally only a hint. Avoid lines that look
+        # like headings, numbers, or very long sentences.
+        for line in lines[:12]:
+            if 3 <= len(line) <= 80 and not any(ch.isdigit() for ch in line):
+                if not re.search(r"certificate|church|parish|baptism|marriage|confirmation|burial", line, re.I):
+                    result["possibleName"] = line
+                    break
+
+    return result
+
+
+def summarize_transcript(text_value, max_sentences=4):
+    """Create a deterministic extractive summary from a transcript.
+
+    This is intentionally lightweight and local. It scores sentences using
+    meaningful-word frequency instead of the previous "longest sentence"
+    shortcut, which produced poor summaries.
+    """
+    clean = re.sub(r"\s+", " ", (text_value or "")).strip()
+    if not clean:
+        return ""
+
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", clean) if s.strip()]
+    if len(sentences) <= max_sentences:
+        return " ".join(sentences)
+
+    stop = {
+        "the", "a", "an", "and", "or", "but", "to", "of", "in", "on", "for", "with",
+        "is", "are", "was", "were", "be", "been", "being", "this", "that", "these",
+        "those", "it", "its", "as", "at", "by", "from", "we", "you", "they", "he",
+        "she", "i", "our", "your", "their", "so", "if", "then", "than", "not",
+    }
+    words = re.findall(r"[A-Za-zÀ-ÖØ-öø-ÿÑñ']+", clean.lower())
+    frequencies = Counter(word for word in words if len(word) > 2 and word not in stop)
+    if not frequencies:
+        return " ".join(sentences[:max_sentences])
+
+    scored = []
+    for index, sentence in enumerate(sentences):
+        sentence_words = re.findall(r"[A-Za-zÀ-ÖØ-öø-ÿÑñ']+", sentence.lower())
+        score = sum(frequencies.get(word, 0) for word in sentence_words)
+        score = score / max(len(sentence_words), 1)
+        scored.append((score, index, sentence))
+
+    selected = sorted(scored, reverse=True)[:max_sentences]
+    selected.sort(key=lambda item: item[1])
+    return " ".join(sentence for _, _, sentence in selected)
+
+
+def generate_release_pdf(cert_request, source_document, output_path):
+    """Generate a clean draft release PDF from the verified archive record.
+
+    The parish can later replace this layout with its official signed/sealed
+    template without changing the request workflow.
+    """
+    styles = getSampleStyleSheet()
+    doc = SimpleDocTemplate(output_path)
+    story = [
+        Paragraph("<b>Iglesia Filipina Independiente - Maragondon</b>", styles["Title"]),
+        Spacer(1, 14),
+        Paragraph("<b>System-Generated Certificate Draft</b>", styles["Heading2"]),
+        Paragraph(
+            "This document is generated from a verified parish archive record. "
+            "It must be reviewed, signed, and/or sealed according to parish policy before official use.",
+            styles["BodyText"],
+        ),
+        Spacer(1, 16),
+        Paragraph(f"<b>Document Type:</b> {source_document.sacrament_type.replace('_', ' ').title()}", styles["BodyText"]),
+        Paragraph(f"<b>Name on Record:</b> {source_document.person_name or cert_request.person_name}", styles["BodyText"]),
+        Paragraph(f"<b>Date of Record:</b> {source_document.date_of_record or 'Not recorded'}", styles["BodyText"]),
+        Paragraph(f"<b>Certificate Number:</b> {source_document.certificate_number or 'Not recorded'}", styles["BodyText"]),
+        Paragraph(f"<b>Book / Page:</b> {source_document.book_number or 'N/A'} / {source_document.page_number or 'N/A'}", styles["BodyText"]),
+        Paragraph(f"<b>Parish:</b> {source_document.parish or 'IFI Maragondon'}", styles["BodyText"]),
+        Paragraph(f"<b>Priest:</b> {source_document.priest or 'Not recorded'}", styles["BodyText"]),
+        Spacer(1, 18),
+        Paragraph(f"<b>Request Reference:</b> IFI-REQ-{cert_request.id:04d}", styles["BodyText"]),
+        Paragraph(f"<b>Requested by:</b> {cert_request.requester_name}", styles["BodyText"]),
+        Paragraph(f"<b>Purpose:</b> {cert_request.purpose or 'Not specified'}", styles["BodyText"]),
+    ]
+    doc.build(story)
+
+
+def highlight_best(text):
+    # Backward-compatible helper name; now returns a meaningful extractive summary.
+    return summarize_transcript(text, max_sentences=4)
+
+
+
 
 
 def format_text(text):
+
     text = text.replace(" um ", " ")
+
     text = text.replace(" uh ", " ")
 
+
+
     sentences = text.split(".")
+
     paragraphs = []
+
+
 
     chunk = []
 
+
+
     for sentence in sentences:
+
         clean_sentence = sentence.strip()
 
+
+
         if clean_sentence:
+
             chunk.append(clean_sentence)
 
+
+
         if len(chunk) >= 5:
+
             paragraphs.append(". ".join(chunk) + ".")
+
             chunk = []
 
+
+
     if chunk:
+
         paragraphs.append(". ".join(chunk) + ".")
+
+
 
     return "\n\n".join(paragraphs)
 
 
+
+
+
 def create_pdf(text, highlight, filename):
+
     doc = SimpleDocTemplate(filename)
+
     styles = getSampleStyleSheet()
+
+
 
     content = []
 
+
+
     content.append(Paragraph("<b>Mass Transcription</b>", styles["Title"]))
+
     content.append(Spacer(1, 20))
 
-    content.append(Paragraph("<b>Best Highlight:</b>", styles["Heading2"]))
+
+
+    content.append(Paragraph("<b>Extractive Summary:</b>", styles["Heading2"]))
+
     content.append(Paragraph(highlight, styles["BodyText"]))
+
     content.append(Spacer(1, 20))
+
+
 
     content.append(Paragraph("<b>Full Transcript:</b>", styles["Heading2"]))
+
     content.append(Paragraph(text.replace("\n", "<br/><br/>"), styles["BodyText"]))
+
+
 
     doc.build(content)
 
+
+
 @app.route("/")
+
 def home():
+
     query = request.args.get("query")
+
     sacrament = request.args.get("sacrament")
+
+
 
     documents = Document.query.filter_by(active=True)
 
+
+
     if query:
+
         documents = documents.filter(Document.person_name.contains(query))
 
+
+
     if sacrament and sacrament != "All":
+
         documents = documents.filter_by(sacrament_type=sacrament)
 
+
+
     documents = documents.all()
+
+
 
     return render_template("index.html", documents=documents)
 
 
+
+
+
 @app.route("/dashboard")
+
 def dashboard():
+
     sacrament_types = ["baptismal", "marriage", "death", "hermana"]
 
+
+
     return render_template(
+
         "dashboard.html",
+
         sacrament_types=sacrament_types
+
     )
+
+
+
 
 
 @app.route("/folder/<sacrament_type>")
+
 def folder(sacrament_type):
+
     documents = Document.query.filter_by(
+
         sacrament_type=sacrament_type,
+
         active=True
+
     ).order_by(Document.person_name.asc()).all()
 
+
+
     return render_template(
+
         "folder.html",
+
         documents=documents,
+
         sacrament_type=sacrament_type
+
     )
 
 
+
+
+
 @app.route("/upload", methods=["GET", "POST"])
+
 def upload():
+
     if request.method == "POST":
 
+
+
         person_name = request.form.get("person_name")
+
         sacrament_type = request.form.get("sacrament_type")
+
         parish = request.form.get("parish")
+
         priest = request.form.get("priest")
+
         date_of_record = request.form.get("date_of_record")
+
+
 
         file = request.files.get("file")
 
+
+
         if not file:
+
             return "No file uploaded"
 
+
+
         folder = f"uploads/{sacrament_type}"
-        os.makedirs(folder, exist_ok=True)
+
+        physical_folder = backend_storage_path(folder)
+
+        os.makedirs(physical_folder, exist_ok=True)
+
+
 
         safe_filename = secure_filename(file.filename)
+
         if not safe_filename:
+
             return "Invalid filename", 400
-        filepath = os.path.join(folder, safe_filename)
-        file.save(filepath)
+
+        filepath = f"{folder}/{safe_filename}"
+
+        file.save(backend_storage_path(filepath))
+
+
 
         new_document = Document(
+
             person_name=person_name,
+
             sacrament_type=sacrament_type,
+
             parish=parish,
+
             priest=priest,
+
             date_of_record=date_of_record,
+
             filename=safe_filename,
+
             filepath=filepath,
+
             uploaded_by=getattr(g, "user_email", None) or "Admin"
+
         )
+
+
 
         db.session.add(new_document)
+
         db.session.commit()
+
+
 
         log = AuditLog(
+
             user="Admin",
+
             action=f"Uploaded {file.filename}",
+
             document_id=new_document.id
+
         )
 
+
+
         db.session.add(log)
+
         db.session.commit()
 
+
+
         return redirect("/dashboard")
+
+
 
     return render_template("upload.html")
 
 
+
+
+
 @app.route("/request-baptismal", methods=["GET", "POST"])
+
 def request_baptismal():
+
     if request.method == "POST":
 
+
+
         data = {
+
             "Church_Name": request.form.get("Church_Name"),
+
             "Church_Address": request.form.get("Church_Address"),
+
             "Contact_Information": request.form.get("Contact_Information"),
+
             "Full_Name": request.form.get("Full_Name"),
+
             "Fathers_fullName": request.form.get("Fathers_fullName"),
+
             "Mothers_fullName": request.form.get("Mothers_fullName"),
+
             "Date_birt": request.form.get("Date_birt"),
+
             "Place_birth": request.form.get("Place_birth"),
+
             "Name_church": request.form.get("Name_church"),
+
             "Date_of_Baptism": request.form.get("Date_of_Baptism"),
+
             "Name_of_Priest": request.form.get("Name_of_Priest"),
+
             "Church_Location": request.form.get("Church_Location"),
+
             "Name_of_Godfather": request.form.get("Name_of_Godfather"),
+
             "Name_of_Godmother": request.form.get("Name_of_Godmother")
+
         }
 
-        os.makedirs("generated", exist_ok=True)
+
+
+        os.makedirs(os.path.join(BACKEND_DIR, "generated"), exist_ok=True)
+
+
 
         doc = DocxTemplate(
-            "templates/certificates/baptismal_template.docx"
+
+            os.path.join(BACKEND_DIR, "templates", "certificates", "baptismal_template.docx")
+
         )
+
+
 
         doc.render(data)
 
+
+
         safe_name = data["Full_Name"].replace(" ", "_")
 
+
+
         output_filename = f"{safe_name}_Baptismal.docx"
-        output_docx = os.path.join("generated", output_filename)
+
+        output_docx = os.path.join(BACKEND_DIR, "generated", output_filename)
+
+
 
         doc.save(output_docx)
 
+
+
         new_document = Document(
+
             person_name=data["Full_Name"],
+
             sacrament_type="baptismal",
+
             parish=data["Church_Name"],
+
             priest=data["Name_of_Priest"],
+
             date_of_record=data["Date_of_Baptism"],
+
             filename=output_filename,
+
             filepath=output_docx,
+
             uploaded_by="User Request"
+
         )
+
+
 
         db.session.add(new_document)
+
         db.session.commit()
+
+
 
         log = AuditLog(
+
             user="User Request",
+
             action=f"Generated baptismal certificate for {data['Full_Name']}",
+
             document_id=new_document.id
+
         )
+
+
 
         db.session.add(log)
+
         db.session.commit()
 
+
+
         return (
+
             "Certificate Generated and Saved to Archive!<br><br>"
+
             f"<a href='/generated/{output_filename}'>Download Certificate</a><br><br>"
+
             "<a href='/'>Back to Main Page</a>"
+
         )
+
+
 
     return render_template("request_baptismal.html")
 
 
+
+
+
 @app.route("/search")
+
 def search():
+
     query = request.args.get("query")
+
+
 
     results = []
 
+
+
     if query:
+
         results = Document.query.filter(
+
             Document.person_name.contains(query),
+
             Document.active == True
+
         ).all()
+
+
 
     return render_template("search.html", results=results)
 
 
+
+
+
 @app.route("/delete/<int:id>")
+
 def delete(id):
+
     document = Document.query.get(id)
 
+
+
     if document:
+
         document.active = False
+
         db.session.commit()
+
+
 
         log = AuditLog(
+
             user="Admin",
+
             action=f"Deleted document {id}",
+
             document_id=id
+
         )
 
+
+
         db.session.add(log)
+
         db.session.commit()
+
+
 
     return redirect("/dashboard")
 
 
+
+
+
 @app.route("/generated/<filename>")
+
 def download_generated(filename):
+
     return send_from_directory(
-        "generated",
+
+        os.path.join(BACKEND_DIR, "generated"),
+
         filename,
+
         as_attachment=True
+
     )
+
+
+
 
 
 @app.route("/files/<path:filepath>")
+
 def view_file(filepath):
+
     if not can_access_filepath(filepath):
+
         return {"error": "Forbidden"}, 403
+
     return send_from_directory(
-        ".",
-        filepath,
+
+        BACKEND_DIR,
+
+        normalize_path(filepath),
+
         as_attachment=False
+
     )
+
+
+
+@app.route("/api/archive/ocr-preview", methods=["POST"])
+def api_archive_ocr_preview():
+    denied = require_roles("ADMIN", "BURIAL_ADMIN")
+    if denied:
+        return denied
+
+    file = request.files.get("file")
+    if not file or not file.filename:
+        return {"error": "Choose a scanned PDF or image first."}, 400
+
+    filename = secure_filename(file.filename)
+    extension = os.path.splitext(filename)[1].lower()
+    if extension not in {".pdf", ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"}:
+        return {"error": "OCR supports PDF and common image files."}, 400
+
+    preview_folder = os.path.join(BACKEND_DIR, "uploads", "ocr_preview")
+    os.makedirs(preview_folder, exist_ok=True)
+    temp_path = os.path.join(preview_folder, f"preview_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}{extension}")
+
+    try:
+        file.save(temp_path)
+        text_value = extract_text_from_path(temp_path)
+        return {
+            "text": text_value,
+            "suggestions": infer_archive_metadata_from_ocr(text_value),
+        }, 200
+    except RuntimeError as error:
+        return {"error": str(error)}, 503
+    finally:
+        try:
+            if os.path.isfile(temp_path):
+                os.remove(temp_path)
+        except OSError:
+            pass
+
+
+@app.route("/api/health")
+def api_health():
+    try:
+        db.session.execute(text("SELECT 1"))
+        return {
+            "status": "ok",
+            "database": "ok",
+            "whisperLoaded": _whisper_model is not None,
+        }, 200
+    except Exception as error:
+        return {"status": "error", "error": str(error)}, 500
+
 
 @app.route("/api/archive/upload", methods=["POST"])
 def api_upload_document():
+
     denied = require_roles("ADMIN", "BURIAL_ADMIN")
+
     if denied:
+
         return denied
+
     try:
+
         file = request.files.get("file")
 
+
+
         if not file:
+
             return {"error": "No file uploaded"}, 400
 
+
+
         person_name = request.form.get("person_name")
+
         sacrament_type = request.form.get("sacrament_type")
+
         parish = request.form.get("parish")
+
         priest = request.form.get("priest")
+
         date_of_record = request.form.get("date_of_record")
+        book_number = (request.form.get("book_number") or "").strip() or None
+        page_number = (request.form.get("page_number") or "").strip() or None
+
         document_type = request.form.get("document_type")
+        run_ocr = (request.form.get("runOcr") or "").lower() in {"1", "true", "yes", "on"}
+
+
 
         if not person_name or not sacrament_type:
+
             return {"error": "Person name and document type are required"}, 400
+
+
 
         allowed_types = allowed_types_for_current_role()
 
+
+
         if sacrament_type not in allowed_types:
+
             return {"error": "Invalid document category"}, 400
+
+
 
         file_hash = calculate_file_hash(file)
 
+
+
         duplicate_file = Document.query.filter_by(
+
             file_hash=file_hash,
+
             active=True
+
         ).first()
+
+
 
         if duplicate_file:
+
             return {
+
                 "error": f"Duplicate file detected. This file already exists as {duplicate_file.certificate_number or 'Archive ID ' + str(duplicate_file.id)}."
+
             }, 409
+
+
 
         possible_duplicate = Document.query.filter(
+
             Document.active == True,
+
             Document.sacrament_type == sacrament_type,
+
             Document.person_name.ilike(person_name),
+
             Document.date_of_record == date_of_record
+
         ).first()
 
+
+
         if possible_duplicate:
+
             return {
+
                 "error": f"Possible duplicate record found: {possible_duplicate.person_name} ({possible_duplicate.certificate_number or 'Archive ID ' + str(possible_duplicate.id)}). Please review the existing record first."
+
             }, 409
 
+
+
         prefix = PREFIX_MAP.get(sacrament_type, "DOC")
+
         year = date_of_record[:4] if date_of_record else "2026"
 
+
+
         existing_count = Document.query.filter(
+
             Document.active == True,
+
             Document.sacrament_type == sacrament_type,
+
             Document.certificate_number.like(f"{prefix}-{year}-%")
+
         ).count()
 
+
+
         next_number = existing_count + 1
+
         certificate_number = f"{prefix}-{year}-{next_number:03d}"
+
+
 
         department = get_department(sacrament_type)
 
-        upload_folder = os.path.join("uploads", sacrament_type)
+
+
+        relative_folder = f"uploads/{sacrament_type}"
+
+        upload_folder = backend_storage_path(relative_folder)
+
         os.makedirs(upload_folder, exist_ok=True)
 
-        filename = secure_filename(file.filename)
-        if not filename:
-            return {"error": "Invalid filename"}, 400
-        filepath = os.path.join(upload_folder, filename)
 
-        file.save(filepath)
+
+        filename = secure_filename(file.filename)
+
+        if not filename:
+
+            return {"error": "Invalid filename"}, 400
+
+        filepath = f"{relative_folder}/{filename}"
+
+        physical_filepath = backend_storage_path(filepath)
+
+
+
+        file.save(physical_filepath)
+
+        ocr_text = None
+        extracted_metadata = None
+        if run_ocr:
+            try:
+                ocr_text = extract_text_from_path(physical_filepath)
+                extracted_metadata = json.dumps(
+                    infer_archive_metadata_from_ocr(ocr_text),
+                    ensure_ascii=False,
+                )
+            except RuntimeError as ocr_error:
+                app.logger.warning("OCR skipped for %s: %s", filename, ocr_error)
 
         new_document = Document(
+
             person_name=person_name,
+
             sacrament_type=sacrament_type,
+
             parish=parish,
+
             priest=priest,
+
             date_of_record=date_of_record,
+            book_number=book_number,
+            page_number=page_number,
+
             certificate_number=certificate_number,
+
             document_type=document_type,
+
             filename=filename,
+
             filepath=filepath,
+
             file_hash=file_hash,
+
             department=department,
-            uploaded_by="Admin"
+            ocr_text=ocr_text,
+            extracted_metadata=extracted_metadata,
+
+            uploaded_by=getattr(g, "user_email", None) or "Admin"
+
         )
+
+
 
         db.session.add(new_document)
+
         db.session.commit()
+
+
 
         log = AuditLog(
+
             user=getattr(g, "user_email", None) or "Admin",
+
             action=f"Uploaded {sacrament_type} archive record: {person_name} ({certificate_number})",
+
             document_id=new_document.id
+
         )
 
+
+
         db.session.add(log)
+
         db.session.commit()
 
+
+
         return {
+
             "message": "Document uploaded successfully",
+
             "document": {
+
                 "id": new_document.id,
+
                 "personName": new_document.person_name,
+
                 "sacramentType": new_document.sacrament_type,
+
                 "certificateNumber": new_document.certificate_number,
+
                 "department": new_document.department,
+
                 "filename": new_document.filename,
-                "filepath": new_document.filepath
+
+                "filepath": new_document.filepath,
+                "ocrAvailable": bool(new_document.ocr_text),
+                "ocrSuggestions": json.loads(new_document.extracted_metadata) if new_document.extracted_metadata else {}
+
             }
+
         }, 201
 
+
+
     except Exception as e:
+
         return {"error": str(e)}, 500
-    
+
+
+
 @app.route("/api/archive/stats")
+
 def api_archive_stats():
+
     denied = require_roles("ADMIN", "BURIAL_ADMIN")
+
     if denied:
+
         return denied
 
+
+
     allowed_types = allowed_types_for_current_role()
+
     base = Document.query.filter(
+
         Document.active == True,
+
         Document.sacrament_type.in_(allowed_types)
+
     )
 
+
+
     def count_type(name):
+
         if name not in allowed_types:
+
             return 0
+
         return Document.query.filter_by(active=True, sacrament_type=name).count()
 
+
+
     return {
+
         "totalRecords": base.count(),
+
         "baptismal": count_type("baptismal"),
+
         "marriage": count_type("marriage"),
+
         "confirmation": count_type("confirmation"),
+
         "burial": count_type("burial"),
+
         "landAgreement": count_type("land_agreement"),
+
         "generatedCertificates": Document.query.filter(
+
             Document.active == True,
+
             Document.sacrament_type.in_(allowed_types),
+
             Document.uploaded_by == "User Request"
+
         ).count()
+
     }
+
+
+
 
 
 @app.route("/api/archive/documents")
+
 def api_archive_documents():
+
     denied = require_roles("ADMIN", "BURIAL_ADMIN")
+
     if denied:
+
         return denied
+
+
 
     allowed_types = allowed_types_for_current_role()
 
+
+
     documents = Document.query.filter(
+
         Document.active == True,
+
         Document.sacrament_type.in_(allowed_types)
+
     ).order_by(Document.person_name.asc()).all()
 
+
+
     return {
+
         "documents": [
+
             {
+
                 "id": d.id,
+
                 "personName": d.person_name,
+
                 "sacramentType": d.sacrament_type,
+
                 "parish": d.parish,
+
                 "priest": d.priest,
+
                 "dateOfRecord": d.date_of_record,
+
                 "certificateNumber": d.certificate_number,
+
                 "documentType": d.document_type,
+
                 "department": d.department,
+
                 "filename": d.filename,
+
                 "filepath": d.filepath,
+
                 "uploadedBy": d.uploaded_by,
+                "ocrText": d.ocr_text,
+                "ocrSuggestions": json.loads(d.extracted_metadata) if d.extracted_metadata else {},
+
             }
+
             for d in documents
+
         ]
+
     }
+
+
+
 
 
 @app.route("/api/archive/documents/<sacrament_type>")
+
 def api_archive_documents_by_type(sacrament_type):
+
     denied = require_roles("ADMIN", "BURIAL_ADMIN")
+
     if denied:
+
         return denied
 
+
+
     if sacrament_type not in allowed_types_for_current_role():
+
         return {"error": "Forbidden category"}, 403
 
-    documents = Document.query.filter_by(
+
+
+    query = Document.query.filter_by(
+
         active=True,
+
         sacrament_type=sacrament_type
-    ).order_by(Document.person_name.asc()).all()
+
+    )
+
+    search_term = (request.args.get("q") or "").strip()
+
+    if search_term:
+        query = query.filter(
+            Document.person_name.ilike(f"%{search_term}%")
+        )
+
+    documents = (
+        query
+        .order_by(Document.person_name.asc())
+        .limit(25)
+        .all()
+    )
+
+
 
     return {
+
         "documents": [
+
             {
+
                 "id": d.id,
+
                 "personName": d.person_name,
+
                 "sacramentType": d.sacrament_type,
+
                 "parish": d.parish,
+
                 "priest": d.priest,
+
                 "dateOfRecord": d.date_of_record,
+
+                "bookNumber": d.book_number,
+
+                "pageNumber": d.page_number,
+
                 "certificateNumber": d.certificate_number,
+
                 "documentType": d.document_type,
+
                 "filename": d.filename,
+
                 "filepath": d.filepath,
+
                 "uploadedBy": d.uploaded_by,
+                "ocrText": d.ocr_text,
+                "ocrSuggestions": json.loads(d.extracted_metadata) if d.extracted_metadata else {},
+
             }
+
             for d in documents
+
         ]
+
     }
+
+
+
 
 
 @app.route("/api/archive/audit-logs")
+
 def api_audit_logs():
+
     denied = require_roles("ADMIN")
+
     if denied:
+
         return denied
+
     logs = AuditLog.query.order_by(AuditLog.id.desc()).limit(20).all()
 
+
+
     return {
+
         "logs": [
+
             {
+
                 "id": log.id,
+
                 "user": log.user,
+
                 "action": log.action,
+
                 "documentId": log.document_id
+
             }
+
             for log in logs
+
         ]
+
     }
 
+
+
 @app.route("/api/requests", methods=["POST"])
+
 def api_create_request():
+
+
+
     denied = require_roles("USER")
+
+
+
     if denied:
+
         return denied
+
+
+
     try:
-        data = request.get_json()
 
-        requester_name = getattr(g, "user_name", None) or data.get("requesterName")
-        requester_email = getattr(g, "user_email", None)
-        contact_number = getattr(g, "user_phone", None) or data.get("contactNumber")
-        sacrament_type = data.get("sacramentType")
-        person_name = data.get("personName")
-        purpose = data.get("purpose")
+        data = request.get_json() or {}
 
-        if not requester_name or not sacrament_type or not person_name:
-            return {"error": "Requester name, sacrament type, and person name are required"}, 400
 
-        if sacrament_type not in allowed_types_for_current_role():
-            return {"error": "Invalid request category"}, 400
+
+        user_id = current_user_id()
+
+
+
+        if not user_id:
+
+            return {
+
+                "error": "Invalid authenticated user."
+
+            }, 401
+
+
+
+        requester_name = (
+
+            getattr(g, "user_name", None)
+
+            or ""
+
+        ).strip()
+
+
+
+        requester_email = (
+
+            getattr(g, "user_email", None)
+
+            or ""
+
+        ).strip()
+
+
+
+        contact_number = (
+
+            getattr(g, "user_phone", None)
+
+            or ""
+
+        ).strip()
+
+
+
+        requester_address = (
+
+            getattr(g, "user_address", None)
+
+            or ""
+
+        ).strip()
+
+
+
+        sacrament_type = (
+
+            data.get("sacramentType")
+
+            or ""
+
+        ).strip()
+
+
+
+        person_name = (
+
+            data.get("personName")
+
+            or ""
+
+        ).strip()
+
+
+
+        purpose = (
+
+            data.get("purpose")
+
+            or ""
+
+        ).strip()
+
+        record_date_hint = (data.get("recordDateHint") or "").strip()[:100] or None
+        record_details = (data.get("recordDetails") or "").strip()[:500] or None
+
+        is_urgent = (
+
+            data.get("isUrgent") is True
+
+        )
+
+
+
+        if not requester_name:
+
+            return {
+
+                "error":
+
+                    "Your account profile is missing a name."
+
+            }, 400
+
+
+
+        if not person_name:
+
+            return {
+
+                "error":
+
+                    "Name on record is required."
+
+            }, 400
+
+
+
+        if not purpose:
+
+            return {
+
+                "error":
+
+                    "Request purpose is required."
+
+            }, 400
+
+
+
+        if sacrament_type not in (
+
+            MAIN_ADMIN_TYPES
+
+            + BURIAL_ADMIN_TYPES
+
+        ):
+
+            return {
+
+                "error":
+
+                    "Invalid request category."
+
+            }, 400
+
+
+
+        base_fee = DEMO_BASE_FEES.get(
+
+            sacrament_type,
+
+            0
+
+        )
+
+
+
+        urgent_fee = (
+
+            DEMO_URGENT_FEE
+
+            if is_urgent
+
+            else 0
+
+        )
+
+
+
+        total_fee = (
+
+            base_fee
+
+            + urgent_fee
+
+        )
+
+
 
         new_request = CertificateRequest(
+
+            requester_user_id=user_id,
+
+
+
             requester_name=requester_name,
+
+
+
             requester_email=requester_email,
+
+
+
             contact_number=contact_number,
+
+
+
+            requester_address=requester_address,
+
+
+
             sacrament_type=sacrament_type,
+
+
+
             person_name=person_name,
+
+
+
             purpose=purpose,
-            status="Pending"
+
+            record_date_hint=record_date_hint,
+            record_details=record_details,
+
+            is_urgent=is_urgent,
+
+
+
+            base_fee=base_fee,
+
+
+
+            urgent_fee=urgent_fee,
+
+
+
+            total_fee=total_fee,
+
+
+
+            payment_status="Unpaid",
+
+
+
+            status="Pending",
+
         )
+
+
 
         db.session.add(new_request)
+
         db.session.commit()
 
-        log = AuditLog(
-            user=requester_name,
-            action=f"Submitted {sacrament_type} certificate request for {person_name}",
-            document_id=None
+
+
+        priority_text = (
+
+            "URGENT"
+
+            if is_urgent
+
+            else "regular"
+
         )
 
+
+
+        log = AuditLog(
+
+            user=requester_name,
+
+
+
+            action=(
+
+                f"Submitted {priority_text} "
+
+                f"{sacrament_type} request "
+
+                f"for {person_name}"
+
+            ),
+
+
+
+            document_id=None,
+
+        )
+
+
+
         db.session.add(log)
+
         db.session.commit()
 
+
+
         return {
-            "message": "Request submitted successfully",
-            "request": {
-                "id": new_request.id,
-                "requesterName": new_request.requester_name,
-                "requesterEmail": new_request.requester_email,
-                "contactNumber": new_request.contact_number,
-                "sacramentType": new_request.sacrament_type,
-                "personName": new_request.person_name,
-                "purpose": new_request.purpose,
-                "status": new_request.status,
-                "remarks": new_request.remarks,
-                "createdAt": new_request.created_at.isoformat()
-            }
+
+            "message":
+
+                "Request submitted successfully.",
+
+
+
+            "request":
+
+                serialize_request(
+
+                    new_request
+
+                ),
+
         }, 201
 
+
+
     except Exception as e:
-        return {"error": str(e)}, 500
+
+        db.session.rollback()
+
+
+
+        return {
+
+            "error": str(e)
+
+        }, 500
+
+
+
 
 
 @app.route("/api/requests", methods=["GET"])
+
 def api_get_requests():
+
+
+
     try:
-        role = getattr(g, "user_role", None)
+
+        role = getattr(
+
+            g,
+
+            "user_role",
+
+            None
+
+        )
+
+
+
+        priority = request.args.get(
+
+            "priority"
+
+        )
+
+
 
         if role == "USER":
-            requests_list = CertificateRequest.query.filter_by(
-                requester_email=getattr(g, "user_email", None)
-            ).order_by(CertificateRequest.id.desc()).all()
-        elif role in {"ADMIN", "BURIAL_ADMIN"}:
-            requests_list = CertificateRequest.query.filter(
-                CertificateRequest.sacrament_type.in_(allowed_types_for_current_role())
-            ).order_by(CertificateRequest.id.desc()).all()
+
+
+
+            user_id = current_user_id()
+
+
+
+            if not user_id:
+
+                return {
+
+                    "error":
+
+                        "Invalid authenticated user."
+
+                }, 401
+
+
+
+            query = (
+
+                CertificateRequest.query
+
+                .filter_by(
+
+                    requester_user_id=user_id
+
+                )
+
+            )
+
+
+
+        elif role in {
+
+            "ADMIN",
+
+            "BURIAL_ADMIN",
+
+        }:
+
+
+
+            query = (
+
+                CertificateRequest.query
+
+                .filter(
+
+                    CertificateRequest
+
+                    .sacrament_type
+
+                    .in_(
+
+                        allowed_types_for_current_role()
+
+                    )
+
+                )
+
+            )
+
+
+
+            if priority == "urgent":
+
+
+
+                query = query.filter(
+
+                    CertificateRequest
+
+                    .is_urgent.is_(True)
+
+                )
+
+
+
+            elif priority == "regular":
+
+
+
+                query = query.filter(
+
+                    CertificateRequest
+
+                    .is_urgent.is_(False)
+
+                )
+
+
+
         else:
-            return {"error": "Forbidden"}, 403
+
+
+
+            return {
+
+                "error": "Forbidden"
+
+            }, 403
+
+
+
+        requests_list = (
+
+            query
+
+            .order_by(
+
+                CertificateRequest.id.desc()
+
+            )
+
+            .all()
+
+        )
+
+
 
         return {
+
             "requests": [
-                {
-                    "id": r.id,
-                    "requesterName": r.requester_name,
-                    "requesterEmail": r.requester_email,
-                    "contactNumber": r.contact_number,
-                    "sacramentType": r.sacrament_type,
-                    "personName": r.person_name,
-                    "purpose": r.purpose,
-                    "status": r.status,
-                    "remarks": r.remarks,
-                    "matchedDocumentId": r.matched_document_id,
-                    "generatedFile": r.generated_file,
-                    "createdAt": r.created_at.isoformat() if r.created_at else None,
-                    "updatedAt": r.updated_at.isoformat() if r.updated_at else None
-                }
+
+                serialize_request(r)
+
                 for r in requests_list
+
             ]
+
         }
+
+
+
     except Exception as e:
-        return {"error": str(e)}, 500
+
+
+
+        return {
+
+            "error": str(e)
+
+        }, 500
+
+
+
 
 
 @app.route("/api/requests/<int:request_id>", methods=["GET"])
 def api_get_single_request(request_id):
-    cert_request = CertificateRequest.query.get(request_id)
+    cert_request = db.session.get(CertificateRequest, request_id)
 
     if not cert_request:
         return {"error": "Request not found"}, 404
 
     role = getattr(g, "user_role", None)
+
     if role == "USER":
-        if cert_request.requester_email != getattr(g, "user_email", None):
+        user_id = current_user_id()
+
+        if not user_id:
+            return {"error": "Invalid authenticated user."}, 401
+
+        if cert_request.requester_user_id != user_id:
             return {"error": "Forbidden"}, 403
+
     elif role in {"ADMIN", "BURIAL_ADMIN"}:
         if not staff_can_access_request(cert_request):
             return {"error": "Forbidden"}, 403
+
     else:
         return {"error": "Forbidden"}, 403
 
     return {
-        "request": {
-            "id": cert_request.id,
-            "requesterName": cert_request.requester_name,
-            "requesterEmail": cert_request.requester_email,
-            "contactNumber": cert_request.contact_number,
-            "sacramentType": cert_request.sacrament_type,
-            "personName": cert_request.person_name,
-            "purpose": cert_request.purpose,
-            "status": cert_request.status,
-            "remarks": cert_request.remarks,
-            "matchedDocumentId": cert_request.matched_document_id,
-            "generatedFile": cert_request.generated_file,
-            "createdAt": cert_request.created_at.isoformat() if cert_request.created_at else None,
-            "updatedAt": cert_request.updated_at.isoformat() if cert_request.updated_at else None
-        }
+        "request": serialize_request(cert_request)
     }
+
+
+@app.route("/api/requests/<int:request_id>/demo-pay", methods=["POST"])
+def api_demo_pay_request(request_id):
+    denied = require_roles("USER")
+
+    if denied:
+        return denied
+
+    try:
+        cert_request = db.session.get(CertificateRequest, request_id)
+
+        if not cert_request:
+            return {"error": "Request not found."}, 404
+
+        user_id = current_user_id()
+
+        if not user_id:
+            return {"error": "Invalid authenticated user."}, 401
+
+        if cert_request.requester_user_id != user_id:
+            return {"error": "Forbidden."}, 403
+
+        if cert_request.status not in {"Approved", "Ready"}:
+            return {
+                "error": "The request must be approved before payment."
+            }, 400
+
+        if cert_request.payment_status == "Paid":
+            return {
+                "message": "This request is already paid.",
+                "request": serialize_request(cert_request),
+            }, 200
+
+        cert_request.payment_status = "Paid"
+        cert_request.payment_method = "DEMO"
+        cert_request.payment_reference = f"DEMO-{cert_request.id:06d}"
+        cert_request.paid_at = datetime.utcnow()
+
+        log = AuditLog(
+            user=getattr(g, "user_email", None) or "USER",
+            action=f"Demo payment completed for request #{cert_request.id}",
+            document_id=cert_request.matched_document_id,
+        )
+
+        db.session.add(log)
+        db.session.commit()
+
+        return {
+            "message": "Demo payment completed successfully.",
+            "request": serialize_request(cert_request),
+        }, 200
+
+    except Exception as e:
+        db.session.rollback()
+        return {"error": str(e)}, 500
 
 
 @app.route("/api/requests/<int:request_id>/status", methods=["PATCH"])
 def api_update_request_status(request_id):
     denied = require_roles("ADMIN", "BURIAL_ADMIN")
+
     if denied:
         return denied
+
     try:
-        cert_request = CertificateRequest.query.get(request_id)
+        cert_request = db.session.get(CertificateRequest, request_id)
 
         if not cert_request:
             return {"error": "Request not found"}, 404
@@ -817,52 +2697,85 @@ def api_update_request_status(request_id):
         if not staff_can_access_request(cert_request):
             return {"error": "Forbidden"}, 403
 
-        data = request.get_json()
-
+        data = request.get_json(silent=True) or {}
         status = data.get("status")
         remarks = data.get("remarks")
 
-        allowed_statuses = ["Pending", "Approved", "Rejected", "Ready", "Released"]
+        allowed_statuses = {"Approved", "Rejected", "Released"}
 
         if status not in allowed_statuses:
-            return {"error": "Invalid status"}, 400
+            return {"error": "Invalid status transition"}, 400
+
+        current_status = cert_request.status or "Pending"
+
+        allowed_transitions = {
+            "Pending": {"Approved", "Rejected"},
+            "Approved": {"Rejected"},
+            "Ready": {"Released"},
+            "Rejected": set(),
+            "Released": set(),
+        }
+
+        if status not in allowed_transitions.get(current_status, set()):
+            return {
+                "error": f"Cannot change request from {current_status} to {status}."
+            }, 400
+
+        if status == "Approved" and not cert_request.matched_document_id:
+            return {
+                "error": "Select and verify the matching archive record before approving this request."
+            }, 400
+
+        if status == "Rejected" and cert_request.payment_status == "Paid":
+            return {
+                "error": "A paid request cannot be rejected in the demo workflow."
+            }, 400
+
+        if status == "Released":
+            if not cert_request.generated_file:
+                return {
+                    "error": "Attach the document before releasing it."
+                }, 400
+
+            if cert_request.payment_status != "Paid":
+                return {
+                    "error": "This document cannot be released until payment is confirmed."
+                }, 400
 
         cert_request.status = status
 
         if remarks is not None:
             cert_request.remarks = remarks
 
-        db.session.commit()
-
         log = AuditLog(
             user=getattr(g, "user_email", None) or "Admin",
             action=f"Updated request #{cert_request.id} status to {status}",
-            document_id=cert_request.matched_document_id
+            document_id=cert_request.matched_document_id,
         )
 
         db.session.add(log)
         db.session.commit()
 
         return {
-            "message": "Request status updated successfully",
-            "request": {
-                "id": cert_request.id,
-                "status": cert_request.status,
-                "remarks": cert_request.remarks
-            }
-        }
+            "message": "Request status updated successfully.",
+            "request": serialize_request(cert_request),
+        }, 200
 
     except Exception as e:
+        db.session.rollback()
         return {"error": str(e)}, 500
-    
 
+
+@app.route("/api/requests/<int:request_id>/select-record", methods=["PATCH"])
 @app.route("/api/requests/<int:request_id>/attach-document", methods=["PATCH"])
-def api_attach_document_to_request(request_id):
+def api_select_source_record(request_id):
     denied = require_roles("ADMIN", "BURIAL_ADMIN")
+
     if denied:
         return denied
+
     try:
-        cert_request = CertificateRequest.query.get(request_id)
+        cert_request = db.session.get(CertificateRequest, request_id)
 
         if not cert_request:
             return {"error": "Request not found"}, 404
@@ -870,13 +2783,18 @@ def api_attach_document_to_request(request_id):
         if not staff_can_access_request(cert_request):
             return {"error": "Forbidden"}, 403
 
-        data = request.get_json()
+        if cert_request.status in {"Released", "Rejected"}:
+            return {
+                "error": f"A {cert_request.status.lower()} request cannot change its source record."
+            }, 400
+
+        data = request.get_json(silent=True) or {}
         document_id = data.get("documentId")
 
         if not document_id:
             return {"error": "Document ID is required"}, 400
 
-        document = Document.query.get(document_id)
+        document = db.session.get(Document, document_id)
 
         if not document or not document.active:
             return {"error": "Archive document not found"}, 404
@@ -885,674 +2803,1525 @@ def api_attach_document_to_request(request_id):
             return {"error": "Forbidden document"}, 403
 
         if document.sacrament_type != cert_request.sacrament_type:
-            return {"error": "Document category does not match the request"}, 400
+            return {
+                "error": "Archive record category does not match the request."
+            }, 400
 
+        changed_source = cert_request.matched_document_id != document.id
         cert_request.matched_document_id = document.id
-        cert_request.generated_file = document.filepath
-        cert_request.status = "Ready"
-        cert_request.remarks = data.get("remarks") or "Your requested document is ready for release."
 
-        db.session.commit()
+        # If staff changes the source after preparing a release document, the
+        # old release file must not remain associated with the new source.
+        if changed_source and cert_request.generated_file:
+            old_release = normalize_path(cert_request.generated_file)
+            if old_release.startswith("uploads/releases/"):
+                old_physical = backend_storage_path(old_release)
+                if os.path.isfile(old_physical):
+                    try:
+                        os.remove(old_physical)
+                    except OSError:
+                        pass
+            cert_request.generated_file = None
+
+        if cert_request.status == "Ready":
+            cert_request.status = "Approved"
+
+        cert_request.remarks = (
+            "Archive source record verified. Staff may now approve and prepare the final release document."
+            if cert_request.status == "Pending"
+            else "Archive source record verified. Prepare the final release document for this request."
+        )
 
         log = AuditLog(
             user=getattr(g, "user_email", None) or "Admin",
-            action=f"Attached archive document #{document.id} to request #{cert_request.id}",
-            document_id=document.id
+            action=(
+                f"Selected archive source document #{document.id} "
+                f"for request #{cert_request.id}"
+            ),
+            document_id=document.id,
         )
 
         db.session.add(log)
         db.session.commit()
 
         return {
-            "message": "Document attached successfully",
-            "request": {
-                "id": cert_request.id,
-                "status": cert_request.status,
-                "matchedDocumentId": cert_request.matched_document_id,
-                "generatedFile": cert_request.generated_file,
-                "remarks": cert_request.remarks
-            }
-        }
+            "message": "Archive source record selected successfully.",
+            "request": serialize_request(cert_request),
+        }, 200
 
     except Exception as e:
+        db.session.rollback()
         return {"error": str(e)}, 500
 
 
-@app.route("/download/<path:filepath>")
-def download_file(filepath):
-    if not can_access_filepath(filepath):
-        return {"error": "Forbidden"}, 403
-    return send_from_directory(
-        ".",
-        filepath,
-        as_attachment=True
-    )
+@app.route("/api/requests/<int:request_id>/release-document", methods=["POST"])
+def api_upload_release_document(request_id):
+    denied = require_roles("ADMIN", "BURIAL_ADMIN")
 
-@app.route("/api/masses", methods=["GET"])
-def api_get_masses():
-    denied = require_roles("USER", "ADMIN")
     if denied:
         return denied
+
     try:
-        masses = MassRecord.query.filter_by(active=True).order_by(
-            MassRecord.id.desc()
-        ).all()
+        cert_request = db.session.get(CertificateRequest, request_id)
 
-        return {
-            "masses": [
-                {
-                    "id": m.id,
-                    "title": m.title,
-                    "priest": m.priest,
-                    "category": m.category,
-                    "date": m.mass_date,
-                    "duration": m.duration,
-                    "status": m.status,
-                    "filename": m.filename,
-                    "filepath": m.filepath,
-                    "transcriptText": m.transcript_text,
-                    "summaryText": m.summary_text,
-                    "transcriptFilename": m.transcript_filename,
-                    "transcriptFilepath": m.transcript_filepath,
-                    "createdAt": m.created_at.isoformat() if m.created_at else None,
-                    "updatedAt": m.updated_at.isoformat() if m.updated_at else None,
-                    "hasTranscript": bool(m.transcript_text or m.summary_text or m.transcript_filepath)
-                }
-                for m in masses
-            ]
-        }
+        if not cert_request:
+            return {"error": "Request not found"}, 404
 
-    except Exception as e:
-        return {"error": str(e)}, 500
+        if not staff_can_access_request(cert_request):
+            return {"error": "Forbidden"}, 403
 
+        if cert_request.status not in {"Approved", "Ready"}:
+            return {
+                "error": "Approve the request before uploading the final release document."
+            }, 400
 
-@app.route("/api/masses", methods=["POST"])
-def api_create_mass():
-    denied = require_roles("ADMIN")
-    if denied:
-        return denied
-    try:
-        title = request.form.get("title")
-        priest = request.form.get("priest")
-        category = request.form.get("category")
-        mass_date = request.form.get("date")
-        duration = request.form.get("duration")
-        status = request.form.get("status") or "Pending"
+        if not cert_request.matched_document_id:
+            return {
+                "error": "Select and verify the archive source record first."
+            }, 400
 
         file = request.files.get("file")
 
-        if not title:
-            return {"error": "Mass title is required"}, 400
+        if not file or not file.filename:
+            return {"error": "Choose the final document file first."}, 400
 
-        filename = None
-        filepath = None
+        filename = secure_filename(file.filename)
+        extension = os.path.splitext(filename)[1].lower()
+        allowed_extensions = {".pdf", ".docx", ".jpg", ".jpeg", ".png"}
 
-        if file:
-            folder = "uploads/masses"
-            os.makedirs(folder, exist_ok=True)
+        if extension not in allowed_extensions:
+            return {
+                "error": "Final document must be PDF, DOCX, JPG, JPEG, or PNG."
+            }, 400
 
-            filename = secure_filename(file.filename)
-            if not filename:
-                return {"error": "Invalid filename"}, 400
-            filepath = os.path.join(folder, filename)
-            file.save(filepath)
+        relative_folder = f"uploads/releases/request_{cert_request.id}"
+        physical_folder = backend_storage_path(relative_folder)
+        os.makedirs(physical_folder, exist_ok=True)
 
-        new_mass = MassRecord(
-            title=title,
-            priest=priest,
-            category=category,
-            mass_date=mass_date,
-            duration=duration,
-            status=status,
-            filename=filename,
-            filepath=filepath
+        timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        stem = secure_filename(os.path.splitext(filename)[0]) or "release_document"
+        stored_filename = f"{stem}_{timestamp}{extension}"
+        relative_path = f"{relative_folder}/{stored_filename}"
+        physical_path = backend_storage_path(relative_path)
+
+        old_release = normalize_path(cert_request.generated_file or "")
+        if old_release.startswith("uploads/releases/"):
+            old_physical = backend_storage_path(old_release)
+            if os.path.isfile(old_physical):
+                try:
+                    os.remove(old_physical)
+                except OSError:
+                    pass
+
+        file.save(physical_path)
+
+        cert_request.generated_file = relative_path
+        cert_request.status = "Ready"
+        cert_request.remarks = (
+            "Final document prepared. Payment confirmed; waiting for staff release."
+            if cert_request.payment_status == "Paid"
+            else "Final document prepared. Payment is required before release."
         )
 
-        db.session.add(new_mass)
-        db.session.commit()
-
         log = AuditLog(
-            user="Admin",
-            action=f"Created mass record: {title}",
-            document_id=None
+            user=getattr(g, "user_email", None) or "Admin",
+            action=f"Uploaded final release document for request #{cert_request.id}",
+            document_id=cert_request.matched_document_id,
         )
 
         db.session.add(log)
         db.session.commit()
 
         return {
-            "message": "Mass record created successfully",
-            "mass": {
-                "id": new_mass.id,
-                "title": new_mass.title,
-                "priest": new_mass.priest,
-                "category": new_mass.category,
-                "date": new_mass.mass_date,
-                "duration": new_mass.duration,
-                "status": new_mass.status,
-                "filename": new_mass.filename,
-                "filepath": new_mass.filepath
-            }
-        }, 201
+            "message": "Final release document uploaded successfully.",
+            "request": serialize_request(cert_request),
+        }, 200
 
     except Exception as e:
+        db.session.rollback()
         return {"error": str(e)}, 500
+
+
+@app.route("/api/requests/<int:request_id>/generate-document", methods=["POST"])
+def api_generate_release_document(request_id):
+    denied = require_roles("ADMIN", "BURIAL_ADMIN")
+    if denied:
+        return denied
+
+    try:
+        cert_request = db.session.get(CertificateRequest, request_id)
+        if not cert_request:
+            return {"error": "Request not found."}, 404
+        if not staff_can_access_request(cert_request):
+            return {"error": "Forbidden"}, 403
+        if cert_request.status not in {"Approved", "Ready"}:
+            return {"error": "Approve the request before generating the final document."}, 400
+        if not cert_request.matched_document_id:
+            return {"error": "Select and verify the archive source record first."}, 400
+
+        source = db.session.get(Document, cert_request.matched_document_id)
+        if not source or not source.active:
+            return {"error": "Verified archive source record is no longer available."}, 404
+
+        relative_folder = f"uploads/releases/request_{cert_request.id}"
+        physical_folder = backend_storage_path(relative_folder)
+        os.makedirs(physical_folder, exist_ok=True)
+
+        filename = f"IFI_request_{cert_request.id:04d}_{source.sacrament_type}.pdf"
+        relative_path = f"{relative_folder}/{filename}"
+        physical_path = backend_storage_path(relative_path)
+
+        old_release = normalize_path(cert_request.generated_file or "")
+        if old_release.startswith("uploads/releases/") and old_release != relative_path:
+            old_physical = backend_storage_path(old_release)
+            if os.path.isfile(old_physical):
+                try:
+                    os.remove(old_physical)
+                except OSError:
+                    pass
+
+        generate_release_pdf(cert_request, source, physical_path)
+        cert_request.generated_file = relative_path
+        cert_request.status = "Ready"
+        cert_request.remarks = (
+            "System-generated draft prepared. Payment confirmed; staff may release after final review."
+            if cert_request.payment_status == "Paid"
+            else "System-generated draft prepared. Payment is required before release."
+        )
+        db.session.add(AuditLog(
+            user=getattr(g, "user_email", None) or "Admin",
+            action=f"Generated final release draft for request #{cert_request.id}",
+            document_id=cert_request.matched_document_id,
+        ))
+        db.session.commit()
+
+        return {
+            "message": "Release document generated successfully.",
+            "request": serialize_request(cert_request),
+        }, 200
+    except Exception as error:
+        db.session.rollback()
+        return {"error": str(error)}, 500
+
+
+@app.route("/api/requests/<int:request_id>/download", methods=["GET"])
+def api_download_request_document(request_id):
+    cert_request = db.session.get(CertificateRequest, request_id)
+    if not cert_request:
+        return {"error": "Request not found."}, 404
+
+    role = getattr(g, "user_role", None)
+    user_id = current_user_id()
+
+    if role == "USER":
+        if not user_id or cert_request.requester_user_id != user_id:
+            return {"error": "Forbidden"}, 403
+        if cert_request.status != "Released" or cert_request.payment_status != "Paid":
+            return {"error": "This document is not available for download yet."}, 403
+    elif role in {"ADMIN", "BURIAL_ADMIN"}:
+        if not staff_can_access_request(cert_request):
+            return {"error": "Forbidden"}, 403
+    else:
+        return {"error": "Forbidden"}, 403
+
+    if not cert_request.generated_file:
+        return {"error": "No release document is attached to this request."}, 404
+
+    normalized = normalize_path(cert_request.generated_file)
+    physical_path = backend_storage_path(normalized)
+    if not os.path.isfile(physical_path):
+        return {"error": "Release document file is missing."}, 404
+
+    return send_from_directory(
+        os.path.dirname(physical_path),
+        os.path.basename(physical_path),
+        as_attachment=True,
+        download_name=os.path.basename(physical_path),
+    )
+
+
+@app.route("/download/<path:filepath>")
+
+def download_file(filepath):
+
+    if not can_access_filepath(filepath):
+
+        return {"error": "Forbidden"}, 403
+
+    return send_from_directory(
+
+        BACKEND_DIR,
+
+        normalize_path(filepath),
+
+        as_attachment=True
+
+    )
+
+
+
+@app.route("/api/masses", methods=["GET"])
+
+def api_get_masses():
+
+    denied = require_roles("USER", "ADMIN")
+
+    if denied:
+
+        return denied
+
+    try:
+
+        masses = MassRecord.query.filter_by(active=True).order_by(
+
+            MassRecord.id.desc()
+
+        ).all()
+
+
+
+        return {
+
+            "masses": [
+
+                {
+
+                    "id": m.id,
+
+                    "title": m.title,
+
+                    "priest": m.priest,
+
+                    "category": m.category,
+
+                    "date": m.mass_date,
+
+                    "duration": m.duration,
+
+                    "status": m.status,
+
+                    "filename": m.filename,
+
+                    "filepath": m.filepath,
+
+                    "transcriptText": m.transcript_text,
+
+                    "summaryText": m.summary_text,
+
+                    "transcriptFilename": m.transcript_filename,
+
+                    "transcriptFilepath": m.transcript_filepath,
+
+                    "createdAt": m.created_at.isoformat() if m.created_at else None,
+
+                    "updatedAt": m.updated_at.isoformat() if m.updated_at else None,
+
+                    "hasTranscript": bool(m.transcript_text or m.summary_text or m.transcript_filepath)
+
+                }
+
+                for m in masses
+
+            ]
+
+        }
+
+
+
+    except Exception as e:
+
+        return {"error": str(e)}, 500
+
+
+
+
+
+@app.route("/api/masses", methods=["POST"])
+
+def api_create_mass():
+
+    denied = require_roles("ADMIN")
+
+    if denied:
+
+        return denied
+
+    try:
+
+        title = request.form.get("title")
+
+        priest = request.form.get("priest")
+
+        category = request.form.get("category")
+
+        mass_date = request.form.get("date")
+
+        duration = request.form.get("duration")
+
+        status = request.form.get("status") or "Pending"
+
+
+
+        file = request.files.get("file")
+
+
+
+        if not title:
+
+            return {"error": "Mass title is required"}, 400
+
+
+
+        filename = None
+
+        filepath = None
+
+
+
+        if file:
+
+            relative_folder = "uploads/masses"
+
+            folder = backend_storage_path(relative_folder)
+
+            os.makedirs(folder, exist_ok=True)
+
+
+
+            filename = secure_filename(file.filename)
+
+            if not filename:
+
+                return {"error": "Invalid filename"}, 400
+
+            filepath = f"{relative_folder}/{filename}"
+
+            file.save(backend_storage_path(filepath))
+
+
+
+        new_mass = MassRecord(
+
+            title=title,
+
+            priest=priest,
+
+            category=category,
+
+            mass_date=mass_date,
+
+            duration=duration,
+
+            status=status,
+
+            filename=filename,
+
+            filepath=filepath
+
+        )
+
+
+
+        db.session.add(new_mass)
+
+        db.session.commit()
+
+
+
+        log = AuditLog(
+
+            user="Admin",
+
+            action=f"Created mass record: {title}",
+
+            document_id=None
+
+        )
+
+
+
+        db.session.add(log)
+
+        db.session.commit()
+
+
+
+        return {
+
+            "message": "Mass record created successfully",
+
+            "mass": {
+
+                "id": new_mass.id,
+
+                "title": new_mass.title,
+
+                "priest": new_mass.priest,
+
+                "category": new_mass.category,
+
+                "date": new_mass.mass_date,
+
+                "duration": new_mass.duration,
+
+                "status": new_mass.status,
+
+                "filename": new_mass.filename,
+
+                "filepath": new_mass.filepath
+
+            }
+
+        }, 201
+
+
+
+    except Exception as e:
+
+        return {"error": str(e)}, 500
+
+
+
 
 
 @app.route("/api/masses/<int:mass_id>/status", methods=["PATCH"])
+
 def api_update_mass_status(mass_id):
+
     denied = require_roles("ADMIN")
+
     if denied:
+
         return denied
+
     try:
+
         mass = MassRecord.query.get(mass_id)
 
+
+
         if not mass or not mass.active:
+
             return {"error": "Mass record not found"}, 404
 
+
+
         data = request.get_json()
+
         status = data.get("status")
+
+
 
         allowed_statuses = ["Pending", "In Progress", "Transcribed"]
 
+
+
         if status not in allowed_statuses:
+
             return {"error": "Invalid status"}, 400
 
+
+
         mass.status = status
+
         db.session.commit()
 
+
+
         return {
+
             "message": "Mass status updated successfully",
+
             "mass": {
+
                 "id": mass.id,
+
                 "status": mass.status
+
             }
+
         }
 
+
+
     except Exception as e:
+
         return {"error": str(e)}, 500
+
+
+
 
 
 @app.route("/api/masses/<int:mass_id>/transcription", methods=["PATCH"])
+
 def api_update_mass_transcription(mass_id):
+
     denied = require_roles("ADMIN")
+
     if denied:
+
         return denied
+
     try:
+
         mass = MassRecord.query.get(mass_id)
 
+
+
         if not mass or not mass.active:
+
             return {"error": "Mass record not found"}, 404
+
+
 
         data = request.get_json()
 
+
+
         transcript_text = data.get("transcriptText")
+
         summary_text = data.get("summaryText")
 
+
+
         mass.transcript_text = transcript_text
+
         mass.summary_text = summary_text
+
         mass.status = "Transcribed"
 
+
+
         db.session.commit()
+
+
 
         log = AuditLog(
+
             user="Admin",
+
             action=f"Added transcription and summary for mass #{mass.id}",
+
             document_id=None
+
         )
 
+
+
         db.session.add(log)
+
         db.session.commit()
 
+
+
         return {
+
             "message": "Transcription saved successfully",
+
             "mass": {
+
                 "id": mass.id,
+
                 "title": mass.title,
+
                 "status": mass.status,
+
                 "transcriptText": mass.transcript_text,
+
                 "summaryText": mass.summary_text
+
             }
+
         }
 
+
+
     except Exception as e:
+
         return {"error": str(e)}, 500
+
+
+
 
 
 @app.route("/api/masses/<int:mass_id>", methods=["DELETE"])
+
 def api_delete_mass(mass_id):
+
     denied = require_roles("ADMIN")
+
     if denied:
+
         return denied
+
     try:
+
         mass = MassRecord.query.get(mass_id)
 
+
+
         if not mass or not mass.active:
+
             return {"error": "Mass record not found"}, 404
 
+
+
         mass.active = False
+
         db.session.commit()
 
+
+
         return {
+
             "message": "Mass record deleted successfully"
+
         }
 
+
+
     except Exception as e:
+
         return {"error": str(e)}, 500
+
+
+
 
 
 @app.route("/api/transcriptions", methods=["GET"])
+
 def api_get_transcriptions():
+
     denied = require_roles("USER", "ADMIN")
+
     if denied:
+
         return denied
+
     try:
+
         masses = MassRecord.query.filter(
+
             MassRecord.active == True,
+
             MassRecord.status == "Transcribed"
+
         ).order_by(MassRecord.id.desc()).all()
 
+
+
         return {
+
             "transcriptions": [
+
                 {
+
                     "id": m.id,
+
                     "massTitle": m.title,
+
                     "priest": m.priest,
+
                     "date": m.mass_date,
+
                     "duration": m.duration,
+
                     "category": m.category,
+
                     "transcriptText": m.transcript_text,
+
                     "summaryText": m.summary_text,
+
                     "transcriptFilename": m.transcript_filename,
+
                     "transcriptFilepath": m.transcript_filepath,
+
                     "words": len(m.transcript_text.split()) if m.transcript_text else 0
+
                 }
+
                 for m in masses
+
             ]
+
         }
 
+
+
     except Exception as e:
+
         return {"error": str(e)}, 500
+
+
+
 
 
 @app.route("/api/announcements", methods=["GET"])
+
 def api_get_announcements():
+
     denied = require_roles("USER", "ADMIN")
+
     if denied:
+
         return denied
+
     try:
+
         announcements = Announcement.query.filter_by(active=True).order_by(
+
             Announcement.id.desc()
+
         ).all()
 
+
+
         return {
+
             "announcements": [
+
                 {
+
                     "id": a.id,
+
                     "title": a.title,
+
                     "category": a.category,
+
                     "date": a.announcement_date,
+
                     "body": a.body,
+
                     "createdAt": a.created_at.isoformat() if a.created_at else None
+
                 }
+
                 for a in announcements
+
             ]
+
         }
 
+
+
     except Exception as e:
+
         return {"error": str(e)}, 500
+
+
+
 
 
 @app.route("/api/announcements", methods=["POST"])
+
 def api_create_announcement():
+
     denied = require_roles("ADMIN")
+
     if denied:
+
         return denied
+
     try:
+
         data = request.get_json()
 
+
+
         title = data.get("title")
+
         category = data.get("category")
+
         announcement_date = data.get("date")
+
         body = data.get("body")
 
+
+
         if not title or not body:
+
             return {"error": "Title and body are required"}, 400
 
+
+
         new_announcement = Announcement(
+
             title=title,
+
             category=category,
+
             announcement_date=announcement_date,
+
             body=body
+
         )
+
+
 
         db.session.add(new_announcement)
+
         db.session.commit()
+
+
 
         log = AuditLog(
+
             user="Admin",
+
             action=f"Published announcement: {title}",
+
             document_id=None
+
         )
 
+
+
         db.session.add(log)
+
         db.session.commit()
 
+
+
         return {
+
             "message": "Announcement published successfully",
+
             "announcement": {
+
                 "id": new_announcement.id,
+
                 "title": new_announcement.title,
+
                 "category": new_announcement.category,
+
                 "date": new_announcement.announcement_date,
+
                 "body": new_announcement.body
+
             }
+
         }, 201
 
+
+
     except Exception as e:
+
         return {"error": str(e)}, 500
+
+
+
 
 
 @app.route("/api/announcements/<int:announcement_id>", methods=["DELETE"])
+
 def api_delete_announcement(announcement_id):
+
     denied = require_roles("ADMIN")
+
     if denied:
+
         return denied
+
     try:
+
         announcement = Announcement.query.get(announcement_id)
 
+
+
         if not announcement or not announcement.active:
+
             return {"error": "Announcement not found"}, 404
 
+
+
         announcement.active = False
+
         db.session.commit()
 
+
+
         return {
+
             "message": "Announcement deleted successfully"
+
         }
 
+
+
     except Exception as e:
+
         return {"error": str(e)}, 500
+
+
+
 
 
 @app.route("/api/user/dashboard-summary")
+
 def api_user_dashboard_summary():
+
     denied = require_roles("USER")
+
     if denied:
+
         return denied
+
     try:
+
         total_masses = MassRecord.query.filter_by(active=True).count()
 
+
+
         ai_transcriptions = MassRecord.query.filter(
+
             MassRecord.active == True,
+
             MassRecord.status == "Transcribed"
+
         ).count()
+
+
 
         sermon_summaries = MassRecord.query.filter(
+
             MassRecord.active == True,
+
             MassRecord.summary_text != None,
+
             MassRecord.summary_text != ""
+
         ).count()
 
-        this_month_uploads = MassRecord.query.filter_by(active=True).count()
+
+
+        month_start = datetime.utcnow().replace(
+            day=1, hour=0, minute=0, second=0, microsecond=0
+        )
+        this_month_uploads = MassRecord.query.filter(
+            MassRecord.active == True,
+            MassRecord.created_at >= month_start,
+        ).count()
+
+
 
         recent_masses = MassRecord.query.filter_by(active=True).order_by(
+
             MassRecord.id.desc()
+
         ).limit(4).all()
 
+
+
         announcements = Announcement.query.filter_by(active=True).order_by(
+
             Announcement.id.desc()
+
         ).limit(3).all()
 
+
+
         latest_transcription = MassRecord.query.filter(
+
             MassRecord.active == True,
+
             MassRecord.status == "Transcribed"
+
         ).order_by(MassRecord.id.desc()).first()
 
+
+
         return {
+
             "stats": {
+
                 "totalArchivedMasses": total_masses,
+
                 "aiTranscriptions": ai_transcriptions,
+
                 "sermonSummaries": sermon_summaries,
+
                 "thisMonthUploads": this_month_uploads
+
             },
+
             "recentMasses": [
+
                 {
+
                     "id": m.id,
+
                     "title": m.title,
+
                     "priest": m.priest,
+
                     "category": m.category,
+
                     "date": m.mass_date,
+
                     "duration": m.duration,
+
                     "status": m.status,
+
                     "filepath": m.filepath,
+
                     "hasTranscript": bool(m.transcript_text or m.summary_text)
+
                 }
+
                 for m in recent_masses
+
             ],
+
             "announcements": [
+
                 {
+
                     "id": a.id,
+
                     "title": a.title,
+
                     "category": a.category,
+
                     "date": a.announcement_date,
+
                     "body": a.body
+
                 }
+
                 for a in announcements
+
             ],
+
             "latestTranscription": {
+
                 "id": latest_transcription.id,
+
                 "massTitle": latest_transcription.title,
+
                 "summaryText": latest_transcription.summary_text
+
             } if latest_transcription else None
+
         }
 
+
+
     except Exception as e:
+
         return {"error": str(e)}, 500
 
+
+
 @app.route("/api/masses/<int:mass_id>/transcribe-ai", methods=["POST"])
+
 def api_transcribe_mass_ai(mass_id):
+
     denied = require_roles("ADMIN")
+
     if denied:
+
         return denied
+
     try:
+
         mass = MassRecord.query.get(mass_id)
 
+
+
         if not mass or not mass.active:
+
             return {"error": "Mass record not found"}, 404
 
+
+
         if not mass.filepath:
+
             return {"error": "This mass has no uploaded audio/video file"}, 400
 
-        original_path = mass.filepath
+
+
+        original_path = backend_storage_path(mass.filepath)
+
+
 
         if not os.path.exists(original_path):
+
             return {"error": f"Uploaded file not found: {original_path}"}, 404
 
+
+
         mass.status = "In Progress"
+
         db.session.commit()
+
+
 
         wav_path = original_path + ".wav"
 
+
+
         subprocess.run(
+
             [
+
                 "ffmpeg",
+
                 "-y",
+
                 "-i", original_path,
+
                 "-ar", "16000",
+
                 "-ac", "1",
+
                 wav_path,
+
             ],
+
             check=True
+
         )
 
-        segments, info = model.transcribe(
+
+
+        whisper_model = get_whisper_model()
+
+        segments, info = whisper_model.transcribe(
+
             wav_path,
+
             language="en",
+
             beam_size=1
+
         )
+
+
 
         raw_text = " ".join([seg.text for seg in segments])
+
         formatted = format_text(raw_text)
+
         highlight = highlight_best(formatted)
 
+
+
         safe_title = mass.title.replace(" ", "_").replace("/", "_")
+
         pdf_filename = f"mass_{mass.id}_{safe_title}_transcript.pdf"
+
         pdf_path = os.path.join(TRANSCRIPTION_FOLDER, pdf_filename)
+
+
 
         create_pdf(formatted, highlight, pdf_path)
 
+
+
         mass.transcript_text = formatted
+
         mass.summary_text = highlight
+
         mass.transcript_filename = pdf_filename
-        mass.transcript_filepath = pdf_path
+
+        mass.transcript_filepath = f"uploads/transcriptions/{pdf_filename}"
+
         mass.status = "Transcribed"
 
+
+
         db.session.commit()
+
+
 
         log = AuditLog(
+
             user="AI Transcription",
+
             action=f"AI transcribed mass #{mass.id}: {mass.title}",
+
             document_id=None
+
         )
 
+
+
         db.session.add(log)
+
         db.session.commit()
 
+
+
         return {
+
             "message": "AI transcription completed successfully",
+
             "mass": {
+
                 "id": mass.id,
+
                 "title": mass.title,
+
                 "status": mass.status,
+
                 "transcriptText": mass.transcript_text,
+
                 "summaryText": mass.summary_text,
+
                 "transcriptFilename": mass.transcript_filename,
+
                 "transcriptFilepath": mass.transcript_filepath
+
             }
+
         }
 
+
+
     except subprocess.CalledProcessError as e:
+
         return {"error": "FFmpeg conversion failed. Check if FFmpeg is installed and the file is valid."}, 500
 
+
+
     except Exception as e:
+
         return {"error": str(e)}, 500
+
+
+
 
 
 @app.route("/api/archive/deleted-documents")
+
 def api_deleted_documents():
+
     denied = require_roles("ADMIN", "BURIAL_ADMIN")
+
     if denied:
+
         return denied
+
     try:
+
         allowed_types = allowed_types_for_current_role()
 
+
+
         documents = Document.query.filter(
+
             Document.active == False,
+
             Document.sacrament_type.in_(allowed_types)
+
         ).order_by(
+
             Document.id.desc()
+
         ).all()
 
+
+
         return {
+
             "documents": [
+
                 {
+
                     "id": d.id,
+
                     "personName": d.person_name,
+
                     "sacramentType": d.sacrament_type,
+
                     "parish": d.parish,
+
                     "priest": d.priest,
+
                     "dateOfRecord": d.date_of_record,
+
                     "certificateNumber": d.certificate_number,
+
                     "documentType": d.document_type,
+
                     "department": d.department,
+
                     "filename": d.filename,
+
                     "filepath": d.filepath,
+
                     "uploadedBy": d.uploaded_by,
+
                 }
+
                 for d in documents
+
             ]
+
         }
 
+
+
     except Exception as e:
+
         return {"error": str(e)}, 500
+
+
+
 
 
 @app.route("/api/archive/documents/<int:document_id>/delete", methods=["PATCH"])
+
 def api_soft_delete_document(document_id):
+
     denied = require_roles("ADMIN", "BURIAL_ADMIN")
+
     if denied:
+
         return denied
+
     try:
+
         document = Document.query.get(document_id)
 
+
+
         if not document:
+
             return {"error": "Document not found"}, 404
 
+
+
         if document.sacrament_type not in allowed_types_for_current_role():
+
             return {"error": "Forbidden"}, 403
 
+
+
         document.active = False
+
         db.session.commit()
+
+
 
         log = AuditLog(
+
             user="Admin",
+
             action=f"Moved archive document #{document.id} to recycle bin",
+
             document_id=document.id
+
         )
 
+
+
         db.session.add(log)
+
         db.session.commit()
 
+
+
         return {
+
             "message": "Document moved to recycle bin successfully",
+
             "document": {
+
                 "id": document.id,
+
                 "active": document.active
+
             }
+
         }
 
+
+
     except Exception as e:
+
         return {"error": str(e)}, 500
+
+
+
 
 
 @app.route("/api/archive/documents/<int:document_id>/restore", methods=["PATCH"])
+
 def api_restore_document(document_id):
+
     denied = require_roles("ADMIN", "BURIAL_ADMIN")
+
     if denied:
+
         return denied
+
     try:
+
         document = Document.query.get(document_id)
 
+
+
         if not document:
+
             return {"error": "Document not found"}, 404
 
+
+
         if document.sacrament_type not in allowed_types_for_current_role():
+
             return {"error": "Forbidden"}, 403
 
+
+
         document.active = True
+
         db.session.commit()
+
+
 
         log = AuditLog(
+
             user="Admin",
+
             action=f"Restored archive document #{document.id} from recycle bin",
+
             document_id=document.id
+
         )
 
+
+
         db.session.add(log)
+
         db.session.commit()
 
+
+
         return {
+
             "message": "Document restored successfully",
+
             "document": {
+
                 "id": document.id,
+
                 "active": document.active
+
             }
+
         }
 
+
+
     except Exception as e:
+
         return {"error": str(e)}, 500
 
 
+
+
+
 if __name__ == "__main__":
+
     app.run(host="127.0.0.1", port=5000, debug=os.environ.get("FLASK_DEBUG") == "1")

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { STATUS_STYLE } from '../data/mockData'
+import { STATUS_STYLE } from '../data/ui'
 
 type TranscriptionRecord = {
   id: number
@@ -35,7 +35,7 @@ export default function TranscriptionsPage() {
       const data = await res.json()
       setTranscriptions(data.transcriptions || [])
     } catch (err) {
-      console.error('Load admin transcriptions error:', err)
+      console.warn('Load admin transcriptions error:', err)
       alert('Cannot load transcriptions. The parish backend service is unavailable.')
       setTranscriptions([])
     } finally {
@@ -44,7 +44,7 @@ export default function TranscriptionsPage() {
   }
 
   useEffect(() => {
-    loadTranscriptions()
+    queueMicrotask(() => void loadTranscriptions())
   }, [])
 
   return (
@@ -107,7 +107,7 @@ export default function TranscriptionsPage() {
                 </p>
 
                 <p className="font-body text-[13px] text-[#4a6a8a] leading-relaxed italic">
-                  "{t.summaryText || 'No summary available.'}"
+                  {'“'}{t.summaryText || 'No summary available.'}{'”'}
                 </p>
               </div>
 

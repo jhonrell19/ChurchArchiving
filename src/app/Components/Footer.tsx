@@ -15,7 +15,7 @@ export default function Footer() {
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    setMounted(true)
+    queueMicrotask(() => setMounted(true))
   }, [])
 
   // Guard against server vs client rendering mismatches entirely

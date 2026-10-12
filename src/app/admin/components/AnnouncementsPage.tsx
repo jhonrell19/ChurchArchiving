@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { inputCls, selectCls } from '../data/mockData'
+import { inputCls, selectCls } from '../data/ui'
 
 type Announcement = {
   id: number
@@ -36,7 +36,7 @@ export default function AnnouncementsPage() {
       const data = await res.json()
       setAnnouncements(data.announcements || [])
     } catch (err) {
-      console.error('Load announcements error:', err)
+      console.warn('Load announcements error:', err)
       alert('Cannot load announcements. The parish backend service is unavailable.')
     } finally {
       setLoading(false)
@@ -44,7 +44,7 @@ export default function AnnouncementsPage() {
   }
 
   useEffect(() => {
-    loadAnnouncements()
+    queueMicrotask(() => void loadAnnouncements())
   }, [])
 
   const handleChange = (
@@ -91,7 +91,7 @@ export default function AnnouncementsPage() {
 
       await loadAnnouncements()
     } catch (err) {
-      console.error('Publish announcement error:', err)
+      console.warn('Publish announcement error:', err)
       alert('Failed to publish announcement.')
     }
   }
@@ -113,7 +113,7 @@ export default function AnnouncementsPage() {
 
       await loadAnnouncements()
     } catch (err) {
-      console.error('Delete announcement error:', err)
+      console.warn('Delete announcement error:', err)
       alert('Failed to delete announcement.')
     }
   }

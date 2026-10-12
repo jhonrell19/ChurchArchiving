@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import type { AdminPage } from '../types.ts'
-import { CERT_ICONS, STATUS_STYLE } from '../data/mockData'
+import { CERT_ICONS, STATUS_STYLE } from '../data/ui'
 
 type ArchiveStats = {
   totalRecords: number
@@ -42,10 +42,12 @@ export default function DashboardHome({ setPage }: { setPage: (p: AdminPage) => 
   const [requests, setRequests] = useState<CertificateRequest[]>([])
   const [masses, setMasses] = useState<MassRecord[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   const loadDashboardData = async () => {
     try {
       setLoading(true)
+      setError('')
 
       const [statsRes, requestsRes, massesRes] = await Promise.all([
         fetch('/api/backend/api/archive/stats'),
@@ -57,11 +59,15 @@ export default function DashboardHome({ setPage }: { setPage: (p: AdminPage) => 
       const requestsData = requestsRes.ok ? await requestsRes.json() : { requests: [] }
       const massesData = massesRes.ok ? await massesRes.json() : { masses: [] }
 
+      if (!statsRes.ok || !requestsRes.ok || !massesRes.ok) {
+        setError('Some dashboard information could not be loaded. You can retry without leaving the page.')
+      }
+
       setStats(statsData)
       setRequests(requestsData.requests || [])
       setMasses(massesData.masses || [])
     } catch (err) {
-      console.error('Admin dashboard load error:', err)
+      setError(err instanceof Error ? err.message : 'Failed to load admin dashboard')
       setStats(null)
       setRequests([])
       setMasses([])
@@ -71,7 +77,7 @@ export default function DashboardHome({ setPage }: { setPage: (p: AdminPage) => 
   }
 
   useEffect(() => {
-    loadDashboardData()
+    queueMicrotask(() => void loadDashboardData())
   }, [])
 
   const realStats = [
@@ -127,6 +133,15 @@ export default function DashboardHome({ setPage }: { setPage: (p: AdminPage) => 
 
   return (
     <div>
+      {error && (
+        <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-start justify-between gap-4">
+          <div>
+            <p className="font-display text-amber-800 text-[12px] font-semibold">Dashboard notice</p>
+            <p className="font-body text-amber-700 text-[12px] mt-1">{error}</p>
+          </div>
+          <button type="button" onClick={() => void loadDashboardData()} className="font-display text-[10px] tracking-wider bg-navy text-white px-3 py-2 rounded-lg">Retry</button>
+        </div>
+      )}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {realStats.map(({ label, value, icon, color }) => (
           <div key={label} className="bg-white border border-gold/20 rounded-xl p-5">

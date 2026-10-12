@@ -1,10 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
-export default function ResetPasswordPage() {
+function ResetPasswordForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const token = searchParams.get('token')
@@ -55,7 +55,7 @@ export default function ResetPasswordPage() {
       alert('Password reset successfully. You can now log in.')
       router.push('/login')
     } catch (error) {
-      console.error('Reset password error:', error)
+      console.warn('Reset password error:', error)
       alert('Something went wrong')
     } finally {
       setLoading(false)
@@ -63,21 +63,21 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen bg-navy flex items-center justify-center px-6">
-      <div className="w-full max-w-md bg-white/5 border border-gold/20 rounded-2xl p-10">
+    <div className="min-h-screen bg-gradient-to-br from-[#fffaf0] via-white to-[#eaf4ff] flex items-center justify-center px-6 py-20">
+      <div className="w-full max-w-md bg-white border border-amber-100 rounded-3xl p-10 shadow-xl shadow-slate-200/60">
         <div className="text-center mb-8">
           <span className="block text-gold text-4xl mb-3">✝</span>
-          <h1 className="font-display text-gold text-lg">
+          <h1 className="font-display text-navy-mid text-lg font-semibold">
             Reset Password
           </h1>
-          <p className="font-body text-txt-md text-[13px] mt-2">
+          <p className="font-body text-slate-500 text-[13px] mt-2">
             Enter your new account password.
           </p>
         </div>
 
         <form onSubmit={submit} className="space-y-5">
           <div>
-            <label className="block font-display text-[10px] tracking-wider uppercase text-gold/60 mb-2">
+            <label className="block font-display text-[10px] tracking-wider uppercase text-navy-mid mb-2">
               New Password
             </label>
             <input
@@ -86,12 +86,12 @@ export default function ResetPasswordPage() {
               value={newPassword}
               onChange={e => setNewPassword(e.target.value)}
               placeholder="New password"
-              className="w-full bg-white/5 border border-gold/20 rounded-lg px-4 py-3 font-body text-[15px] text-txt-lt outline-none placeholder:text-txt-md/40 focus:border-gold/60"
+              className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 font-body text-[15px] text-navy-mid outline-none placeholder:text-slate-400 focus:border-gold focus:ring-2 focus:ring-gold/10"
             />
           </div>
 
           <div>
-            <label className="block font-display text-[10px] tracking-wider uppercase text-gold/60 mb-2">
+            <label className="block font-display text-[10px] tracking-wider uppercase text-navy-mid mb-2">
               Confirm Password
             </label>
             <input
@@ -100,24 +100,40 @@ export default function ResetPasswordPage() {
               value={confirmPassword}
               onChange={e => setConfirmPassword(e.target.value)}
               placeholder="Confirm password"
-              className="w-full bg-white/5 border border-gold/20 rounded-lg px-4 py-3 font-body text-[15px] text-txt-lt outline-none placeholder:text-txt-md/40 focus:border-gold/60"
+              className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 font-body text-[15px] text-navy-mid outline-none placeholder:text-slate-400 focus:border-gold focus:ring-2 focus:ring-gold/10"
             />
           </div>
 
           <button
             disabled={loading}
-            className="w-full bg-gold text-navy font-display text-[11px] tracking-wider uppercase py-3 rounded-lg disabled:opacity-60"
+            className="w-full bg-navy text-white font-display text-[11px] tracking-wider uppercase py-3 rounded-xl hover:bg-navy-mid disabled:opacity-60"
           >
             {loading ? 'Resetting...' : 'Reset Password'}
           </button>
         </form>
 
         <div className="mt-6 text-center">
-          <Link href="/login" className="text-gold/70 underline font-body text-[13px]">
+          <Link href="/login" className="text-gold font-semibold font-body text-[13px] hover:text-amber-600">
             Back to Login
           </Link>
         </div>
       </div>
     </div>
+  )
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gradient-to-br from-[#fffaf0] via-white to-[#eaf4ff] flex items-center justify-center px-6 py-20">
+          <div className="w-full max-w-md bg-white border border-amber-100 rounded-3xl p-10 shadow-xl shadow-slate-200/60 text-center">
+            <p className="font-body text-slate-500 text-[13px]">Loading password reset...</p>
+          </div>
+        </div>
+      }
+    >
+      <ResetPasswordForm />
+    </Suspense>
   )
 }

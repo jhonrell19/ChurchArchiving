@@ -18,13 +18,15 @@ export default function Navbar() {
   const pathname = usePathname()
 
   useEffect(() => {
-    setMounted(true)
+    queueMicrotask(() => setMounted(true))
     const fn = () => setScrolled(window.scrollY > 50)
     window.addEventListener('scroll', fn)
     return () => window.removeEventListener('scroll', fn)
   }, [])
 
-  useEffect(() => setOpen(false), [pathname])
+  useEffect(() => {
+    queueMicrotask(() => setOpen(false))
+  }, [pathname])
 
   // --- CRITICAL RETURN ---
   // If we are on the server, return nothing. This prevents the server/client HTML mismatch.

@@ -44,21 +44,22 @@ type DashboardSummary = {
 export default function HomePage({ setPage }: { setPage: (p: Page) => void }) {
   const [data, setData] = useState<DashboardSummary | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   const loadDashboard = async () => {
     try {
       setLoading(true)
+      setError('')
 
       const res = await fetch('/api/backend/api/user/dashboard-summary')
 
+      const result = await res.json().catch(() => ({}))
       if (!res.ok) {
-        throw new Error('Failed to load dashboard')
+        throw new Error(result.error || result.message || 'Failed to load dashboard')
       }
-
-      const result = await res.json()
       setData(result)
     } catch (err) {
-      console.error('Dashboard load error:', err)
+      setError(err instanceof Error ? err.message : 'Failed to load dashboard')
       setData(null)
     } finally {
       setLoading(false)
@@ -66,7 +67,7 @@ export default function HomePage({ setPage }: { setPage: (p: Page) => void }) {
   }
 
   useEffect(() => {
-    loadDashboard()
+    queueMicrotask(() => void loadDashboard())
   }, [])
 
   const stats = [
@@ -98,6 +99,16 @@ export default function HomePage({ setPage }: { setPage: (p: Page) => void }) {
         <p className="font-body text-[#9ab0c4] text-[14px]">
           Loading dashboard content...
         </p>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
+        <p className="font-display text-amber-800 text-[13px] font-semibold">Dashboard temporarily unavailable</p>
+        <p className="font-body text-amber-700 text-[12px] mt-1">{error}</p>
+        <button onClick={() => void loadDashboard()} className="mt-3 font-display text-[10px] tracking-wider bg-navy text-white px-3 py-2 rounded-lg">Retry</button>
       </div>
     )
   }
@@ -270,7 +281,7 @@ export default function HomePage({ setPage }: { setPage: (p: Page) => void }) {
                 </div>
 
                 <p className="font-body text-[12px] text-[#6b8caa] italic leading-relaxed line-clamp-3">
-                  "{data.latestTranscription.summaryText || 'No summary available.'}"
+                  {'“'}{data.latestTranscription.summaryText || 'No summary available.'}{'”'}
                 </p>
               </div>
             )}

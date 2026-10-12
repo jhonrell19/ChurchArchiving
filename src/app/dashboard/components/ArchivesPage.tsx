@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { inputCls } from '../data/mockData'
+import { inputCls } from '../data/ui'
 
 type MassRecord = {
   id: number
@@ -38,7 +38,7 @@ export default function ArchivesPage() {
       const data = await res.json()
       setMasses(data.masses || [])
     } catch (err) {
-      console.error('Mass archive load error:', err)
+      console.warn('Mass archive load error:', err)
       setMasses([])
     } finally {
       setLoading(false)
@@ -46,7 +46,7 @@ export default function ArchivesPage() {
   }
 
   useEffect(() => {
-    loadMasses()
+    queueMicrotask(() => void loadMasses())
   }, [])
 
   const priests = useMemo(() => {

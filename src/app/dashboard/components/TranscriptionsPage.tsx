@@ -34,7 +34,7 @@ export default function TranscriptionsPage() {
       const data = await res.json()
       setTranscriptions(data.transcriptions || [])
     } catch (err) {
-      console.error('Load transcriptions error:', err)
+      console.warn('Load transcriptions error:', err)
       setTranscriptions([])
     } finally {
       setLoading(false)
@@ -42,7 +42,7 @@ export default function TranscriptionsPage() {
   }
 
   useEffect(() => {
-    loadTranscriptions()
+    queueMicrotask(() => void loadTranscriptions())
   }, [])
 
   return (
@@ -95,7 +95,7 @@ export default function TranscriptionsPage() {
 
               <div className="border-l-2 border-gold/30 pl-4 mt-3">
                 <p className="font-body text-[13px] text-[#4a6a8a] leading-relaxed italic">
-                  "{t.summaryText || 'No summary available.'}"
+                  {'“'}{t.summaryText || 'No summary available.'}{'”'}
                 </p>
               </div>
 

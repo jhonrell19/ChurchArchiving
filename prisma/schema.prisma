@@ -34,6 +34,10 @@ model User {
 
   emailVerified Boolean @default(true)
 
+  googleSub       String?   @unique
+  facebookId      String?   @unique
+  phoneVerifiedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 

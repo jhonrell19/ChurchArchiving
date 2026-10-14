@@ -6,6 +6,7 @@ import { NextResponse } from 'next/server'
 
 import {
   createSession,
+  isUserProfileComplete,
   SESSION_COOKIE,
   SESSION_MAX_AGE_SECONDS,
 } from '@/lib/auth'
@@ -14,26 +15,24 @@ import { normalizeEmail } from '@/lib/validation'
 
 const googleClientId = process.env.GOOGLE_CLIENT_ID
 
+type GoogleAuthIntent = 'login' | 'register'
+
 export async function POST(request: Request) {
   try {
-    /*
-     * 1. Make sure Google authentication is configured on the server.
-     */
     if (!googleClientId) {
-      console.error('GOOGLE LOGIN ERROR: GOOGLE_CLIENT_ID is missing.')
+      console.error(
+        'GOOGLE AUTH ERROR: GOOGLE_CLIENT_ID is missing.'
+      )
 
       return NextResponse.json(
         {
           message:
-            'Google Sign-In is not configured on the server.',
+            'Google authentication is not configured on the server.',
         },
         { status: 500 }
       )
     }
 
-    /*
-     * 2. Read the Google credential sent by the login page.
-     */
     const body = await request.json().catch(() => null)
 
     const credential =
@@ -41,21 +40,16 @@ export async function POST(request: Request) {
         ? body.credential.trim()
         : ''
 
+    const intent: GoogleAuthIntent =
+      body?.intent === 'register' ? 'register' : 'login'
+
     if (!credential) {
       return NextResponse.json(
-        {
-          message: 'Google credential is required.',
-        },
+        { message: 'Google credential is required.' },
         { status: 400 }
       )
     }
 
-    /*
-     * 3. Verify the credential directly with Google's library.
-     *
-     * We DO NOT trust an email address sent by the browser.
-     * Google's signed ID token must pass verification first.
-     */
     const googleClient = new OAuth2Client(googleClientId)
 
     const ticket = await googleClient.verifyIdToken({
@@ -74,11 +68,7 @@ export async function POST(request: Request) {
       )
     }
 
-    /*
-     * Google's "sub" is the permanent Google account identifier.
-     */
     const googleSub = payload.sub
-
     const email = normalizeEmail(payload.email)
 
     if (
@@ -95,51 +85,30 @@ export async function POST(request: Request) {
       )
     }
 
-    /*
-     * 4. First see whether this exact Google account
-     * has already been linked.
-     */
+    // Prefer the stable Google account identifier first.
     let user = await prisma.user.findUnique({
-      where: {
-        googleSub,
-      },
+      where: { googleSub },
     })
 
-    /*
-     * 5. If the Google account has never been linked,
-     * check whether a normal USER already owns this email.
-     *
-     * This lets someone who originally registered using
-     * email/password later use Google without creating a
-     * duplicate account.
-     */
+    // If not previously linked, use the verified Google email to find
+    // the same parishioner account and link it instead of duplicating it.
     if (!user) {
       const existingEmailUser =
         await prisma.user.findUnique({
-          where: {
-            email,
-          },
+          where: { email },
         })
 
       if (existingEmailUser) {
-        /*
-         * Never allow a public Google login to connect itself
-         * to a staff account.
-         */
         if (existingEmailUser.role !== 'USER') {
           return NextResponse.json(
             {
               message:
-                'Staff accounts cannot use public Google Sign-In. Please use the normal staff login.',
+                'Staff accounts cannot use public Google authentication. Please use the normal staff login.',
             },
             { status: 403 }
           )
         }
 
-        /*
-         * Prevent one local account from being attached to
-         * two different Google identities.
-         */
         if (
           existingEmailUser.googleSub &&
           existingEmailUser.googleSub !== googleSub
@@ -147,33 +116,21 @@ export async function POST(request: Request) {
           return NextResponse.json(
             {
               message:
-                'This email is already connected to another Google account.',
+                'This parish account is already connected to another Google account.',
             },
             { status: 409 }
           )
         }
 
-        /*
-         * Link Google to the existing USER account.
-         */
         user = await prisma.user.update({
-          where: {
-            id: existingEmailUser.id,
-          },
+          where: { id: existingEmailUser.id },
           data: {
             googleSub,
             emailVerified: true,
-
-            /*
-             * Only fill names from Google if the existing
-             * account does not already have them.
-             */
             firstName:
               existingEmailUser.firstName ||
               payload.given_name?.trim() ||
-              payload.name?.trim() ||
               null,
-
             surname:
               existingEmailUser.surname ||
               payload.family_name?.trim() ||
@@ -183,15 +140,19 @@ export async function POST(request: Request) {
       }
     }
 
-    /*
-     * 6. If no account exists at all, create a normal USER.
-     *
-     * The generated password is random and unknown to the user.
-     * It is still hashed so no plaintext credential is stored.
-     *
-     * The user may later create a normal password through
-     * your Forgot Password system if needed.
-     */
+    // Login is intentionally different from registration: the login page
+    // must not silently create a brand-new parish account.
+    if (!user && intent === 'login') {
+      return NextResponse.json(
+        {
+          message:
+            'No parish account is registered with this Google account yet. Please use Register first.',
+        },
+        { status: 404 }
+      )
+    }
+
+    // Registration may create a new normal USER only.
     if (!user) {
       const randomPassword =
         randomBytes(48).toString('base64url')
@@ -205,49 +166,36 @@ export async function POST(request: Request) {
         data: {
           email,
           password: passwordHash,
-
-          firstName:
-            payload.given_name?.trim() ||
-            payload.name?.trim() ||
-            null,
-
-          surname:
-            payload.family_name?.trim() ||
-            null,
-
+          firstName: payload.given_name?.trim() || null,
+          surname: payload.family_name?.trim() || null,
           role: 'USER',
-
           emailVerified: true,
-
           googleSub,
         },
       })
     }
 
-    /*
-     * 7. Final defense:
-     *
-     * Public Google authentication must never produce
-     * an ADMIN or BURIAL_ADMIN session.
-     */
     if (user.role !== 'USER') {
       return NextResponse.json(
         {
           message:
-            'Google Sign-In is available only for parishioner accounts.',
+            'Google authentication is available only for parishioner accounts.',
         },
         { status: 403 }
       )
     }
 
-    /*
-     * 8. Use the SAME session system as normal email/password login.
-     */
+    const needsProfileCompletion =
+      !isUserProfileComplete(user)
+
     const { token } = await createSession(user.id)
 
     const response = NextResponse.json(
       {
-        message: 'Google login successful.',
+        message: needsProfileCompletion
+          ? 'Google account verified. Please complete your parish profile.'
+          : 'Google authentication successful.',
+        needsProfileCompletion,
         user: {
           id: user.id,
           email: user.email,
@@ -261,36 +209,23 @@ export async function POST(request: Request) {
         },
       },
       {
-        status: 200,
         headers: {
           'Cache-Control': 'no-store',
         },
       }
     )
 
-    /*
-     * 9. Store our secure database-backed parish session.
-     */
-    response.cookies.set(
-      SESSION_COOKIE,
-      token,
-      {
-        httpOnly: true,
-        secure:
-          process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        path: '/',
-        maxAge: SESSION_MAX_AGE_SECONDS,
-      }
-    )
+    response.cookies.set(SESSION_COOKIE, token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: SESSION_MAX_AGE_SECONDS,
+    })
 
-    /*
-     * Remove the old legacy JWT cookie if one still exists.
-     */
     response.cookies.set('token', '', {
       httpOnly: true,
-      secure:
-        process.env.NODE_ENV === 'production',
+      secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
       expires: new Date(0),
@@ -298,15 +233,12 @@ export async function POST(request: Request) {
 
     return response
   } catch (error) {
-    console.error(
-      'GOOGLE LOGIN ERROR:',
-      error
-    )
+    console.error('GOOGLE AUTH ERROR:', error)
 
     return NextResponse.json(
       {
         message:
-          'Google login could not be completed.',
+          'Google authentication could not be completed.',
       },
       { status: 500 }
     )

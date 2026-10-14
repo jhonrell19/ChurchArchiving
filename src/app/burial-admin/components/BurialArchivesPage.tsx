@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { inputCls } from '../data/ui'
+import { inputCls } from '../../admin/data/ui'
 
 type ArchiveDocument = {
   id: number

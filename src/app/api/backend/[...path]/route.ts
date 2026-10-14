@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import type { Role } from '@prisma/client'
 import { getCurrentUser } from '@/lib/auth'
 
+const MAIN_ARCHIVE_TYPES = new Set(['baptismal', 'confirmation', 'marriage'])
+const BURIAL_ARCHIVE_TYPES = new Set(['burial', 'land_agreement'])
+
 const HOP_BY_HOP_HEADERS = new Set([
   'connection',
   'keep-alive',
@@ -19,6 +22,22 @@ const HOP_BY_HOP_HEADERS = new Set([
 
 function isAllowed(role: Role, method: string, path: string) {
   const m = method.toUpperCase()
+
+  const archiveCategoryMatch = path.match(
+    /^api\/archive\/documents\/([^/]+)$/
+  )
+
+  if (archiveCategoryMatch) {
+    const category = decodeURIComponent(archiveCategoryMatch[1])
+
+    if (role === 'ADMIN' && BURIAL_ARCHIVE_TYPES.has(category)) {
+      return false
+    }
+
+    if (role === 'BURIAL_ADMIN' && MAIN_ARCHIVE_TYPES.has(category)) {
+      return false
+    }
+  }
 
   if (path.startsWith('files/') || path.startsWith('download/')) {
     return true
@@ -58,6 +77,10 @@ if (
 
   if (/^api\/requests\/\d+\/download$/.test(path)) {
     return m === 'GET' && ['USER', 'ADMIN', 'BURIAL_ADMIN'].includes(role)
+  }
+
+  if (path === 'api/archive/audit-logs') {
+    return m === 'GET' && role === 'ADMIN'
   }
 
   if (path.startsWith('api/archive/')) {

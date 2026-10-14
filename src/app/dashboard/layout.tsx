@@ -1,7 +1,21 @@
 import type { ReactNode } from 'react'
-import { requireRole } from '@/lib/auth'
+import { redirect } from 'next/navigation'
 
-export default async function DashboardLayout({ children }: { children: ReactNode }) {
-  await requireRole('USER')
+import {
+  isUserProfileComplete,
+  requireRole,
+} from '@/lib/auth'
+
+export default async function DashboardLayout({
+  children,
+}: {
+  children: ReactNode
+}) {
+  const user = await requireRole('USER')
+
+  if (!isUserProfileComplete(user)) {
+    redirect('/complete-profile')
+  }
+
   return children
 }

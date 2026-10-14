@@ -56,6 +56,11 @@ type Props = {
 
 const FILTERS: ReqStatus[] = ['All', 'Pending', 'Approved', 'Ready', 'Released', 'Rejected']
 
+const OFFICE_TYPES = {
+  main: new Set(['baptismal', 'confirmation', 'marriage']),
+  burial: new Set(['burial', 'land_agreement', 'death']),
+} as const
+
 const toDisplayType = (type: string) => {
   switch (type) {
     case 'baptismal':
@@ -123,7 +128,15 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
         throw new Error(data.error || data.message || 'Failed to load requests')
       }
 
-      setRequests(Array.isArray(data.requests) ? data.requests : [])
+      const incoming: CertificateRequest[] = Array.isArray(data.requests)
+        ? data.requests
+        : []
+
+      // Defense in depth: never render a request that belongs to the
+      // other office, even if an upstream regression returns it.
+      setRequests(
+        incoming.filter(item => OFFICE_TYPES[office].has(item.sacramentType))
+      )
     } catch (err) {
       console.warn('Load requests error:', err)
       setRequests([])

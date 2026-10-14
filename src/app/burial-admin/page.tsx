@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import BurialArchivesPage from '../admin/components/BurialArchivesPage'
+import BurialArchivesPage from './components/BurialArchivesPage'
 import RequestsPage from '../admin/components/RequestsPage'
 import RecycleBinPage from '../admin/components/RecycleBinPage'
 

@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
+
+import {
+  getCurrentUser,
+  isUserProfileComplete,
+} from '@/lib/auth'
 
 export async function GET() {
   try {
@@ -10,12 +14,18 @@ export async function GET() {
         { message: 'Please log in again.' },
         {
           status: 401,
-          headers: { 'Cache-Control': 'no-store' },
+          headers: {
+            'Cache-Control': 'no-store',
+          },
         }
       )
     }
 
-    const fullName = [user.firstName, user.middleName, user.surname]
+    const fullName = [
+      user.firstName,
+      user.middleName,
+      user.surname,
+    ]
       .filter(Boolean)
       .join(' ')
       .trim()
@@ -35,14 +45,24 @@ export async function GET() {
           createdAt: user.createdAt,
           fullName: fullName || user.email,
         },
+        profileComplete:
+          user.role === 'USER'
+            ? isUserProfileComplete(user)
+            : true,
       },
-      { headers: { 'Cache-Control': 'no-store' } }
+      {
+        headers: {
+          'Cache-Control': 'no-store',
+        },
+      }
     )
   } catch (error) {
     console.error('PROFILE ERROR:', error)
 
     return NextResponse.json(
-      { message: 'Unable to load profile information.' },
+      {
+        message: 'Unable to load profile information.',
+      },
       { status: 500 }
     )
   }

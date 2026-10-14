@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import type { Role } from '@prisma/client'
+
 import { prisma } from '@/lib/prisma'
 
 export const SESSION_COOKIE = 'parish_session'
@@ -22,13 +23,29 @@ export function getRoleHome(role: Role) {
   }
 }
 
+export function isUserProfileComplete(user: {
+  firstName: string | null
+  surname: string | null
+  phoneNumber: string | null
+  address: string | null
+}) {
+  return Boolean(
+    user.firstName?.trim() &&
+      user.surname?.trim() &&
+      user.phoneNumber?.trim() &&
+      user.address?.trim()
+  )
+}
+
 export async function createSession(userId: number) {
   const token = randomBytes(32).toString('base64url')
   const tokenHash = hashSessionToken(token)
-  const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000)
+  const expiresAt = new Date(
+    Date.now() + SESSION_MAX_AGE_SECONDS * 1000
+  )
 
-  // Keep one active session per account for predictable parish-office use.
-  // A new login invalidates older browser sessions for this account.
+  // Keep one active browser session per account. A new login
+  // invalidates the previous session for predictable account security.
   await prisma.session.deleteMany({ where: { userId } })
 
   await prisma.session.create({
@@ -42,7 +59,9 @@ export async function createSession(userId: number) {
   return { token, expiresAt }
 }
 
-export async function destroySessionToken(token: string | undefined) {
+export async function destroySessionToken(
+  token: string | undefined
+) {
   if (!token) return
 
   const tokenHash = hashSessionToken(token)
@@ -73,6 +92,7 @@ export async function getCurrentUser() {
           email: true,
           role: true,
           emailVerified: true,
+          googleSub: true,
           createdAt: true,
           updatedAt: true,
         },
@@ -83,7 +103,9 @@ export async function getCurrentUser() {
   if (!session) return null
 
   if (session.expiresAt.getTime() <= Date.now()) {
-    await prisma.session.delete({ where: { id: session.id } }).catch(() => undefined)
+    await prisma.session
+      .delete({ where: { id: session.id } })
+      .catch(() => undefined)
     return null
   }
 

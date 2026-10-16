@@ -2,21 +2,39 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import BurialArchivesPage from './components/BurialArchivesPage'
+
 import RequestsPage from '../admin/components/RequestsPage'
 import RecycleBinPage from '../admin/components/RecycleBinPage'
+import BurialArchivesPage from './components/BurialArchivesPage'
+import BurialDashboardPage from './components/BurialDashboardPage'
+import BurialRecordsPage from './components/BurialRecordsPage'
+import CemeterySlotsPage from './components/CemeterySlotsPage'
+import PaymentsPage from './components/PaymentsPage'
+import ReservationsPage from './components/ReservationsPage'
 
-type BurialPage = 'archives' | 'requests' | 'urgent-requests' | 'recycle'
+type BurialPage =
+  | 'dashboard'
+  | 'slots'
+  | 'reservations'
+  | 'payments'
+  | 'burials'
+  | 'requests'
+  | 'archives'
+  | 'recycle'
 
 const NAV: { id: BurialPage; label: string; icon: string }[] = [
-  { id: 'archives', label: 'Burial Archives', icon: 'ti-archive' },
-  { id: 'requests', label: 'Requests', icon: 'ti-inbox' },
-  { id: 'urgent-requests', label: 'Urgent Requests', icon: 'ti-bolt' },
+  { id: 'dashboard', label: 'Dashboard', icon: 'ti-layout-dashboard' },
+  { id: 'slots', label: 'Cemetery Slots', icon: 'ti-map-pin' },
+  { id: 'reservations', label: 'Reservations', icon: 'ti-file-contract' },
+  { id: 'payments', label: 'Payments', icon: 'ti-receipt' },
+  { id: 'burials', label: 'Burial Records', icon: 'ti-cross' },
+  { id: 'requests', label: 'Burial Requests', icon: 'ti-inbox' },
+  { id: 'archives', label: 'Legacy Archives', icon: 'ti-archive' },
   { id: 'recycle', label: 'Recycle Bin', icon: 'ti-trash' },
 ]
 
 export default function BurialAdminPage() {
-  const [page, setPage] = useState<BurialPage>('archives')
+  const [page, setPage] = useState<BurialPage>('dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const router = useRouter()
 
@@ -42,12 +60,12 @@ export default function BurialAdminPage() {
               <h1 className="font-display text-navy-mid text-[12px] tracking-wide font-semibold">
                 Smart Parish System
               </h1>
-              <p className="font-body text-[11px] text-slate-500">Burial Admin</p>
+              <p className="font-body text-[11px] text-slate-500">Burial & Cemetery Management</p>
             </div>
           </div>
         </div>
 
-        <nav className="flex-1 px-3 py-4 space-y-1">
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {NAV.map(item => (
             <button
               key={item.id}
@@ -97,15 +115,22 @@ export default function BurialAdminPage() {
           >
             <i className="ti ti-menu-2 text-navy-mid text-[20px]" />
           </button>
-          <h2 className="font-display text-navy-mid text-[15px] font-semibold tracking-wide">
-            {currentLabel}
-          </h2>
+          <div>
+            <h2 className="font-display text-navy-mid text-[15px] font-semibold tracking-wide">
+              {currentLabel}
+            </h2>
+            <p className="text-[11px] text-slate-500">Philippine Independent Church Cemetery Extension</p>
+          </div>
         </header>
 
         <main className="flex-1 p-4 md:p-6 overflow-auto">
-          {page === 'archives' && <BurialArchivesPage />}
+          {page === 'dashboard' && <BurialDashboardPage />}
+          {page === 'slots' && <CemeterySlotsPage />}
+          {page === 'reservations' && <ReservationsPage />}
+          {page === 'payments' && <PaymentsPage />}
+          {page === 'burials' && <BurialRecordsPage />}
           {page === 'requests' && <RequestsPage office="burial" />}
-          {page === 'urgent-requests' && <RequestsPage urgentOnly office="burial" />}
+          {page === 'archives' && <BurialArchivesPage />}
           {page === 'recycle' && <RecycleBinPage scope="burial" />}
         </main>
       </div>

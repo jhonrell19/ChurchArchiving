@@ -44,6 +44,7 @@ type CertificateRequest = {
   remarks: string | null
   matchedDocumentId: number | null
   matchedDocument: ArchiveDocument | null
+  draftFile: string | null
   generatedFile: string | null
   createdAt: string | null
   updatedAt: string | null
@@ -55,11 +56,6 @@ type Props = {
 }
 
 const FILTERS: ReqStatus[] = ['All', 'Pending', 'Approved', 'Ready', 'Released', 'Rejected']
-
-const OFFICE_TYPES = {
-  main: new Set(['baptismal', 'confirmation', 'marriage']),
-  burial: new Set(['burial', 'land_agreement', 'death']),
-} as const
 
 const toDisplayType = (type: string) => {
   switch (type) {
@@ -128,15 +124,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
         throw new Error(data.error || data.message || 'Failed to load requests')
       }
 
-      const incoming: CertificateRequest[] = Array.isArray(data.requests)
-        ? data.requests
-        : []
-
-      // Defense in depth: never render a request that belongs to the
-      // other office, even if an upstream regression returns it.
-      setRequests(
-        incoming.filter(item => OFFICE_TYPES[office].has(item.sacramentType))
-      )
+      setRequests(Array.isArray(data.requests) ? data.requests : [])
     } catch (err) {
       console.warn('Load requests error:', err)
       setRequests([])
@@ -335,7 +323,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
     }
 
     const confirmed = window.confirm(
-      'Generate a system draft PDF from the verified archive record? Staff should review/sign/seal it according to parish policy before release.'
+      'Generate an official-form draft from the verified archive record? The draft is not released to the parishioner. Staff must review it, complete required signatures/legal fields, and upload the reviewed final document.'
     )
     if (!confirmed) return
 
@@ -662,6 +650,27 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
                     <section className="rounded-xl border border-violet-200 bg-violet-50/40 p-4">
                       <StepTitle number="3" title="Prepare the final release document" />
 
+                      {item.draftFile && (
+                        <div className="rounded-lg border border-blue-200 bg-white p-3 mb-3 flex items-center justify-between gap-3 flex-wrap">
+                          <div>
+                            <p className="font-display text-[10px] tracking-wider uppercase text-blue-700">
+                              Generated official-form draft
+                            </p>
+                            <p className="font-body text-[12px] text-navy-mid mt-1">
+                              Review this draft, complete signatures/legal fields when applicable, then upload the reviewed final document.
+                            </p>
+                          </div>
+                          <a
+                            href={backendFileUrl(item.draftFile)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-display text-[10px] tracking-wider text-blue-700 border border-blue-200 px-3 py-2 rounded-lg"
+                          >
+                            Preview Draft
+                          </a>
+                        </div>
+                      )}
+
                       {item.generatedFile && (
                         <div className="rounded-lg border border-violet-200 bg-white p-3 mb-3 flex items-center justify-between gap-3 flex-wrap">
                           <div>
@@ -692,10 +701,10 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
                               onClick={() => void generateReleaseDocument(item)}
                               className="font-display text-[10px] tracking-wider bg-blue-600 text-white px-3 py-2 rounded-lg disabled:opacity-40"
                             >
-                              Generate Draft PDF
+                              Generate Official Form Draft
                             </button>
                             <span className="font-body text-[11px] text-slate-500">
-                              Or upload the parish-prepared final certificate below.
+                              Then upload the reviewed/signed final certificate below.
                             </span>
                           </div>
                           <div className="flex items-center gap-2 flex-wrap">

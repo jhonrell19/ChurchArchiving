@@ -47,6 +47,10 @@ function isAllowed(role: Role, method: string, path: string) {
     return m === 'GET'
   }
 
+  if (path.startsWith('api/cemetery/')) {
+    return role === 'BURIAL_ADMIN'
+  }
+
   if (path.startsWith('api/user/')) {
     return role === 'USER' && m === 'GET'
   }

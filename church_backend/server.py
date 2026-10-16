@@ -24,7 +24,19 @@ from datetime import datetime
 
 from docxtpl import DocxTemplate
 
-from models import db, Document, AuditLog, CertificateRequest, MassRecord, Announcement
+from models import (
+    db,
+    Document,
+    AuditLog,
+    CertificateRequest,
+    MassRecord,
+    Announcement,
+    CemeterySlot,
+    CemeteryReservation,
+    CemeteryPayment,
+    BurialRecord,
+)
+from document_templates import generate_official_draft, TemplateNotConfiguredError, TemplateDataError
 
 from faster_whisper import WhisperModel
 
@@ -80,12 +92,14 @@ INTERNAL_API_KEY = os.environ.get("FLASK_INTERNAL_KEY")
 MASS_UPLOAD_FOLDER = os.path.join(BACKEND_DIR, "uploads", "masses")
 
 TRANSCRIPTION_FOLDER = os.path.join(BACKEND_DIR, "uploads", "transcriptions")
+CEMETERY_UPLOAD_FOLDER = os.path.join(BACKEND_DIR, "uploads", "cemetery")
 
 
 
 os.makedirs(MASS_UPLOAD_FOLDER, exist_ok=True)
 
 os.makedirs(TRANSCRIPTION_FOLDER, exist_ok=True)
+os.makedirs(CEMETERY_UPLOAD_FOLDER, exist_ok=True)
 
 
 
@@ -132,6 +146,7 @@ REQUEST_SCHEMA_COLUMNS = {
     "paid_at": "DATETIME",
     "record_date_hint": "VARCHAR(100)",
     "record_details": "VARCHAR(500)",
+    "draft_file": "VARCHAR(500)",
 }
 
 DOCUMENT_SCHEMA_COLUMNS = {
@@ -139,6 +154,7 @@ DOCUMENT_SCHEMA_COLUMNS = {
     "department": "VARCHAR(100)",
     "ocr_text": "TEXT",
     "extracted_metadata": "TEXT",
+    "record_data": "TEXT",
 }
 
 
@@ -361,6 +377,7 @@ def serialize_request(r):
                 "certificateNumber": source.certificate_number,
                 "filename": source.filename,
                 "filepath": source.filepath,
+                "recordData": json.loads(source.record_data) if source.record_data else {},
             }
 
     return {
@@ -492,6 +509,12 @@ def serialize_request(r):
         "matchedDocument":
 
             matched_document,
+
+
+
+        "draftFile":
+
+            r.draft_file,
 
 
 
@@ -669,6 +692,10 @@ def can_access_filepath(filepath):
         func.replace(CertificateRequest.generated_file, "\\", "/") == normalized
     )
 
+    draft_path_matches = (
+        func.replace(CertificateRequest.draft_file, "\\", "/") == normalized
+    )
+
     # MAIN ADMIN
     if role == "ADMIN":
 
@@ -696,7 +723,19 @@ def can_access_filepath(filepath):
             .first()
         )
 
-        return release_request is not None
+        if release_request is not None:
+            return True
+
+        draft_request = (
+            CertificateRequest.query
+            .filter(
+                draft_path_matches,
+                CertificateRequest.sacrament_type.in_(MAIN_ADMIN_TYPES),
+            )
+            .first()
+        )
+
+        return draft_request is not None
 
     # BURIAL ADMIN
     if role == "BURIAL_ADMIN":
@@ -719,7 +758,19 @@ def can_access_filepath(filepath):
             .first()
         )
 
-        return release_request is not None
+        if release_request is not None:
+            return True
+
+        draft_request = (
+            CertificateRequest.query
+            .filter(
+                draft_path_matches,
+                CertificateRequest.sacrament_type.in_(BURIAL_ADMIN_TYPES),
+            )
+            .first()
+        )
+
+        return draft_request is not None
 
     # PARISHIONER / USER
     if role == "USER":
@@ -1590,6 +1641,16 @@ def api_upload_document():
 
         document_type = request.form.get("document_type")
         run_ocr = (request.form.get("runOcr") or "").lower() in {"1", "true", "yes", "on"}
+        record_data_raw = (request.form.get("record_data") or "").strip()
+        record_data = {}
+        if record_data_raw:
+            try:
+                parsed_record_data = json.loads(record_data_raw)
+            except json.JSONDecodeError:
+                return {"error": "Template record data is not valid JSON."}, 400
+            if not isinstance(parsed_record_data, dict):
+                return {"error": "Template record data must be a JSON object."}, 400
+            record_data = parsed_record_data
 
 
 
@@ -1746,6 +1807,7 @@ def api_upload_document():
             department=department,
             ocr_text=ocr_text,
             extracted_metadata=extracted_metadata,
+            record_data=json.dumps(record_data, ensure_ascii=False) if record_data else None,
 
             uploaded_by=getattr(g, "user_email", None) or "Admin"
 
@@ -1797,7 +1859,8 @@ def api_upload_document():
 
                 "filepath": new_document.filepath,
                 "ocrAvailable": bool(new_document.ocr_text),
-                "ocrSuggestions": json.loads(new_document.extracted_metadata) if new_document.extracted_metadata else {}
+                "ocrSuggestions": json.loads(new_document.extracted_metadata) if new_document.extracted_metadata else {},
+                "recordData": json.loads(new_document.record_data) if new_document.record_data else {}
 
             }
 
@@ -1932,6 +1995,7 @@ def api_archive_documents():
                 "uploadedBy": d.uploaded_by,
                 "ocrText": d.ocr_text,
                 "ocrSuggestions": json.loads(d.extracted_metadata) if d.extracted_metadata else {},
+                "recordData": json.loads(d.record_data) if d.record_data else {},
 
             }
 
@@ -2020,6 +2084,7 @@ def api_archive_documents_by_type(sacrament_type):
                 "uploadedBy": d.uploaded_by,
                 "ocrText": d.ocr_text,
                 "ocrSuggestions": json.loads(d.extracted_metadata) if d.extracted_metadata else {},
+                "recordData": json.loads(d.record_data) if d.record_data else {},
 
             }
 
@@ -2963,42 +3028,43 @@ def api_generate_release_document(request_id):
         if not source or not source.active:
             return {"error": "Verified archive source record is no longer available."}, 404
 
-        relative_folder = f"uploads/releases/request_{cert_request.id}"
+        relative_folder = f"uploads/drafts/request_{cert_request.id}"
         physical_folder = backend_storage_path(relative_folder)
         os.makedirs(physical_folder, exist_ok=True)
 
-        filename = f"IFI_request_{cert_request.id:04d}_{source.sacrament_type}.pdf"
+        filename = f"IFI_request_{cert_request.id:04d}_{source.sacrament_type}_DRAFT.pdf"
         relative_path = f"{relative_folder}/{filename}"
         physical_path = backend_storage_path(relative_path)
 
-        old_release = normalize_path(cert_request.generated_file or "")
-        if old_release.startswith("uploads/releases/") and old_release != relative_path:
-            old_physical = backend_storage_path(old_release)
+        old_draft = normalize_path(cert_request.draft_file or "")
+        if old_draft.startswith("uploads/drafts/") and old_draft != relative_path:
+            old_physical = backend_storage_path(old_draft)
             if os.path.isfile(old_physical):
                 try:
                     os.remove(old_physical)
                 except OSError:
                     pass
 
-        generate_release_pdf(cert_request, source, physical_path)
-        cert_request.generated_file = relative_path
-        cert_request.status = "Ready"
+        generate_official_draft(cert_request, source, physical_path)
+        cert_request.draft_file = relative_path
         cert_request.remarks = (
-            "System-generated draft prepared. Payment confirmed; staff may release after final review."
-            if cert_request.payment_status == "Paid"
-            else "System-generated draft prepared. Payment is required before release."
+            "Official-form draft prepared from the verified archive record. "
+            "Review all details, complete required signatures/legal fields, then upload the final document."
         )
         db.session.add(AuditLog(
             user=getattr(g, "user_email", None) or "Admin",
-            action=f"Generated final release draft for request #{cert_request.id}",
+            action=f"Generated official-form draft for request #{cert_request.id}",
             document_id=cert_request.matched_document_id,
         ))
         db.session.commit()
 
         return {
-            "message": "Release document generated successfully.",
+            "message": "Official-form draft generated successfully. Review it before uploading the final document.",
             "request": serialize_request(cert_request),
         }, 200
+    except (TemplateNotConfiguredError, TemplateDataError) as error:
+        db.session.rollback()
+        return {"error": str(error)}, 400
     except Exception as error:
         db.session.rollback()
         return {"error": str(error)}, 500
@@ -4151,6 +4217,7 @@ def api_deleted_documents():
                     "filepath": d.filepath,
 
                     "uploadedBy": d.uploaded_by,
+                    "recordData": json.loads(d.record_data) if d.record_data else {},
 
                 }
 
@@ -4319,6 +4386,553 @@ def api_restore_document(document_id):
         return {"error": str(e)}, 500
 
 
+
+
+
+# ---------------------------------------------------------------------------
+# Burial / cemetery management
+# ---------------------------------------------------------------------------
+
+CEMETERY_SLOT_STATUSES = {"AVAILABLE", "RESERVED", "OCCUPIED"}
+CEMETERY_LOT_TYPES = {"LAWN_LOT", "MAUSOLEUM", "MULTI_LEVEL_TOMB", "OSSUARY", "OTHER"}
+CEMETERY_PAYMENT_PLANS = {"CASH", "DOWNPAYMENT", "INSTALLMENT"}
+CEMETERY_PAYMENT_TYPES = {
+    "RESERVATION_FEE",
+    "DOWN_PAYMENT",
+    "INSTALLMENT",
+    "FULL_PAYMENT",
+    "PERPETUAL_DUES",
+    "INTERMENT_FEE",
+    "OTHER",
+}
+
+
+def _cemetery_only():
+    return require_roles("BURIAL_ADMIN")
+
+
+def _safe_int(value, default=0, minimum=0):
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        number = default
+    return max(number, minimum)
+
+
+def _reservation_amount_paid(reservation):
+    return sum((payment.amount or 0) for payment in reservation.payments)
+
+
+def _reservation_balance(reservation):
+    return max((reservation.total_price or 0) - _reservation_amount_paid(reservation), 0)
+
+
+def serialize_cemetery_slot(slot):
+    active_burials = [b for b in slot.burials if b.status == "ACTIVE"]
+    latest_reservation = None
+    if slot.reservations:
+        latest_reservation = sorted(slot.reservations, key=lambda item: item.id, reverse=True)[0]
+
+    return {
+        "id": slot.id,
+        "section": slot.section,
+        "block": slot.block,
+        "lotNumber": slot.lot_number,
+        "slotCode": slot.slot_code,
+        "lotType": slot.lot_type,
+        "status": slot.status,
+        "rightsHolderName": slot.rights_holder_name,
+        "rightsHolderAddress": slot.rights_holder_address,
+        "rightsHolderContact": slot.rights_holder_contact,
+        "mapLabel": slot.map_label,
+        "notes": slot.notes,
+        "burialCount": len(active_burials),
+        "burials": [
+            {
+                "id": burial.id,
+                "deceasedName": burial.deceased_name,
+                "burialDate": burial.burial_date,
+            }
+            for burial in active_burials
+        ],
+        "latestReservationId": latest_reservation.id if latest_reservation else None,
+        "createdAt": slot.created_at.isoformat() if slot.created_at else None,
+        "updatedAt": slot.updated_at.isoformat() if slot.updated_at else None,
+    }
+
+
+def serialize_cemetery_payment(payment):
+    return {
+        "id": payment.id,
+        "reservationId": payment.reservation_id,
+        "amount": payment.amount,
+        "paymentType": payment.payment_type,
+        "paymentMethod": payment.payment_method,
+        "receiptNumber": payment.receipt_number,
+        "paymentDate": payment.payment_date,
+        "notes": payment.notes,
+        "recordedBy": payment.recorded_by,
+        "createdAt": payment.created_at.isoformat() if payment.created_at else None,
+    }
+
+
+def serialize_cemetery_reservation(reservation, include_payments=True):
+    amount_paid = _reservation_amount_paid(reservation)
+    balance = _reservation_balance(reservation)
+    if balance == 0 and reservation.total_price > 0:
+        payment_status = "FULLY_PAID"
+    elif amount_paid > 0:
+        payment_status = "PARTIALLY_PAID"
+    else:
+        payment_status = "UNPAID"
+
+    return {
+        "id": reservation.id,
+        "raNumber": reservation.ra_number,
+        "reservationDate": reservation.reservation_date,
+        "buyerName": reservation.buyer_name,
+        "buyerAddress": reservation.buyer_address,
+        "buyerContact": reservation.buyer_contact,
+        "civilStatus": reservation.civil_status,
+        "spouseName": reservation.spouse_name,
+        "slotId": reservation.slot_id,
+        "slot": serialize_cemetery_slot(reservation.slot) if reservation.slot else None,
+        "paymentPlan": reservation.payment_plan,
+        "totalPrice": reservation.total_price,
+        "reservationFee": reservation.reservation_fee,
+        "requiredDownPayment": reservation.required_down_payment,
+        "termMonths": reservation.term_months,
+        "monthlyAmortization": reservation.monthly_amortization,
+        "dueDate": reservation.due_date,
+        "status": reservation.status,
+        "paymentStatus": payment_status,
+        "amountPaid": amount_paid,
+        "balance": balance,
+        "contractFile": reservation.contract_file,
+        "notes": reservation.notes,
+        "payments": [serialize_cemetery_payment(p) for p in sorted(reservation.payments, key=lambda x: x.id, reverse=True)] if include_payments else [],
+        "createdAt": reservation.created_at.isoformat() if reservation.created_at else None,
+        "updatedAt": reservation.updated_at.isoformat() if reservation.updated_at else None,
+    }
+
+
+def serialize_burial_record(record):
+    details = {}
+    if record.deceased_details:
+        try:
+            details = json.loads(record.deceased_details)
+        except (TypeError, json.JSONDecodeError):
+            details = {}
+    return {
+        "id": record.id,
+        "slotId": record.slot_id,
+        "slot": serialize_cemetery_slot(record.slot) if record.slot else None,
+        "deceasedName": record.deceased_name,
+        "burialDate": record.burial_date,
+        "deathCertificateNumber": record.death_certificate_number,
+        "deathCertificateFile": record.death_certificate_file,
+        "burialPermitFile": record.burial_permit_file,
+        "authorizationFile": record.authorization_file,
+        "deceasedDetails": details,
+        "notes": record.notes,
+        "status": record.status,
+        "createdAt": record.created_at.isoformat() if record.created_at else None,
+        "updatedAt": record.updated_at.isoformat() if record.updated_at else None,
+    }
+
+
+def _save_cemetery_upload(file, subfolder, prefix):
+    if not file or not getattr(file, "filename", None):
+        return None
+    filename = secure_filename(file.filename)
+    if not filename:
+        raise ValueError("Invalid uploaded filename")
+    extension = os.path.splitext(filename)[1].lower()
+    allowed = {".pdf", ".jpg", ".jpeg", ".png", ".doc", ".docx"}
+    if extension not in allowed:
+        raise ValueError("Only PDF, image, DOC, and DOCX files are allowed.")
+    relative_folder = f"uploads/cemetery/{subfolder}"
+    physical_folder = backend_storage_path(relative_folder)
+    os.makedirs(physical_folder, exist_ok=True)
+    timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S%f")
+    stored_name = f"{prefix}_{timestamp}{extension}"
+    relative_path = f"{relative_folder}/{stored_name}"
+    file.save(backend_storage_path(relative_path))
+    return relative_path
+
+
+@app.route("/api/cemetery/map", methods=["GET"])
+def api_cemetery_map():
+    denied = _cemetery_only()
+    if denied:
+        return denied
+    filename = "site_master_plan_reference.png"
+    physical = os.path.join(CEMETERY_UPLOAD_FOLDER, filename)
+    if not os.path.isfile(physical):
+        return {"error": "Cemetery reference map has not been uploaded yet."}, 404
+    return send_from_directory(CEMETERY_UPLOAD_FOLDER, filename, as_attachment=False)
+
+
+@app.route("/api/cemetery/dashboard", methods=["GET"])
+def api_cemetery_dashboard():
+    denied = _cemetery_only()
+    if denied:
+        return denied
+
+    slots = CemeterySlot.query.filter_by(active=True).all()
+    reservations = CemeteryReservation.query.order_by(CemeteryReservation.id.desc()).all()
+    burials = BurialRecord.query.filter_by(status="ACTIVE").all()
+    payments = CemeteryPayment.query.order_by(CemeteryPayment.id.desc()).limit(8).all()
+
+    outstanding = sum(_reservation_balance(r) for r in reservations if r.status == "ACTIVE")
+    partially_paid = sum(1 for r in reservations if 0 < _reservation_amount_paid(r) < (r.total_price or 0))
+    unpaid = sum(1 for r in reservations if _reservation_amount_paid(r) == 0 and (r.total_price or 0) > 0)
+    today_text = datetime.utcnow().date().isoformat()
+    overdue = sum(
+        1
+        for r in reservations
+        if r.status == "ACTIVE"
+        and r.due_date
+        and r.due_date < today_text
+        and _reservation_balance(r) > 0
+    )
+
+    return {
+        "counts": {
+            "totalSlots": len(slots),
+            "availableSlots": sum(1 for s in slots if s.status == "AVAILABLE"),
+            "reservedSlots": sum(1 for s in slots if s.status == "RESERVED"),
+            "occupiedSlots": sum(1 for s in slots if s.status == "OCCUPIED"),
+            "activeReservations": sum(1 for r in reservations if r.status == "ACTIVE"),
+            "burialRecords": len(burials),
+            "partiallyPaid": partially_paid,
+            "unpaid": unpaid,
+            "overdue": overdue,
+            "outstandingBalance": outstanding,
+        },
+        "recentPayments": [serialize_cemetery_payment(p) for p in payments],
+        "recentReservations": [serialize_cemetery_reservation(r, include_payments=False) for r in reservations[:5]],
+    }, 200
+
+
+@app.route("/api/cemetery/slots", methods=["GET", "POST"])
+def api_cemetery_slots():
+    denied = _cemetery_only()
+    if denied:
+        return denied
+
+    if request.method == "GET":
+        q = (request.args.get("q") or "").strip()
+        status = (request.args.get("status") or "").strip().upper()
+        query = CemeterySlot.query.filter_by(active=True)
+        if status in CEMETERY_SLOT_STATUSES:
+            query = query.filter(CemeterySlot.status == status)
+        if q:
+            like = f"%{q}%"
+            query = query.filter(
+                (CemeterySlot.slot_code.ilike(like))
+                | (CemeterySlot.lot_number.ilike(like))
+                | (CemeterySlot.block.ilike(like))
+                | (CemeterySlot.section.ilike(like))
+                | (CemeterySlot.rights_holder_name.ilike(like))
+            )
+        slots = query.order_by(CemeterySlot.section, CemeterySlot.block, CemeterySlot.lot_number).all()
+        return {"slots": [serialize_cemetery_slot(slot) for slot in slots]}, 200
+
+    data = request.get_json(silent=True) or {}
+    lot_number = (data.get("lotNumber") or "").strip()
+    block = (data.get("block") or "").strip() or None
+    section = (data.get("section") or "").strip() or None
+    lot_type = (data.get("lotType") or "LAWN_LOT").strip().upper()
+    slot_code = (data.get("slotCode") or "").strip()
+    if not lot_number:
+        return {"error": "Lot number is required."}, 400
+    if lot_type not in CEMETERY_LOT_TYPES:
+        return {"error": "Invalid lot type."}, 400
+    if not slot_code:
+        slot_code = "-".join(part for part in [section, block, lot_number] if part) or f"LOT-{lot_number}"
+    existing = CemeterySlot.query.filter_by(slot_code=slot_code).first()
+    if existing:
+        return {"error": "That cemetery slot code already exists."}, 409
+
+    slot = CemeterySlot(
+        section=section,
+        block=block,
+        lot_number=lot_number,
+        slot_code=slot_code,
+        lot_type=lot_type,
+        status="AVAILABLE",
+        map_label=(data.get("mapLabel") or "").strip() or None,
+        notes=(data.get("notes") or "").strip() or None,
+    )
+    db.session.add(slot)
+    db.session.commit()
+    return {"message": "Cemetery slot created.", "slot": serialize_cemetery_slot(slot)}, 201
+
+
+@app.route("/api/cemetery/slots/<int:slot_id>", methods=["PATCH"])
+def api_update_cemetery_slot(slot_id):
+    denied = _cemetery_only()
+    if denied:
+        return denied
+    slot = db.session.get(CemeterySlot, slot_id)
+    if not slot or not slot.active:
+        return {"error": "Cemetery slot not found."}, 404
+    data = request.get_json(silent=True) or {}
+    if "status" in data:
+        status = str(data.get("status") or "").upper()
+        if status not in CEMETERY_SLOT_STATUSES:
+            return {"error": "Invalid slot status."}, 400
+        slot.status = status
+    for attr, key, limit in [
+        ("rights_holder_name", "rightsHolderName", 200),
+        ("rights_holder_address", "rightsHolderAddress", 500),
+        ("rights_holder_contact", "rightsHolderContact", 100),
+        ("map_label", "mapLabel", 120),
+        ("notes", "notes", 1000),
+    ]:
+        if key in data:
+            setattr(slot, attr, (str(data.get(key) or "").strip()[:limit] or None))
+    db.session.commit()
+    return {"message": "Cemetery slot updated.", "slot": serialize_cemetery_slot(slot)}, 200
+
+
+@app.route("/api/cemetery/reservations", methods=["GET", "POST"])
+def api_cemetery_reservations():
+    denied = _cemetery_only()
+    if denied:
+        return denied
+
+    if request.method == "GET":
+        q = (request.args.get("q") or "").strip()
+        query = CemeteryReservation.query
+        if q:
+            like = f"%{q}%"
+            query = query.join(CemeterySlot).filter(
+                (CemeteryReservation.buyer_name.ilike(like))
+                | (CemeteryReservation.ra_number.ilike(like))
+                | (CemeterySlot.slot_code.ilike(like))
+                | (CemeterySlot.lot_number.ilike(like))
+            )
+        reservations = query.order_by(CemeteryReservation.id.desc()).all()
+        return {"reservations": [serialize_cemetery_reservation(r) for r in reservations]}, 200
+
+    data = request.get_json(silent=True) or {}
+    buyer_name = (data.get("buyerName") or "").strip()
+    slot_id = _safe_int(data.get("slotId"), 0)
+    if not buyer_name:
+        return {"error": "Buyer name is required."}, 400
+    slot = db.session.get(CemeterySlot, slot_id)
+    if not slot or not slot.active:
+        return {"error": "Select a valid cemetery slot."}, 400
+    if slot.status != "AVAILABLE":
+        return {"error": "The selected cemetery slot is not available."}, 409
+
+    plan = str(data.get("paymentPlan") or "CASH").upper()
+    if plan not in CEMETERY_PAYMENT_PLANS:
+        return {"error": "Invalid payment plan."}, 400
+
+    ra_number = (data.get("raNumber") or "").strip() or None
+    if ra_number and CemeteryReservation.query.filter_by(ra_number=ra_number).first():
+        return {"error": "That R.A. number already exists."}, 409
+
+    reservation = CemeteryReservation(
+        ra_number=ra_number,
+        reservation_date=(data.get("reservationDate") or "").strip() or None,
+        buyer_name=buyer_name,
+        buyer_address=(data.get("buyerAddress") or "").strip() or None,
+        buyer_contact=(data.get("buyerContact") or "").strip() or None,
+        civil_status=(data.get("civilStatus") or "").strip() or None,
+        spouse_name=(data.get("spouseName") or "").strip() or None,
+        slot_id=slot.id,
+        payment_plan=plan,
+        total_price=_safe_int(data.get("totalPrice")),
+        reservation_fee=_safe_int(data.get("reservationFee")),
+        required_down_payment=_safe_int(data.get("requiredDownPayment")),
+        term_months=_safe_int(data.get("termMonths"), 0) or None,
+        monthly_amortization=_safe_int(data.get("monthlyAmortization"), 0) or None,
+        due_date=(data.get("dueDate") or "").strip() or None,
+        notes=(data.get("notes") or "").strip() or None,
+        status="ACTIVE",
+    )
+    slot.status = "RESERVED"
+    slot.rights_holder_name = buyer_name
+    slot.rights_holder_address = reservation.buyer_address
+    slot.rights_holder_contact = reservation.buyer_contact
+    db.session.add(reservation)
+    db.session.commit()
+    return {"message": "Reservation created.", "reservation": serialize_cemetery_reservation(reservation)}, 201
+
+
+@app.route("/api/cemetery/reservations/<int:reservation_id>/contract", methods=["POST"])
+def api_upload_cemetery_contract(reservation_id):
+    denied = _cemetery_only()
+    if denied:
+        return denied
+    reservation = db.session.get(CemeteryReservation, reservation_id)
+    if not reservation:
+        return {"error": "Reservation not found."}, 404
+    file = request.files.get("file")
+    try:
+        path = _save_cemetery_upload(file, f"reservations/{reservation_id}", "contract")
+    except ValueError as error:
+        return {"error": str(error)}, 400
+    if not path:
+        return {"error": "Choose a contract image or document."}, 400
+    reservation.contract_file = path
+    db.session.commit()
+    return {"message": "Contract uploaded.", "reservation": serialize_cemetery_reservation(reservation)}, 200
+
+
+@app.route("/api/cemetery/reservations/<int:reservation_id>/payments", methods=["POST"])
+def api_add_cemetery_payment(reservation_id):
+    denied = _cemetery_only()
+    if denied:
+        return denied
+    reservation = db.session.get(CemeteryReservation, reservation_id)
+    if not reservation:
+        return {"error": "Reservation not found."}, 404
+    data = request.get_json(silent=True) or {}
+    amount = _safe_int(data.get("amount"))
+    if amount <= 0:
+        return {"error": "Payment amount must be greater than zero."}, 400
+    payment_type = str(data.get("paymentType") or "INSTALLMENT").upper()
+    if payment_type not in CEMETERY_PAYMENT_TYPES:
+        return {"error": "Invalid payment type."}, 400
+    current_balance = _reservation_balance(reservation)
+    if reservation.total_price > 0 and amount > current_balance:
+        return {"error": f"Payment exceeds the remaining balance of PHP {current_balance:,}."}, 400
+
+    payment = CemeteryPayment(
+        reservation=reservation,
+        amount=amount,
+        payment_type=payment_type,
+        payment_method=str(data.get("paymentMethod") or "CASH").upper()[:50],
+        receipt_number=(data.get("receiptNumber") or "").strip() or None,
+        payment_date=(data.get("paymentDate") or "").strip() or datetime.utcnow().date().isoformat(),
+        notes=(data.get("notes") or "").strip() or None,
+        recorded_by=getattr(g, "user_email", None) or "Burial Admin",
+    )
+    db.session.add(payment)
+    db.session.flush()
+    if _reservation_balance(reservation) == 0 and reservation.total_price > 0:
+        reservation.status = "COMPLETED"
+    db.session.commit()
+    return {
+        "message": "Payment recorded.",
+        "payment": serialize_cemetery_payment(payment),
+        "reservation": serialize_cemetery_reservation(reservation),
+    }, 201
+
+
+@app.route("/api/cemetery/payments", methods=["GET"])
+def api_cemetery_payments():
+    denied = _cemetery_only()
+    if denied:
+        return denied
+    reservation_id = _safe_int(request.args.get("reservationId"), 0)
+    query = CemeteryPayment.query
+    if reservation_id:
+        query = query.filter_by(reservation_id=reservation_id)
+    payments = query.order_by(CemeteryPayment.id.desc()).all()
+    return {"payments": [serialize_cemetery_payment(p) for p in payments]}, 200
+
+
+@app.route("/api/cemetery/burials", methods=["GET", "POST"])
+def api_cemetery_burials():
+    denied = _cemetery_only()
+    if denied:
+        return denied
+
+    if request.method == "GET":
+        q = (request.args.get("q") or "").strip()
+        query = BurialRecord.query.filter(BurialRecord.status == "ACTIVE")
+        if q:
+            like = f"%{q}%"
+            query = query.join(CemeterySlot).filter(
+                (BurialRecord.deceased_name.ilike(like))
+                | (BurialRecord.death_certificate_number.ilike(like))
+                | (CemeterySlot.slot_code.ilike(like))
+                | (CemeterySlot.lot_number.ilike(like))
+                | (CemeterySlot.rights_holder_name.ilike(like))
+            )
+        records = query.order_by(BurialRecord.id.desc()).all()
+        return {"burials": [serialize_burial_record(record) for record in records]}, 200
+
+    form = request.form
+    deceased_name = (form.get("deceased_name") or "").strip()
+    slot_id = _safe_int(form.get("slot_id"), 0)
+    if not deceased_name:
+        return {"error": "Deceased name is required."}, 400
+    slot = db.session.get(CemeterySlot, slot_id)
+    if not slot or not slot.active:
+        return {"error": "Select a valid cemetery slot."}, 400
+
+    try:
+        death_certificate_file = _save_cemetery_upload(
+            request.files.get("death_certificate"),
+            f"burials/{slot.id}",
+            "death_certificate",
+        )
+        burial_permit_file = _save_cemetery_upload(
+            request.files.get("burial_permit"),
+            f"burials/{slot.id}",
+            "burial_permit",
+        )
+        authorization_file = _save_cemetery_upload(
+            request.files.get("authorization"),
+            f"burials/{slot.id}",
+            "authorization",
+        )
+    except ValueError as error:
+        return {"error": str(error)}, 400
+
+    # Reusing an already occupied niche/lot is allowed only when staff uploads
+    # an authorization document, matching the client interview workflow.
+    existing_active_burials = [b for b in slot.burials if b.status == "ACTIVE"]
+    if existing_active_burials and not authorization_file:
+        return {
+            "error": "This slot already has a burial record. Upload an authorization document before adding another interment."
+        }, 400
+
+    details = {}
+    raw_details = form.get("deceased_details")
+    if raw_details:
+        try:
+            details = json.loads(raw_details)
+        except json.JSONDecodeError:
+            return {"error": "Invalid deceased details data."}, 400
+
+    record = BurialRecord(
+        slot_id=slot.id,
+        deceased_name=deceased_name,
+        burial_date=(form.get("burial_date") or "").strip() or None,
+        death_certificate_number=(form.get("death_certificate_number") or "").strip() or None,
+        death_certificate_file=death_certificate_file,
+        burial_permit_file=burial_permit_file,
+        authorization_file=authorization_file,
+        deceased_details=json.dumps(details, ensure_ascii=False) if details else None,
+        notes=(form.get("notes") or "").strip() or None,
+        status="ACTIVE",
+    )
+    slot.status = "OCCUPIED"
+    db.session.add(record)
+    db.session.commit()
+    return {"message": "Burial record created.", "burial": serialize_burial_record(record)}, 201
+
+
+@app.route("/api/cemetery/files/<path:filepath>", methods=["GET"])
+def api_cemetery_file(filepath):
+    denied = _cemetery_only()
+    if denied:
+        return denied
+    normalized = normalize_path(filepath)
+    if not normalized.startswith("uploads/cemetery/"):
+        return {"error": "Forbidden"}, 403
+    physical = backend_storage_path(normalized)
+    if not os.path.isfile(physical):
+        return {"error": "File not found."}, 404
+    return send_from_directory(os.path.dirname(physical), os.path.basename(physical), as_attachment=False)
 
 
 

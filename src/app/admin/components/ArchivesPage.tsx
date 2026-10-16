@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { inputCls } from '../data/ui'
+import TemplateDataFields, { type TemplateRecordData } from './TemplateDataFields'
 
 type ArchiveDocument = {
   id: number
@@ -29,6 +30,7 @@ export default function ArchivesPage() {
   const [documents, setDocuments] = useState<ArchiveDocument[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [recordData, setRecordData] = useState<TemplateRecordData>({})
 
   const [form, setForm] = useState({
   person_name: '',
@@ -96,6 +98,7 @@ export default function ArchivesPage() {
 
     formData.append('file', file)
     formData.append('runOcr', runOcr ? 'true' : 'false')
+    formData.append('record_data', JSON.stringify(recordData))
 
     try {
       const res = await fetch('/api/backend/api/archive/upload', {
@@ -123,6 +126,7 @@ export default function ArchivesPage() {
   document_type: 'Scanned Certificate',
 })
 
+      setRecordData({})
       setFile(null)
       setOcrText('')
       setOcrSuggestions({})
@@ -220,6 +224,7 @@ const records = documents.filter(doc =>
               ...prev,
               sacrament_type: activeTab,
             }))
+            setRecordData({})
             setShowForm(!showForm)
           }}
           className="flex items-center gap-1.5 font-display text-[11px] tracking-wider bg-navy text-gold px-4 py-2 rounded-lg"
@@ -360,6 +365,12 @@ const records = documents.filter(doc =>
   </div>
 </div>
 
+            <TemplateDataFields
+              sacramentType={form.sacrament_type}
+              value={recordData}
+              onChange={setRecordData}
+            />
+
             <div className="md:col-span-3">
               <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1">
                 Upload Scanned File *
@@ -444,6 +455,7 @@ const records = documents.filter(doc =>
                 ...prev,
                 sacrament_type: type.value,
               }))
+              setRecordData({})
             }}
             className={`flex items-center gap-2 font-display text-[11px] tracking-wider px-4 py-2 rounded-lg border transition-all ${
               activeTab === type.value

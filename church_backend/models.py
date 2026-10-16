@@ -24,6 +24,7 @@ class Document(db.Model):
     department = db.Column(db.String(100), nullable=True)
     ocr_text = db.Column(db.Text, nullable=True)
     extracted_metadata = db.Column(db.Text, nullable=True)
+    record_data = db.Column(db.Text, nullable=True)
 
     uploaded_by = db.Column(db.String(100))
     active = db.Column(db.Boolean, default=True)
@@ -146,6 +147,11 @@ class CertificateRequest(db.Model):
         nullable=True
     )
 
+    draft_file = db.Column(
+        db.String(500),
+        nullable=True
+    )
+
     generated_file = db.Column(
         db.String(500),
         nullable=True
@@ -196,3 +202,104 @@ class Announcement(db.Model):
 
     active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class CemeterySlot(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+
+    section = db.Column(db.String(100), nullable=True)
+    block = db.Column(db.String(50), nullable=True)
+    lot_number = db.Column(db.String(50), nullable=False)
+    slot_code = db.Column(db.String(120), nullable=False, unique=True, index=True)
+    lot_type = db.Column(db.String(50), nullable=False, default="LAWN_LOT")
+    status = db.Column(db.String(30), nullable=False, default="AVAILABLE")
+
+    rights_holder_name = db.Column(db.String(200), nullable=True)
+    rights_holder_address = db.Column(db.String(500), nullable=True)
+    rights_holder_contact = db.Column(db.String(100), nullable=True)
+
+    map_label = db.Column(db.String(120), nullable=True)
+    notes = db.Column(db.String(1000), nullable=True)
+
+    active = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class CemeteryReservation(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+
+    ra_number = db.Column(db.String(100), nullable=True, unique=True, index=True)
+    reservation_date = db.Column(db.String(30), nullable=True)
+
+    buyer_name = db.Column(db.String(200), nullable=False)
+    buyer_address = db.Column(db.String(500), nullable=True)
+    buyer_contact = db.Column(db.String(100), nullable=True)
+    civil_status = db.Column(db.String(50), nullable=True)
+    spouse_name = db.Column(db.String(200), nullable=True)
+
+    slot_id = db.Column(db.Integer, db.ForeignKey("cemetery_slot.id"), nullable=False, index=True)
+
+    payment_plan = db.Column(db.String(30), nullable=False, default="CASH")
+    total_price = db.Column(db.Integer, nullable=False, default=0)
+    reservation_fee = db.Column(db.Integer, nullable=False, default=0)
+    required_down_payment = db.Column(db.Integer, nullable=False, default=0)
+    term_months = db.Column(db.Integer, nullable=True)
+    monthly_amortization = db.Column(db.Integer, nullable=True)
+    due_date = db.Column(db.String(30), nullable=True)
+
+    status = db.Column(db.String(30), nullable=False, default="ACTIVE")
+    contract_file = db.Column(db.String(500), nullable=True)
+    notes = db.Column(db.String(1000), nullable=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    slot = db.relationship("CemeterySlot", backref=db.backref("reservations", lazy=True))
+    payments = db.relationship(
+        "CemeteryPayment",
+        backref="reservation",
+        lazy=True,
+        cascade="all, delete-orphan",
+    )
+
+
+class CemeteryPayment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+
+    reservation_id = db.Column(
+        db.Integer,
+        db.ForeignKey("cemetery_reservation.id"),
+        nullable=False,
+        index=True,
+    )
+    amount = db.Column(db.Integer, nullable=False)
+    payment_type = db.Column(db.String(50), nullable=False, default="INSTALLMENT")
+    payment_method = db.Column(db.String(50), nullable=False, default="CASH")
+    receipt_number = db.Column(db.String(100), nullable=True, index=True)
+    payment_date = db.Column(db.String(30), nullable=True)
+    notes = db.Column(db.String(500), nullable=True)
+    recorded_by = db.Column(db.String(200), nullable=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class BurialRecord(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+
+    slot_id = db.Column(db.Integer, db.ForeignKey("cemetery_slot.id"), nullable=False, index=True)
+    deceased_name = db.Column(db.String(200), nullable=False, index=True)
+    burial_date = db.Column(db.String(30), nullable=True)
+
+    death_certificate_number = db.Column(db.String(100), nullable=True)
+    death_certificate_file = db.Column(db.String(500), nullable=True)
+    burial_permit_file = db.Column(db.String(500), nullable=True)
+    authorization_file = db.Column(db.String(500), nullable=True)
+
+    deceased_details = db.Column(db.Text, nullable=True)
+    notes = db.Column(db.String(1000), nullable=True)
+    status = db.Column(db.String(30), nullable=False, default="ACTIVE")
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    slot = db.relationship("CemeterySlot", backref=db.backref("burials", lazy=True))

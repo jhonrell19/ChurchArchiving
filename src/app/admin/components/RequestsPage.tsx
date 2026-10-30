@@ -65,9 +65,11 @@ const toDisplayType = (type: string) => {
       return 'Confirmation'
     case 'marriage':
       return 'Marriage'
+    case 'ownership':
+      return 'Certificate of Ownership'
     case 'burial':
     case 'death':
-      return 'Burial Certificate'
+      return 'Historical Burial Request'
     case 'land_agreement':
       return 'Land Agreement'
     default:
@@ -159,20 +161,23 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
 
     try {
       setSearchingId(item.id)
-      const res = await fetch(
-        `/api/backend/api/archive/documents/${encodeURIComponent(item.sacramentType)}?q=${encodeURIComponent(query)}`,
-        { cache: 'no-store' }
-      )
-      const data = await res.json().catch(() => ({}))
-
-      if (!res.ok) {
-        alert(data.error || data.message || 'Unable to search the archive.')
-        return
-      }
-
+      const categories = item.sacramentType === 'ownership'
+        ? ['ownership', 'land_agreement']
+        : [item.sacramentType]
+      const results = await Promise.all(categories.map(async category => {
+        const res = await fetch(
+          `/api/backend/api/archive/documents/${encodeURIComponent(category)}?q=${encodeURIComponent(query)}`,
+          { cache: 'no-store' }
+        )
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(data.error || data.message || 'Unable to search the archive.')
+        return Array.isArray(data.documents) ? (data.documents as ArchiveDocument[]) : []
+      }))
+      const unique = new Map<number, ArchiveDocument>()
+      for (const record of results.flat()) unique.set(record.id, record)
       setSearchResults(prev => ({
         ...prev,
-        [item.id]: Array.isArray(data.documents) ? data.documents : [],
+        [item.id]: Array.from(unique.values()),
       }))
     } catch (error) {
       console.warn('Archive search error:', error)
@@ -695,6 +700,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
                       {item.status === 'Approved' || item.status === 'Ready' ? (
                         <div className="space-y-3">
                           <div className="flex items-center gap-2 flex-wrap">
+                            {item.sacramentType !== 'ownership' ? (
                             <button
                               type="button"
                               disabled={isBusy || !item.matchedDocumentId}
@@ -703,9 +709,16 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
                             >
                               Generate Official Form Draft
                             </button>
-                            <span className="font-body text-[11px] text-slate-500">
-                              Then upload the reviewed/signed final certificate below.
-                            </span>
+                            ) : (
+                              <span className="font-body text-[11px] text-amber-800">
+                                No automatic ownership-certificate template is configured. Verify the ownership record, then upload the approved and signed final document below.
+                              </span>
+                            )}
+                            {item.sacramentType !== 'ownership' && (
+                              <span className="font-body text-[11px] text-slate-500">
+                                Then upload the reviewed/signed final certificate below.
+                              </span>
+                            )}
                           </div>
                           <div className="flex items-center gap-2 flex-wrap">
                           <input

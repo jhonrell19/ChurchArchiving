@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap');
 @import url('https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css');
 
 @import "tailwindcss";
@@ -15,8 +14,8 @@
   --color-txt-lt:     #fffdf8;
   --color-txt-md:     #66788c;
 
-  --font-display: 'Cinzel', Georgia, serif;
-  --font-body:    'EB Garamond', Georgia, serif;
+  --font-display: Arial, Helvetica, sans-serif;
+  --font-body:    Arial, Helvetica, sans-serif;
 }
 
 @layer base {
@@ -126,3 +125,117 @@ textarea::placeholder {
 .font-display.text-\[11px\] {
   font-weight: 600;
 }
+
+/* SMART PARISH — SITE-WIDE READABILITY UPDATE (October 2026) */
+/* Applies to public pages, login/registration, parishioner, Main Admin and
+   Burial Admin. Background colors and dark-theme gold/white lettering stay. */
+
+:root {
+  --parish-text-main: #111111;
+  --parish-text-secondary: #334155;
+  --parish-text-muted: #475569;
+}
+
+/* Default foreground only — does not change the navy/gold theme colors used
+   in backgrounds, borders, logos or buttons. */
+body {
+  color: var(--parish-text-main);
+}
+
+/* Main headings, record titles, data labels and text links on pale cards. */
+.text-navy-mid,
+.text-navy-lite,
+.text-ink {
+  color: var(--parish-text-main);
+}
+
+/* text-navy is also used on gold-filled buttons, where black is readable. */
+.text-navy {
+  color: var(--parish-text-main);
+}
+
+/* Make faint Tailwind secondary text legible on light page backgrounds. */
+.text-slate-300,
+.text-slate-400,
+.text-slate-500,
+.text-gray-400,
+.text-gray-500,
+.text-zinc-400,
+.text-zinc-500,
+.text-neutral-400,
+.text-neutral-500,
+.text-stone-400,
+.text-stone-500 {
+  color: var(--parish-text-muted);
+}
+
+.text-slate-600,
+.text-gray-600,
+.text-zinc-600,
+.text-neutral-600,
+.text-stone-600,
+.text-txt-md {
+  color: var(--parish-text-secondary);
+}
+
+/* Existing archive and dashboard screens use custom pale blue-grays.
+   These override earlier fallback colors in globals.css. */
+.text-\[\#9ab0c4\],
+.text-\[\#7890a6\],
+.text-\[\#6b8caa\],
+.text-\[\#4a6a8a\],
+.text-\[\#3a5a7a\] {
+  color: var(--parish-text-muted) !important;
+}
+
+/* Pale placeholder text was particularly hard to see in forms. */
+input::placeholder,
+textarea::placeholder {
+  color: #475569 !important;
+  opacity: 1;
+}
+
+/* Normal form values, keeping disabled/checked/colored control styling. */
+input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+textarea,
+select {
+  color: var(--parish-text-main);
+}
+
+select option {
+  color: var(--parish-text-main);
+}
+
+/* Two public pages use inline colors rather than Tailwind classes.
+   Restrict those adjustments to known dark-blue headings and pale paragraphs;
+   hero, navy banner, and gold/white text are deliberately not changed. */
+:is(h1, h2, h3, h4, h5, h6)[style*="#0c2a5e"],
+:is(h1, h2, h3, h4, h5, h6)[style*="rgb(12, 42, 94)"],
+:is(h1, h2, h3, h4, h5, h6)[style*="rgb(12,42,94)"] {
+  color: var(--parish-text-main) !important;
+}
+
+p[style*="#4a6a8a"],
+p[style*="#3a5a7a"],
+p[style*="rgb(74, 106, 138)"],
+p[style*="rgb(58, 90, 122)"],
+span[style*="rgba(12, 42, 94, 0.45)"],
+span[style*="rgba(12,42,94,0.45)"] {
+  color: var(--parish-text-secondary) !important;
+}
+
+/* Keep light foreground on dark call-to-action buttons and banners, where
+   a primary-black override would otherwise reduce legibility. */
+:is(.bg-navy, .bg-navy-mid, .bg-black, .bg-slate-800, .bg-slate-900).text-navy-mid,
+:is(.bg-navy, .bg-navy-mid, .bg-black, .bg-slate-800, .bg-slate-900).text-ink {
+  color: #fffdf8;
+}
+
+
+/* October 21 checking: consistent local Arial typography. */
+html, body, button, input, textarea, select { font-family: Arial, Helvetica, sans-serif !important; }
+.font-display, .font-body { font-family: Arial, Helvetica, sans-serif !important; letter-spacing: normal; }
+/* Raise tiny data/navigation labels while respecting existing large headings. */
+.text-\[9px\], .text-\[10px\], .text-\[11px\], .text-\[12px\] { font-size: 13px; line-height: 1.5; }
+main h1, main h2, [class*="dashboard"] h2, [class*="admin"] h2 { font-size: clamp(25px, 2.2vw, 28px); line-height: 1.25; }
+input::placeholder, textarea::placeholder { color: #475569; }

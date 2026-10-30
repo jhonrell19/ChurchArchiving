@@ -20,7 +20,7 @@ export const REQUEST_ICONS: Record<string, string> = {
   Baptismal: 'ti-droplet',
   Confirmation: 'ti-shield-check',
   Marriage: 'ti-rings',
-  'Burial Certificate': 'ti-candle',
+  'Certificate of Ownership': 'ti-file-certificate',
   'Land Agreement': 'ti-file-contract',
 }
 

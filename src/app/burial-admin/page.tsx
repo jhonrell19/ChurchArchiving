@@ -28,7 +28,7 @@ const NAV: { id: BurialPage; label: string; icon: string }[] = [
   { id: 'reservations', label: 'Reservations', icon: 'ti-file-contract' },
   { id: 'payments', label: 'Payments', icon: 'ti-receipt' },
   { id: 'burials', label: 'Burial Records', icon: 'ti-cross' },
-  { id: 'requests', label: 'Burial Requests', icon: 'ti-inbox' },
+  { id: 'requests', label: 'Document Requests', icon: 'ti-inbox' },
   { id: 'archives', label: 'Legacy Archives', icon: 'ti-archive' },
   { id: 'recycle', label: 'Recycle Bin', icon: 'ti-trash' },
 ]

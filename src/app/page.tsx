@@ -1,6 +1,6 @@
-import Navbar from './Components/Navbar'
-import Footer from './Components/Footer'
-import Slideshow from './Components/Slideshow'
+import Navbar from './components/Navbar'
+import Footer from './components/Footer'
+import Slideshow from './components/Slideshow'
 
 const CARDS = [
   { title: 'Worship',     desc: 'Join us in prayer and praise every Sunday morning as we lift our voices together in faith.' },

@@ -300,9 +300,9 @@ def generate_official_draft(cert_request, source_document, output_path):
         _generate_confirmation(source_document, output_path)
     elif sacrament_type == 'marriage':
         _generate_marriage(source_document, output_path)
-    elif sacrament_type in {'burial', 'land_agreement'}:
+    elif sacrament_type in {'burial', 'land_agreement', 'ownership'}:
         raise TemplateNotConfiguredError(
-            'No official Burial/Land Agreement template has been configured yet.'
+            'No official Certificate of Ownership / Land Agreement template has been configured yet. Staff must upload a verified, approved final document.'
         )
     else:
         raise TemplateNotConfiguredError(

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { inputCls } from '../data/ui'
+import MassMediaPlayer from '../../components/MassMediaPlayer'
 
 type MassRecord = {
   id: number
@@ -19,6 +20,7 @@ type MassRecord = {
 }
 
 export default function ArchivesPage() {
+  const [playing, setPlaying] = useState<{ title: string; filepath: string } | null>(null)
   const [search, setSearch] = useState('')
   const [priest, setPriest] = useState('All Priests')
   const [category, setCategory] = useState('All Categories')
@@ -85,6 +87,7 @@ export default function ArchivesPage() {
 
   return (
     <div>
+      {playing && <MassMediaPlayer title={playing.title} filepath={playing.filepath} onClose={() => setPlaying(null)} />}
       <h2 className="font-display text-navy-mid text-xl font-semibold mb-1">
         Mass Archives
       </h2>
@@ -154,7 +157,7 @@ export default function ArchivesPage() {
               className="bg-white border border-gold/20 rounded-xl overflow-hidden"
             >
               <div className="h-32 bg-navy flex items-center justify-center relative">
-                <i className="ti ti-player-play text-gold text-3xl" />
+                {m.filepath ? <button type="button" aria-label={`Play ${m.title}`} onClick={() => setPlaying({ title: m.title, filepath: m.filepath! })} className="text-gold"><i className="ti ti-player-play text-3xl" /></button> : <i className="ti ti-video-off text-gold text-3xl" />}
 
                 {m.hasTranscript && (
                   <span className="absolute top-3 right-3 font-display text-[10px] tracking-wider bg-gold text-navy px-2 py-1 rounded-full">
@@ -188,15 +191,12 @@ export default function ArchivesPage() {
 
                 <div className="flex gap-2 flex-wrap">
                   {m.filepath ? (
-                    <a
-                      href={`/api/backend/files/${m.filepath}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <button type="button" onClick={() => setPlaying({ title: m.title, filepath: m.filepath! })}
                       className="inline-flex items-center gap-1.5 font-display text-[10px] tracking-wider text-gold border border-gold/30 px-3 py-1.5 rounded-lg bg-gold/5"
                     >
                       <i className="ti ti-player-play text-[13px]" />
-                      Watch / Open
-                    </a>
+                      Watch Recording
+                    </button>
                   ) : (
                     <span className="font-body text-[11px] text-[#9ab0c4]">
                       No media file attached

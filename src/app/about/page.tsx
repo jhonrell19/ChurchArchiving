@@ -1,5 +1,5 @@
-import Navbar from '../Components/Navbar'
-import Footer from '../Components/Footer'
+import Navbar from '../components/Navbar'
+import Footer from '../components/Footer'
 
 const TIMELINE = [
   { year: '1900',  title: 'Iglesia Católica Filipina Founded',       desc: 'Catholic Riego de Dios establishes the Iglesia Católica Filipina in Maragondon — two years before the IFI — after the Archbishop of Manila failed to act on the community\'s demands.' },
@@ -25,9 +25,9 @@ const STORY = [
 
 // ── Reusable style tokens ──
 const S = {
-  label:    { fontFamily: 'Cinzel, Georgia, serif', fontSize: '11px', letterSpacing: '3px', textTransform: 'uppercase' as const, display: 'block', marginBottom: '12px' },
-  h2:       { fontFamily: 'Cinzel, Georgia, serif', fontSize: 'clamp(18px,2.5vw,26px)', fontWeight: 600, marginBottom: '16px' },
-  body:     { fontFamily: 'EB Garamond, Georgia, serif', fontSize: '15px', lineHeight: 1.75 },
+  label:    { fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '11px', letterSpacing: '3px', textTransform: 'uppercase' as const, display: 'block', marginBottom: '12px' },
+  h2:       { fontFamily: 'Arial, Helvetica, sans-serif', fontSize: 'clamp(18px,2.5vw,26px)', fontWeight: 600, marginBottom: '16px' },
+  body:     { fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '15px', lineHeight: 1.75 },
   gold:     { color: '#d4af37' },
   navy:     { color: '#0c2a5e' },
   muted:    { color: '#8aaccf' },
@@ -60,7 +60,7 @@ export default function AboutPage() {
         <div style={{ position: 'relative', zIndex: 10, maxWidth: '560px', margin: '0 auto' }}>
           <SectionLabel text="Who We Are" dark />
           <div style={{ fontSize: '36px', color: '#d4af37', marginBottom: '16px' }} className="animate-pulse-cross">✝</div>
-          <h1 style={{ fontFamily: 'Cinzel, Georgia, serif', fontSize: 'clamp(22px,4vw,36px)', fontWeight: 600, color: '#d4af37', marginBottom: '16px' }}>About Our Church</h1>
+          <h1 style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: 'clamp(22px,4vw,36px)', fontWeight: 600, color: '#d4af37', marginBottom: '16px' }}>About Our Church</h1>
           <p style={{ ...S.body, fontStyle: 'italic', color: '#e8d9b0', marginBottom: '24px' }}>A heritage of faith, independence, and service to the Filipino people since 1902.</p>
           <div className="gold-divider"><span /><span className="diamond" /><span /></div>
         </div>
@@ -88,7 +88,7 @@ export default function AboutPage() {
               <div key={i} style={{ position: 'relative', marginBottom: '36px' }}>
                 <div style={{ position: 'absolute', left: '-26px', top: '4px', width: '12px', height: '12px', borderRadius: '50%', background: '#d4af37', border: '2px solid #071630', boxShadow: '0 0 0 3px rgba(212,175,55,0.2)' }} />
                 <div style={{ ...S.label, ...S.gold, marginBottom: '4px' }}>{year}</div>
-                <div style={{ fontFamily: 'Cinzel, Georgia, serif', fontSize: '14px', color: 'rgba(212,175,55,0.9)', marginBottom: '8px' }}>{title}</div>
+                <div style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '14px', color: 'rgba(212,175,55,0.9)', marginBottom: '8px' }}>{title}</div>
                 <p style={{ ...S.body, ...S.muted }}>{desc}</p>
               </div>
             ))}
@@ -104,7 +104,7 @@ export default function AboutPage() {
             {VALUES.map(({ title, desc }) => (
               <div key={title} style={{ background: '#fff', border: '1px solid rgba(212,175,55,0.28)', borderRadius: '12px', padding: '32px 24px', textAlign: 'center' }}>
                 <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.28)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 18px', fontSize: '22px' }}>✝</div>
-                <h3 style={{ fontFamily: 'Cinzel, Georgia, serif', fontSize: '15px', fontWeight: 600, color: '#0c2a5e', marginBottom: '12px' }}>{title}</h3>
+                <h3 style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '15px', fontWeight: 600, color: '#0c2a5e', marginBottom: '12px' }}>{title}</h3>
                 <p style={{ ...S.body, color: '#4a6a8a' }}>{desc}</p>
               </div>
             ))}

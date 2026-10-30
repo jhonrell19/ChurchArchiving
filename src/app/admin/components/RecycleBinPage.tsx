@@ -24,7 +24,8 @@ const toDisplayType = (type: string) => {
   if (type === 'baptismal') return 'Baptismal'
   if (type === 'confirmation') return 'Confirmation'
   if (type === 'marriage') return 'Marriage'
-  if (type === 'burial') return 'Burial Certificate'
+  if (type === 'ownership') return 'Certificate of Ownership'
+  if (type === 'burial') return 'Historical Burial Document'
   if (type === 'land_agreement') return 'Land Agreement'
   return type
 }

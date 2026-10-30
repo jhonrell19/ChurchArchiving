@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import MassMediaPlayer from '../../components/MassMediaPlayer'
 import { STATUS_STYLE, inputCls, selectCls } from '../data/ui'
 
 type MassStatus = 'Pending' | 'In Progress' | 'Transcribed'
@@ -21,6 +22,7 @@ type MassRecord = {
 }
 
 export default function MassesPage() {
+  const [playing, setPlaying] = useState<{ title: string; filepath: string } | null>(null)
   const [masses, setMasses] = useState<MassRecord[]>([])
   const [filterStatus, setFilter] = useState<'All' | MassStatus>('All')
   const [search, setSearch] = useState('')
@@ -252,6 +254,7 @@ export default function MassesPage() {
 
   return (
     <div>
+      {playing && <MassMediaPlayer title={playing.title} filepath={playing.filepath} onClose={() => setPlaying(null)} />}
       <div className="flex items-center justify-between mb-1">
         <h2 className="font-display text-navy-mid text-xl font-semibold">
           Mass Recordings
@@ -526,14 +529,12 @@ export default function MassesPage() {
                       </button>
 
                       {m.filepath && (
-                        <a
-                          href={`/api/backend/files/${m.filepath}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <button type="button" onClick={() => setPlaying({ title: m.title, filepath: m.filepath! })}
+                          aria-label={`Play ${m.title}`}
                           className="p-1.5 rounded-lg border border-gold/20 text-[#6b8caa]"
                         >
                           <i className="ti ti-player-play text-[14px]" />
-                        </a>
+                        </button>
                       )}
 
                       <button

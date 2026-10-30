@@ -15,7 +15,7 @@ type RequestType =
   | 'Baptismal'
   | 'Confirmation'
   | 'Marriage'
-  | 'Burial Certificate'
+  | 'Certificate of Ownership'
   | 'Land Agreement'
 
 type CertificateRequest = {
@@ -58,20 +58,20 @@ type MeResponseUser = {
 }
 
 const DEMO_BASE_FEES: Record<RequestType, number> = {
-  Baptismal: 100,
-  Confirmation: 100,
-  Marriage: 100,
-  'Burial Certificate': 100,
-  'Land Agreement': 100,
+  Baptismal: 200,
+  Confirmation: 200,
+  Marriage: 0,
+  'Certificate of Ownership': 0,
+  'Land Agreement': 0,
 }
 
-const DEMO_URGENT_FEE = 50
+const DEMO_URGENT_FEE = 100
 
 const REQUEST_TYPES: RequestType[] = [
   'Baptismal',
   'Confirmation',
   'Marriage',
-  'Burial Certificate',
+  'Certificate of Ownership',
   'Land Agreement',
 ]
 
@@ -79,7 +79,7 @@ const REQUEST_TYPE_ICONS: Record<RequestType, string> = {
   Baptismal: REQUEST_ICONS.Baptismal || 'ti-droplet',
   Confirmation: REQUEST_ICONS.Confirmation || 'ti-shield-check',
   Marriage: REQUEST_ICONS.Marriage || 'ti-rings',
-  'Burial Certificate': REQUEST_ICONS['Burial Certificate'] || 'ti-candle',
+  'Certificate of Ownership': REQUEST_ICONS['Certificate of Ownership'] || 'ti-file-certificate',
   'Land Agreement': REQUEST_ICONS['Land Agreement'] || 'ti-file-contract',
 }
 
@@ -91,8 +91,8 @@ const toBackendType = (type: RequestType) => {
       return 'confirmation'
     case 'Marriage':
       return 'marriage'
-    case 'Burial Certificate':
-      return 'burial'
+    case 'Certificate of Ownership':
+      return 'ownership'
     case 'Land Agreement':
       return 'land_agreement'
   }
@@ -106,8 +106,11 @@ const toDisplayType = (type: string) => {
       return 'Confirmation'
     case 'marriage':
       return 'Marriage'
+    case 'ownership':
+      return 'Certificate of Ownership'
     case 'burial':
-      return 'Burial Certificate'
+    case 'death':
+      return 'Historical Burial Request'
     case 'land_agreement':
       return 'Land Agreement'
     default:
@@ -126,9 +129,12 @@ const getRequestIcon = (type: string) => {
     case 'Marriage':
     case 'marriage':
       return REQUEST_TYPE_ICONS.Marriage
-    case 'Burial Certificate':
+    case 'Certificate of Ownership':
+    case 'ownership':
+      return REQUEST_TYPE_ICONS['Certificate of Ownership']
     case 'burial':
-      return REQUEST_TYPE_ICONS['Burial Certificate']
+    case 'death':
+      return 'ti-archive'
     case 'Land Agreement':
     case 'land_agreement':
       return REQUEST_TYPE_ICONS['Land Agreement']
@@ -307,33 +313,18 @@ export default function RequestsPage() {
     }
   }
 
-  const demoPay = async (requestId: number) => {
-    const confirmed = window.confirm(
-      'Complete the demo payment for this request? This is only a simulation and does not charge real money.'
-    )
-
-    if (!confirmed) return
-
+  const payMongoCheckout = async (requestId: number) => {
     try {
-      const res = await fetch(
-        `/api/backend/api/requests/${requestId}/demo-pay`,
-        {
-          method: 'POST',
-        }
-      )
-
+      const res = await fetch(`/api/backend/api/requests/${requestId}/paymongo-checkout`, { method: 'POST' })
       const data = await res.json().catch(() => ({}))
-
-      if (!res.ok) {
-        alert(data.error || 'Demo payment failed.')
-        return
+      if (!res.ok) { alert(data.error || 'Checkout unavailable.'); return }
+      if (!data.checkoutUrl?.startsWith('https://checkout.paymongo.com/')) {
+        alert('Invalid payment destination.'); return
       }
-
-      alert('Demo payment completed successfully.')
-      await loadRequests()
+      window.location.assign(data.checkoutUrl)
     } catch (error) {
-      console.warn('Demo payment error:', error)
-      alert('Unable to complete demo payment right now.')
+      console.warn('PayMongo checkout error:', error)
+      alert('Unable to reach payment checkout.')
     }
   }
 
@@ -348,7 +339,7 @@ export default function RequestsPage() {
       </h2>
 
       <p className="font-body text-[#6b8caa] text-[14px] mb-6">
-        Request parish certificates, burial certificates, or land agreement copies.
+        Request parish certificates, certificates of ownership, or land agreement copies.
         Your registered account information is used automatically for every request.
       </p>
 
@@ -543,12 +534,12 @@ export default function RequestsPage() {
 
               <div>
                 <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1.5">
-                  Name on Record <span className="text-gold">*</span>
+                  {activeType === 'Certificate of Ownership' ? 'Registered Lot Holder' : 'Name on Record'} <span className="text-gold">*</span>
                 </label>
                 <input
                   value={formData.personName}
                   onChange={e => handleChange('personName', e.target.value)}
-                  placeholder="Name written on church record"
+                  placeholder={activeType === 'Certificate of Ownership' ? 'Name of registered lot holder' : 'Name written on church record'}
                   className={inputCls}
                 />
               </div>
@@ -567,7 +558,7 @@ export default function RequestsPage() {
 
               <div>
                 <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1.5">
-                  Approximate Record Date / Year
+                  {activeType === 'Certificate of Ownership' ? 'Agreement Date / Year (if known)' : 'Approximate Record Date / Year'}
                 </label>
                 <input
                   value={formData.recordDateHint}
@@ -579,12 +570,12 @@ export default function RequestsPage() {
 
               <div>
                 <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1.5">
-                  Identifying Details
+                  {activeType === 'Certificate of Ownership' ? 'Lot / Reservation Reference' : 'Identifying Details'}
                 </label>
                 <input
                   value={formData.recordDetails}
                   onChange={e => handleChange('recordDetails', e.target.value)}
-                  placeholder="Parents, spouse, book/page, or other known detail"
+                  placeholder={activeType === 'Certificate of Ownership' ? 'Section, block, lot number, reservation number' : 'Parents, spouse, book/page, or other known detail'}
                   className={inputCls}
                 />
               </div>
@@ -656,6 +647,7 @@ export default function RequestsPage() {
                 const displayType = toDisplayType(req.sacramentType)
                 const canDemoPay =
                   req.paymentStatus !== 'Paid' &&
+                  req.totalFee > 0 &&
                   (req.status === 'Approved' || req.status === 'Ready')
 
                 const canDownload =
@@ -801,7 +793,7 @@ export default function RequestsPage() {
 
                         {req.status === 'Approved' && req.paymentStatus !== 'Paid' && (
                           <p className="font-body text-[12px] text-amber-700">
-                            Your request is approved. Demo payment is now available.
+                            Your request is approved. PayMongo test checkout is available.
                           </p>
                         )}
 
@@ -840,11 +832,11 @@ export default function RequestsPage() {
                         {canDemoPay && (
                           <button
                             type="button"
-                            onClick={() => void demoPay(req.id)}
+                            onClick={() => void payMongoCheckout(req.id)}
                             className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-display text-[11px] tracking-wider px-4 py-2 rounded-lg transition-colors"
                           >
                             <i className="ti ti-credit-card text-[14px]" />
-                            Demo Pay {formatPeso(req.totalFee)}
+                            Pay Online {formatPeso(req.totalFee)}
                           </button>
                         )}
 

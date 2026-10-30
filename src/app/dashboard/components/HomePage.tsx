@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import type { Page } from '../types'
+import MassMediaPlayer from '../../components/MassMediaPlayer'
 
 type MassRecord = {
   id: number
@@ -42,6 +43,7 @@ type DashboardSummary = {
 }
 
 export default function HomePage({ setPage }: { setPage: (p: Page) => void }) {
+  const [playing, setPlaying] = useState<{ title: string; filepath: string } | null>(null)
   const [data, setData] = useState<DashboardSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -115,6 +117,7 @@ export default function HomePage({ setPage }: { setPage: (p: Page) => void }) {
 
   return (
     <div>
+      {playing && <MassMediaPlayer title={playing.title} filepath={playing.filepath} onClose={() => setPlaying(null)} />}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {stats.map(({ label, value, icon }) => (
           <div key={label} className="bg-white border border-gold/20 rounded-xl p-5">
@@ -163,7 +166,7 @@ export default function HomePage({ setPage }: { setPage: (p: Page) => void }) {
               {data.recentMasses.map(m => (
                 <div key={m.id} className="bg-white border border-gold/20 rounded-xl overflow-hidden">
                   <div className="h-28 bg-navy flex items-center justify-center relative">
-                    <i className="ti ti-player-play text-gold text-3xl" />
+                    {m.filepath ? <button type="button" aria-label={`Play ${m.title}`} onClick={() => setPlaying({ title: m.title, filepath: m.filepath! })} className="text-gold"><i className="ti ti-player-play text-3xl" /></button> : <i className="ti ti-video-off text-gold text-3xl" />}
 
                     {m.hasTranscript && (
                       <span className="absolute top-3 right-3 font-display text-[10px] tracking-wider bg-gold text-navy px-2 py-1 rounded-full">
@@ -196,15 +199,12 @@ export default function HomePage({ setPage }: { setPage: (p: Page) => void }) {
                     </div>
 
                     {m.filepath && (
-                      <a
-                        href={`/api/backend/files/${m.filepath}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button type="button" onClick={() => setPlaying({ title: m.title, filepath: m.filepath! })}
                         className="inline-flex items-center gap-1.5 mt-3 font-display text-[10px] tracking-wider text-gold border border-gold/30 px-3 py-1.5 rounded-lg bg-gold/5"
                       >
                         <i className="ti ti-player-play text-[13px]" />
                         View Recording
-                      </a>
+                      </button>
                     )}
                   </div>
                 </div>

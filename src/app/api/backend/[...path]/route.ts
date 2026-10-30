@@ -3,7 +3,7 @@ import type { Role } from '@prisma/client'
 import { getCurrentUser } from '@/lib/auth'
 
 const MAIN_ARCHIVE_TYPES = new Set(['baptismal', 'confirmation', 'marriage'])
-const BURIAL_ARCHIVE_TYPES = new Set(['burial', 'land_agreement'])
+const BURIAL_ARCHIVE_TYPES = new Set(['burial', 'land_agreement', 'ownership'])
 
 const HOP_BY_HOP_HEADERS = new Set([
   'connection',
@@ -66,7 +66,7 @@ function isAllowed(role: Role, method: string, path: string) {
   }
 
 if (
-  /^api\/requests\/\d+\/demo-pay$/.test(path)
+  /^api\/requests\/\d+\/paymongo-checkout$/.test(path)
 ) {
   return m === 'POST' && role === 'USER'
 }
@@ -206,6 +206,8 @@ async function forward(request: NextRequest, context: { params: Promise<{ path: 
       'content-type',
       'content-disposition',
       'content-length',
+      'content-range',
+      'accept-ranges',
       'cache-control',
       'last-modified',
       'etag',

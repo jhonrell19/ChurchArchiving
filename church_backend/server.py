@@ -16,10 +16,6 @@ from flask import (
 
 )
 
-
-
-
-
 from datetime import datetime
 
 from docxtpl import DocxTemplate
@@ -311,7 +307,7 @@ with app.app_context():
 
 MAIN_ADMIN_TYPES = ["baptismal", "confirmation", "marriage"]
 
-BURIAL_ADMIN_TYPES = ["burial", "land_agreement"]
+BURIAL_ADMIN_TYPES = ["burial", "land_agreement", "ownership"]
 
 
 
@@ -326,26 +322,21 @@ PREFIX_MAP = {
     "burial": "BRL",
 
     "land_agreement": "LAG",
+    "ownership": "OWN",
 
 }
 
-DEMO_BASE_FEES = {
-
-    "baptismal": 100,
-
-    "confirmation": 100,
-
-    "marriage": 100,
-
-    "burial": 100,
-
-    "land_agreement": 100,
-
+# PAYMONGO_CERTIFICATE_V1
+# All prices are in whole PHP pesos. Unconfirmed document prices default to 0 (disabled).
+CERTIFICATE_BASE_FEES = {
+    "baptismal": int(os.getenv("CERT_FEE_BAPTISMAL", "200")),
+    "confirmation": int(os.getenv("CERT_FEE_CONFIRMATION", "200")),
+    "marriage": int(os.getenv("CERT_FEE_MARRIAGE", "0")),
+    "ownership": int(os.getenv("CERT_FEE_OWNERSHIP", "0")),
+    "land_agreement": int(os.getenv("CERT_FEE_LAND_AGREEMENT", "0")),
 }
-
-
-
-DEMO_URGENT_FEE = 50
+DEMO_BASE_FEES = CERTIFICATE_BASE_FEES
+DEMO_URGENT_FEE = int(os.getenv("CERT_FEE_URGENT", "100"))
 
 
 
@@ -566,9 +557,10 @@ def _is_protected_backend_path():
 
 def protect_backend_boundary():
 
+    # Only the modern API/file endpoints may be served by Flask.
+    # Old HTML admin and generated-file routes are deliberately disabled.
     if not _is_protected_backend_path():
-
-        return None
+        return {"error": "Not found"}, 404
 
 
 
@@ -601,6 +593,9 @@ def protect_backend_boundary():
     g.user_address = request.headers.get("X-User-Address")
 
 
+
+    if request.path == "/api/paymongo/confirm-internal" and g.user_role == "PAYMONGO_WEBHOOK":
+        return None
 
     if g.user_role not in {"USER", "ADMIN", "BURIAL_ADMIN"}:
 
@@ -1668,6 +1663,9 @@ def api_upload_document():
 
             return {"error": "Invalid document category"}, 400
 
+        if sacrament_type == "burial":
+            return {"error": "New burial certificate archives are retired. Use Certificate of Ownership for the appropriate document instead."}, 400
+
 
 
         file_hash = calculate_file_hash(file)
@@ -2287,6 +2285,9 @@ def api_create_request():
 
 
 
+        if sacrament_type == "burial":
+            return {"error": "Burial certificate requests are no longer offered. Select Certificate of Ownership instead."}, 400
+
         if sacrament_type not in (
 
             MAIN_ADMIN_TYPES
@@ -2692,6 +2693,7 @@ def api_get_single_request(request_id):
 
 @app.route("/api/requests/<int:request_id>/demo-pay", methods=["POST"])
 def api_demo_pay_request(request_id):
+    return {"error": "Demo payments disabled. Use PayMongo Checkout."}, 410
     denied = require_roles("USER")
 
     if denied:
@@ -2867,7 +2869,12 @@ def api_select_source_record(request_id):
         if document.sacrament_type not in allowed_types_for_current_role():
             return {"error": "Forbidden document"}, 403
 
-        if document.sacrament_type != cert_request.sacrament_type:
+        permitted_source_types = (
+            {"ownership", "land_agreement"}
+            if cert_request.sacrament_type == "ownership"
+            else {cert_request.sacrament_type}
+        )
+        if document.sacrament_type not in permitted_source_types:
             return {
                 "error": "Archive record category does not match the request."
             }, 400
@@ -4419,8 +4426,13 @@ def _safe_int(value, default=0, minimum=0):
     return max(number, minimum)
 
 
+LOT_PAYMENT_TYPES = {"RESERVATION_FEE", "DOWN_PAYMENT", "INSTALLMENT", "FULL_PAYMENT"}
+
+
 def _reservation_amount_paid(reservation):
-    return sum((payment.amount or 0) for payment in reservation.payments)
+    # Separate lot purchase payments from perpetual dues/interment charges.
+    return sum((payment.amount or 0) for payment in reservation.payments
+               if payment.payment_type in LOT_PAYMENT_TYPES)
 
 
 def _reservation_balance(reservation):
@@ -4732,6 +4744,19 @@ def api_cemetery_reservations():
     if plan not in CEMETERY_PAYMENT_PLANS:
         return {"error": "Invalid payment plan."}, 400
 
+    total_price = _safe_int(data.get("totalPrice"))
+    reservation_fee = _safe_int(data.get("reservationFee"))
+    down_payment = _safe_int(data.get("requiredDownPayment"))
+    term_months = _safe_int(data.get("termMonths"))
+    if total_price <= 0:
+        return {"error": "Lot price must be greater than zero."}, 400
+    if reservation_fee > total_price or down_payment > total_price:
+        return {"error": "Reservation fee/down payment cannot exceed lot price."}, 400
+    if plan == "INSTALLMENT" and term_months <= 0:
+        return {"error": "Installment plans require a positive term in months."}, 400
+    if plan == "DOWNPAYMENT" and down_payment <= 0:
+        return {"error": "Down payment plan requires a positive down payment."}, 400
+
     ra_number = (data.get("raNumber") or "").strip() or None
     if ra_number and CemeteryReservation.query.filter_by(ra_number=ra_number).first():
         return {"error": "That R.A. number already exists."}, 409
@@ -4746,10 +4771,10 @@ def api_cemetery_reservations():
         spouse_name=(data.get("spouseName") or "").strip() or None,
         slot_id=slot.id,
         payment_plan=plan,
-        total_price=_safe_int(data.get("totalPrice")),
-        reservation_fee=_safe_int(data.get("reservationFee")),
-        required_down_payment=_safe_int(data.get("requiredDownPayment")),
-        term_months=_safe_int(data.get("termMonths"), 0) or None,
+        total_price=total_price,
+        reservation_fee=reservation_fee,
+        required_down_payment=down_payment if plan != "CASH" else 0,
+        term_months=term_months if plan == "INSTALLMENT" else None,
         monthly_amortization=_safe_int(data.get("monthlyAmortization"), 0) or None,
         due_date=(data.get("dueDate") or "").strip() or None,
         notes=(data.get("notes") or "").strip() or None,
@@ -4800,8 +4825,8 @@ def api_add_cemetery_payment(reservation_id):
     if payment_type not in CEMETERY_PAYMENT_TYPES:
         return {"error": "Invalid payment type."}, 400
     current_balance = _reservation_balance(reservation)
-    if reservation.total_price > 0 and amount > current_balance:
-        return {"error": f"Payment exceeds the remaining balance of PHP {current_balance:,}."}, 400
+    if payment_type in LOT_PAYMENT_TYPES and amount > current_balance:
+        return {"error": f"Lot payment exceeds the remaining balance of PHP {current_balance:,}."}, 400
 
     payment = CemeteryPayment(
         reservation=reservation,
@@ -4935,6 +4960,129 @@ def api_cemetery_file(filepath):
     return send_from_directory(os.path.dirname(physical), os.path.basename(physical), as_attachment=False)
 
 
+
+
+# PAYMONGO_CERTIFICATE_V1 — server-authoritative checkout and reconciliation
+import base64
+import urllib.request
+import urllib.error
+
+
+def _paymongo_api(method, path, payload=None):
+    key = os.getenv("PAYMONGO_SECRET_KEY", "")
+    if not key.startswith("sk_test_"):
+        raise ValueError("A PayMongo TEST secret key (sk_test_) is required.")
+    headers = {"Authorization": "Basic " + base64.b64encode((key + ":").encode()).decode(),
+               "Content-Type": "application/json", "Accept": "application/json"}
+    data = json.dumps(payload).encode() if payload is not None else None
+    req = urllib.request.Request("https://api.paymongo.com" + path, data=data, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=18) as res:
+            return json.loads(res.read().decode())
+    except urllib.error.HTTPError as ex:
+        app.logger.warning("PayMongo API error %s: %s", ex.code, ex.read().decode()[:500])
+        raise RuntimeError("PayMongo rejected this operation. Check test keys and enabled payment channels.") from ex
+
+
+@app.route("/api/requests/<int:request_id>/paymongo-checkout", methods=["POST"])
+def certificate_checkout(request_id):
+    denied = require_roles("USER")
+    if denied: return denied
+    cert = db.session.get(CertificateRequest, request_id)
+    if not cert: return {"error": "Request not found"}, 404
+    if cert.requester_user_id != current_user_id(): return {"error": "Forbidden"}, 403
+    if cert.status not in {"Approved", "Ready"}: return {"error": "Approval required"}, 400
+    if cert.payment_status == "Paid": return {"error": "Already paid"}, 409
+    if (cert.payment_reference or "").startswith("cs_"):
+        # Do not overwrite possibly paid/pending sessions. Query provider first.
+        try:
+            prior = _paymongo_api("GET", "/v1/checkout_sessions/" + cert.payment_reference)["data"]["attributes"]
+            prior_status = str(prior.get("status") or "").lower()
+            prior_payments = prior.get("payments") or []
+            has_paid = any(isinstance(p, dict) and p.get("attributes", p).get("status") == "paid" for p in prior_payments)
+            if has_paid:
+                return {"error": "Prior checkout may be paid. Await payment confirmation; do not retry."}, 409
+            if prior_status not in {"expired", "cancelled", "canceled"}:
+                return {"error": "Previous checkout remains active or unverified. Finish it or wait for expiry."}, 409
+        except Exception:
+            app.logger.exception("Cannot safely reconcile previous PayMongo checkout")
+            return {"error": "Unable to verify prior checkout. Retry later or contact staff."}, 502
+    price = CERTIFICATE_BASE_FEES.get(cert.sacrament_type, 0)
+    if price <= 0: return {"error": "Fee for this certificate has not been confirmed by the parish."}, 409
+    total = price + (DEMO_URGENT_FEE if cert.is_urgent else 0)
+    if cert.total_fee != total or cert.base_fee != price or cert.urgent_fee != total-price:
+        # Do not silently overwrite previously quoted amount; staff must reconcile it first.
+        return {"error": "Stored request fee does not match the configured parish fee. Please reconcile before checkout."}, 409
+    public_url = os.getenv("APP_BASE_URL", "").rstrip("/")
+    if not public_url.startswith("https://"):
+        return {"error": "APP_BASE_URL must be a public HTTPS address for PayMongo checkout."}, 503
+    methods = [s.strip() for s in os.getenv("PAYMONGO_METHODS", "card").split(",") if s.strip()]
+    if not methods: return {"error": "No PayMongo methods configured"}, 500
+    body = {"data": {"attributes": {
+        "billing": {"email": cert.requester_email, "name": cert.requester_name},
+        "cancel_url": public_url + "/dashboard",
+        "success_url": public_url + "/dashboard",
+        "description": "Smart Parish certificate request #" + str(cert.id),
+        "reference_number": "PARISH-CERT-" + str(cert.id),
+        "line_items": [{"name": "Certificate request #"+str(cert.id), "quantity": 1, "currency": "PHP", "amount": total*100}],
+        "payment_method_types": methods,
+        "send_email_receipt": False,
+        "show_description": True,
+        "show_line_items": True
+    }}}
+    try:
+        result = _paymongo_api("POST", "/v1/checkout_sessions", body)
+        session = result["data"]
+        sid = session["id"]
+        url = session["attributes"]["checkout_url"]
+        if not isinstance(url, str) or not url.startswith("https://checkout.paymongo.com/"):
+            raise ValueError("Unexpected checkout URL")
+        cert.payment_reference = sid
+        cert.payment_method = "PAYMONGO_TEST_PENDING"
+        db.session.commit()
+        return {"checkoutUrl": url}
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("PayMongo checkout creation failed")
+        return {"error": "Unable to start PayMongo test checkout; verify configuration."}, 502
+
+
+@app.route("/api/paymongo/confirm-internal", methods=["POST"])
+def paymongo_confirm_internal():
+    # The public Next.js webhook verifies PayMongo's HMAC signature first.
+    # The private Flask API additionally requires its internal key and reserved role.
+    if request.headers.get("X-User-Role") != "PAYMONGO_WEBHOOK":
+        return {"error": "Forbidden"}, 403
+    data = request.get_json(silent=True) or {}
+    session_id = str(data.get("checkoutSessionId") or "")
+    if not session_id.startswith("cs_"): return {"error": "Invalid checkout reference"}, 400
+    cert = CertificateRequest.query.filter_by(payment_reference=session_id).first()
+    if not cert: return {"error": "Unknown checkout session"}, 404
+    if cert.payment_status == "Paid": return {"ok": True, "alreadyProcessed": True}, 200
+    if cert.status not in {"Approved", "Ready"}: return {"error": "Request not approved"}, 409
+    try:
+        # Independently query PayMongo; do not trust webhook client fields for amount.
+        actual = _paymongo_api("GET", "/v1/checkout_sessions/" + session_id)["data"]["attributes"]
+        if actual.get("livemode") is True: return {"error": "Live mode not allowed"}, 409
+        if actual.get("reference_number") != "PARISH-CERT-" + str(cert.id):
+            return {"error": "Reference mismatch"}, 409
+        price = CERTIFICATE_BASE_FEES.get(cert.sacrament_type, 0)
+        total = price + (DEMO_URGENT_FEE if cert.is_urgent else 0)
+        if price <= 0 or cert.total_fee != total: return {"error": "Amount mismatch"}, 409
+        payments = actual.get("payments") or []
+        success = any(p.get("attributes", p).get("status") == "paid" and
+                      p.get("attributes", p).get("amount") == total * 100 for p in payments if isinstance(p, dict))
+        if not success: return {"error": "Verified paid transaction not found"}, 409
+        cert.payment_status = "Paid"
+        cert.payment_method = "PAYMONGO_TEST"
+        cert.paid_at = datetime.utcnow()
+        db.session.add(AuditLog(user="PAYMONGO_WEBHOOK", action=f"Verified PayMongo test payment for certificate #{cert.id}", document_id=cert.matched_document_id))
+        db.session.commit()
+        return {"ok": True}, 200
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("PayMongo webhook verification failed")
+        return {"error": "Unable to verify checkout against PayMongo"}, 502
 
 if __name__ == "__main__":
 

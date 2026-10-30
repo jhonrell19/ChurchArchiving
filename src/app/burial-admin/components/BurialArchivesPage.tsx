@@ -18,12 +18,12 @@ type ArchiveDocument = {
 }
 
 const ARCHIVE_TYPES = [
-  { label: 'Burial Certificate', value: 'burial', icon: 'ti-candle' },
+  { label: 'Certificate of Ownership', value: 'ownership', icon: 'ti-file-certificate' },
   { label: 'Land Agreement', value: 'land_agreement', icon: 'ti-file-contract' },
 ]
 
 export default function ArchivesPage() {
-  const [activeTab, setActiveTab] = useState('burial')  
+  const [activeTab, setActiveTab] = useState('ownership')  
   const [search, setSearch] = useState('')
   const [documents, setDocuments] = useState<ArchiveDocument[]>([])
   const [loading, setLoading] = useState(true)
@@ -31,7 +31,7 @@ export default function ArchivesPage() {
 
 const [form, setForm] = useState({
   person_name: '',
-  sacrament_type: 'burial',
+  sacrament_type: 'ownership',
   parish: '',
   priest: '',
   date_of_record: '',
@@ -210,7 +210,7 @@ const records = documents.filter(doc =>
     <div>
       <div className="flex items-center justify-between mb-1">
         <h2 className="font-display text-navy-mid text-xl font-semibold">
-          Digital Church Archives
+          Cemetery Document Archives
         </h2>
 
         <button
@@ -229,7 +229,7 @@ const records = documents.filter(doc =>
       </div>
 
       <p className="font-body text-[#6b8caa] text-[14px] mb-5">
-        Store scanned church records with metadata, categorization, and searchable archive retrieval.
+        Store verified ownership certificates and land agreements for cemetery document requests.
       </p>
 
       {showForm && (
@@ -244,21 +244,21 @@ const records = documents.filter(doc =>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
               <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1">
-                Full Name *
+                Registered Holder / Name on Document *
               </label>
               <input
                 name="person_name"
                 value={form.person_name}
                 onChange={handleChange}
                 required
-                placeholder="Name on record"
+                placeholder="Registered holder or name on document"
                 className={inputCls}
               />
             </div>
 
             <div>
               <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1">
-                Sacrament Type *
+                Document Category *
               </label>
               <select
                 name="sacrament_type"
@@ -266,7 +266,7 @@ const records = documents.filter(doc =>
                 onChange={handleChange}
                 className={inputCls}
               >
-                <option value="burial">Burial Certificate</option>
+                <option value="ownership">Certificate of Ownership</option>
                 <option value="land_agreement">Land Agreement</option>
               </select>
             </div>

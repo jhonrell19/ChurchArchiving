@@ -2,11 +2,11 @@ import { NextResponse } from 'next/server'
 
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { validateAndFormatAddress } from '@/lib/address'
 import {
   NAME_RE,
-  PH_PHONE_RE,
   cleanName,
-  normalizePhone,
+  validateInternationalPhone,
 } from '@/lib/validation'
 
 export async function PATCH(request: Request) {
@@ -32,13 +32,9 @@ export async function PATCH(request: Request) {
     const firstName = cleanName(body?.firstName)
     const middleName = cleanName(body?.middleName)
     const surname = cleanName(body?.surname)
-    const phoneNumber = normalizePhone(body?.phoneNumber)
-    const address =
-      typeof body?.address === 'string'
-        ? body.address.trim().replace(/\s+/g, ' ')
-        : ''
-
-    if (!firstName || !surname || !phoneNumber || !address) {
+    const phoneNumber = validateInternationalPhone(body?.phoneNumber, body?.phoneCountry)
+    const address = validateAndFormatAddress(body?.addressInfo)
+    if (!firstName || !surname) {
       return NextResponse.json(
         { message: 'Please complete all required fields.' },
         { status: 400 }
@@ -56,17 +52,17 @@ export async function PATCH(request: Request) {
       )
     }
 
-    if (!PH_PHONE_RE.test(phoneNumber)) {
+    if (!phoneNumber) {
       return NextResponse.json(
         {
           message:
-            'Use a valid Philippine mobile number such as 09XXXXXXXXX.',
+            'Enter a valid contact number for the selected country. This checks numbering rules, not ownership.',
         },
         { status: 400 }
       )
     }
 
-    if (address.length < 8 || address.length > 500) {
+    if (!address) {
       return NextResponse.json(
         { message: 'Please enter a complete address.' },
         { status: 400 }

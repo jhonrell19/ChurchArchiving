@@ -8,13 +8,13 @@ import {
   sendTransactionalEmail,
 } from '@/lib/email'
 import { prisma } from '@/lib/prisma'
+import { validateAndFormatAddress } from '@/lib/address'
 import {
   EMAIL_RE,
   NAME_RE,
-  PH_PHONE_RE,
   cleanName,
   normalizeEmail,
-  normalizePhone,
+  validateInternationalPhone,
   validatePassword,
 } from '@/lib/validation'
 
@@ -25,11 +25,8 @@ export async function POST(req: Request) {
     const firstName = cleanName(body?.firstName)
     const middleName = cleanName(body?.middleName)
     const surname = cleanName(body?.surname)
-    const phoneNumber = normalizePhone(body?.phoneNumber)
-    const address =
-      typeof body?.address === 'string'
-        ? body.address.trim().replace(/\s+/g, ' ')
-        : ''
+    const phoneNumber = validateInternationalPhone(body?.phoneNumber, body?.phoneCountry)
+    const address = validateAndFormatAddress(body?.addressInfo)
     const email = normalizeEmail(body?.email)
     const password =
       typeof body?.password === 'string'
@@ -43,8 +40,6 @@ export async function POST(req: Request) {
     if (
       !firstName ||
       !surname ||
-      !phoneNumber ||
-      !address ||
       !email ||
       !password ||
       !confirmPassword
@@ -66,11 +61,11 @@ export async function POST(req: Request) {
       )
     }
 
-    if (!PH_PHONE_RE.test(phoneNumber)) {
+    if (!phoneNumber) {
       return NextResponse.json(
         {
           message:
-            'Use a valid Philippine mobile number such as 09XXXXXXXXX.',
+            'Enter a valid contact number for the selected country. This checks numbering rules, not ownership.',
         },
         { status: 400 }
       )
@@ -83,7 +78,7 @@ export async function POST(req: Request) {
       )
     }
 
-    if (address.length < 8 || address.length > 500) {
+    if (!address) {
       return NextResponse.json(
         { message: 'Please enter a complete address.' },
         { status: 400 }

@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { ReactNode } from 'react'
+import InternationalPhoneField from '@/components/auth/InternationalPhoneField'
+import StructuredAddressField, { emptyAddress, formatAddress, type AddressInfo } from '@/components/auth/StructuredAddressField'
 
 export default function CompleteProfilePage() {
   const router = useRouter()
@@ -16,6 +18,7 @@ export default function CompleteProfilePage() {
     middleName: '',
     surname: '',
     phoneNumber: '',
+    phoneCountry: 'PH',
     address: '',
   })
 
@@ -46,6 +49,7 @@ export default function CompleteProfilePage() {
           middleName: user.middleName || '',
           surname: user.surname || '',
           phoneNumber: user.phoneNumber || '',
+          phoneCountry: 'PH',
           address: user.address || '',
         })
       } catch (error) {
@@ -58,6 +62,8 @@ export default function CompleteProfilePage() {
 
     void loadProfile()
   }, [router])
+
+  const [addressInfo, setAddressInfo] = useState<AddressInfo>(emptyAddress)
 
   const change = (
     event: React.ChangeEvent<
@@ -82,7 +88,7 @@ export default function CompleteProfilePage() {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(form),
+          body: JSON.stringify({...form, addressInfo, address: formatAddress(addressInfo)}),
         }
       )
 
@@ -176,20 +182,12 @@ export default function CompleteProfilePage() {
             />
           </Field>
 
-          <Field label="Phone Number *">
-            <input
-              type="tel"
-              name="phoneNumber"
-              value={form.phoneNumber}
-              onChange={change}
-              placeholder="09XXXXXXXXX"
-              autoComplete="tel"
-              inputMode="tel"
-              required
-              className={inputClass}
-            />
-          </Field>
-
+          <div className="md:col-span-2">
+            <InternationalPhoneField country={form.phoneCountry} phoneNumber={form.phoneNumber}
+              onCountryChange={v=>setForm(p=>({...p,phoneCountry:v}))}
+              onPhoneChange={v=>setForm(p=>({...p,phoneNumber:v}))}
+              inputClass={inputClass} />
+          </div>
           <div className="md:col-span-2">
             <Field label="Verified Email">
               <input
@@ -200,20 +198,7 @@ export default function CompleteProfilePage() {
             </Field>
           </div>
 
-          <div className="md:col-span-2">
-            <Field label="Complete Address *">
-              <textarea
-                name="address"
-                value={form.address}
-                onChange={change}
-                required
-                rows={3}
-                autoComplete="street-address"
-                placeholder="House number, street, barangay, municipality/city, province"
-                className={`${inputClass} resize-none`}
-              />
-            </Field>
-          </div>
+          <StructuredAddressField value={addressInfo} onChange={setAddressInfo}/>
 
           <button
             type="submit"

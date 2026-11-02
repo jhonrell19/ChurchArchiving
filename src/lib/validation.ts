@@ -1,3 +1,5 @@
+import { parsePhoneNumberFromString, type CountryCode } from 'libphonenumber-js/max'
+
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 export const PH_PHONE_RE = /^09\d{9}$/
 export const NAME_RE = /^[A-Za-zÀ-ÖØ-öø-ÿÑñ.'\- ]{2,80}$/
@@ -56,4 +58,24 @@ export function cleanName(value: unknown) {
   return typeof value === 'string'
     ? value.trim().replace(/\s+/g, ' ')
     : ''
+}
+
+// Numbers are stored as E.164 for new registrations. libphonenumber-js/max
+// validates country-specific number patterns, not simply character count.
+// IMPORTANT: a valid pattern does not prove number ownership or reachability.
+export function validateInternationalPhone(value: unknown, country: unknown) {
+  if (typeof value !== 'string' || typeof country !== 'string') return ''
+  const raw = value.trim()
+  const code = country.toUpperCase()
+  if (!/^[A-Z]{2}$/.test(code) || !raw || raw.length > 40) return ''
+  try {
+    const parsed = parsePhoneNumberFromString(raw, code as CountryCode)
+    if (!parsed || !parsed.isValid() || !parsed.country) return ''
+    if (parsed.country !== code) return ''
+    // Enforce mobile for PH, where the parish needs a reachable mobile contact.
+    if (code === 'PH' && parsed.getType() !== 'MOBILE') return ''
+    return parsed.number
+  } catch {
+    return ''
+  }
 }

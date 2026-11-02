@@ -1013,7 +1013,6 @@ def generate_release_pdf(cert_request, source_document, output_path):
         Paragraph(f"<b>Name on Record:</b> {source_document.person_name or cert_request.person_name}", styles["BodyText"]),
         Paragraph(f"<b>Date of Record:</b> {source_document.date_of_record or 'Not recorded'}", styles["BodyText"]),
         Paragraph(f"<b>Certificate Number:</b> {source_document.certificate_number or 'Not recorded'}", styles["BodyText"]),
-        Paragraph(f"<b>Book / Page:</b> {source_document.book_number or 'N/A'} / {source_document.page_number or 'N/A'}", styles["BodyText"]),
         Paragraph(f"<b>Parish:</b> {source_document.parish or 'IFI Maragondon'}", styles["BodyText"]),
         Paragraph(f"<b>Priest:</b> {source_document.priest or 'Not recorded'}", styles["BodyText"]),
         Spacer(1, 18),

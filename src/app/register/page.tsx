@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
+import InternationalPhoneField from '@/components/auth/InternationalPhoneField'
+import StructuredAddressField, { emptyAddress, formatAddress, type AddressInfo } from '@/components/auth/StructuredAddressField'
 
 import GoogleAuthButton from '@/components/auth/GoogleAuthButton'
 
@@ -21,11 +23,14 @@ export default function RegisterPage() {
     middleName: '',
     surname: '',
     phoneNumber: '',
+    phoneCountry: 'PH',
     address: '',
     email: '',
     password: '',
     confirmPassword: '',
   })
+
+  const [addressInfo, setAddressInfo] = useState<AddressInfo>(emptyAddress)
 
   const change = (
     event: React.ChangeEvent<
@@ -56,7 +61,7 @@ export default function RegisterPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(form),
+        body: JSON.stringify({...form, addressInfo, address: formatAddress(addressInfo)}),
       })
 
       const data = await response.json().catch(() => ({}))
@@ -148,34 +153,16 @@ export default function RegisterPage() {
             />
           </Field>
 
-          <Field label="Phone Number *">
-            <input
-              type="tel"
-              name="phoneNumber"
-              value={form.phoneNumber}
-              onChange={change}
-              placeholder="09XXXXXXXXX"
-              autoComplete="tel"
-              inputMode="tel"
-              required
-              className={inputClass}
-            />
-          </Field>
-
           <div className="md:col-span-2">
-            <Field label="Address *">
-              <textarea
-                name="address"
-                value={form.address}
-                onChange={change}
-                placeholder="House number, street, barangay, municipality/city, province"
-                autoComplete="street-address"
-                required
-                rows={3}
-                className={`${inputClass} resize-none`}
-              />
-            </Field>
+            <InternationalPhoneField
+              country={form.phoneCountry}
+              phoneNumber={form.phoneNumber}
+              onCountryChange={v=>setForm(p=>({...p,phoneCountry:v}))}
+              onPhoneChange={v=>setForm(p=>({...p,phoneNumber:v}))}
+              inputClass={inputClass}
+            />
           </div>
+          <StructuredAddressField value={addressInfo} onChange={setAddressInfo}/>
 
           <div className="md:col-span-2">
             <Field label="Email Address *">

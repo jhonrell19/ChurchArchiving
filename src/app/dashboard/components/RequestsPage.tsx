@@ -279,7 +279,7 @@ export default function RequestsPage() {
             : formData.purpose.trim(),
           isUrgent: formData.isUrgent,
           recordDateHint: formData.recordDateHint.trim(),
-          recordDetails: formData.recordDetails.trim(),
+          recordDetails: activeType === 'Certificate of Ownership' ? formData.recordDetails.trim() : '', 
         }),
       })
 
@@ -561,24 +561,26 @@ export default function RequestsPage() {
                   {activeType === 'Certificate of Ownership' ? 'Agreement Date / Year (if known)' : 'Approximate Record Date / Year'}
                 </label>
                 <input
+                  type="date"
                   value={formData.recordDateHint}
                   onChange={e => handleChange('recordDateHint', e.target.value)}
-                  placeholder="Example: 2005 or March 12, 2005"
                   className={inputCls}
                 />
               </div>
 
-              <div>
-                <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1.5">
-                  {activeType === 'Certificate of Ownership' ? 'Lot / Reservation Reference' : 'Identifying Details'}
-                </label>
-                <input
-                  value={formData.recordDetails}
-                  onChange={e => handleChange('recordDetails', e.target.value)}
-                  placeholder={activeType === 'Certificate of Ownership' ? 'Section, block, lot number, reservation number' : 'Parents, spouse, book/page, or other known detail'}
-                  className={inputCls}
-                />
-              </div>
+              {activeType === 'Certificate of Ownership' && (
+                <div>
+                  <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1.5">
+                    Lot / Reservation Reference
+                  </label>
+                  <input
+                    value={formData.recordDetails}
+                    onChange={e => handleChange('recordDetails', e.target.value)}
+                    placeholder="Section, block, lot number, reservation number"
+                    className={inputCls}
+                  />
+                </div>
+              )}
 
               <div className="md:col-span-2">
                 <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1.5">

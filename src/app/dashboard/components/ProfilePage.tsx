@@ -82,15 +82,6 @@ export default function ProfilePage() {
     loadProfile()
   }, [router])
 
-  const logout = async () => {
-    await fetch('/api/auth/logout', {
-      method: 'POST',
-      credentials: 'same-origin',
-    })
-
-    router.replace('/login')
-    router.refresh()
-  }
 
   if (loading) {
     return (
@@ -150,12 +141,6 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      <button
-        onClick={logout}
-        className="font-display text-[11px] tracking-wider text-red-500 border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-50 mb-4"
-      >
-        Logout
-      </button>
 
       <div className="bg-gold/5 border border-gold/20 rounded-xl p-4 flex items-start gap-3">
         <i className="ti ti-info-circle text-gold text-[18px] mt-0.5 flex-shrink-0" aria-hidden="true" />

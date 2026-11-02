@@ -17,6 +17,8 @@ export default function CemeterySlotsPage() {
   const [slots, setSlots] = useState<CemeterySlot[]>([])
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
+  const [mapError, setMapError] = useState(false)
+  const [mapReload, setMapReload] = useState(0)
   const [form, setForm] = useState(initialForm)
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
@@ -77,7 +79,10 @@ export default function CemeterySlotsPage() {
           <p className="mt-1 text-xs text-slate-500">Use the physical map and cemetery records to confirm section, block, and lot number before encoding.</p>
         </div>
         <div className="max-h-[520px] overflow-auto bg-slate-50 p-3">
-          <img src="/api/backend/api/cemetery/map" alt="Cemetery site master plan reference" className="mx-auto max-w-full rounded-lg border border-slate-200" />
+          {mapError ? <div className="p-5 text-center text-sm text-amber-800">
+            <p>The cemetery map could not load. Check that <code>church_backend/uploads/cemetery/site_master_plan_reference.png</code> is present on the machine running Flask, and that the Burial Admin session is active.</p>
+            <button type="button" className="mt-3 rounded-lg bg-navy px-4 py-2 text-white" onClick={()=>{setMapError(false);setMapReload(x=>x+1)}}>Retry map</button>
+          </div> : <img key={mapReload} src={`/api/backend/api/cemetery/map?v=${mapReload}`} onError={()=>setMapError(true)} alt="Cemetery site master plan reference" className="mx-auto max-w-full rounded-lg border border-slate-200" />}
         </div>
       </section>
 

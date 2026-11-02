@@ -530,8 +530,6 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
                               <p className="font-body text-[11px] text-slate-600 mt-1">
                                 {item.matchedDocument.certificateNumber || `Archive #${item.matchedDocument.id}`}
                                 {item.matchedDocument.dateOfRecord ? ` · ${item.matchedDocument.dateOfRecord}` : ''}
-                                {item.matchedDocument.bookNumber ? ` · Book ${item.matchedDocument.bookNumber}` : ''}
-                                {item.matchedDocument.pageNumber ? ` / Page ${item.matchedDocument.pageNumber}` : ''}
                               </p>
                             </div>
                             <a

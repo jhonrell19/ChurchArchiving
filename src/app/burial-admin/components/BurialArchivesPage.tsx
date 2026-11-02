@@ -35,8 +35,6 @@ const [form, setForm] = useState({
   parish: '',
   priest: '',
   date_of_record: '',
-  book_number: '',
-  page_number: '',
   document_type: 'Scanned Certificate',
 })
 
@@ -117,8 +115,6 @@ const [form, setForm] = useState({
   parish: '',
   priest: '',
   date_of_record: '',
-  book_number: '',
-  page_number: '',
   document_type: 'Scanned Certificate',
 })
 
@@ -310,31 +306,6 @@ const records = documents.filter(doc =>
               />
             </div>
 
-            <div>
-              <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1">
-                Book Number
-              </label>
-              <input
-                name="book_number"
-                value={form.book_number}
-                onChange={handleChange}
-                placeholder="Book / Volume"
-                className={inputCls}
-              />
-            </div>
-
-            <div>
-              <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1">
-                Page Number
-              </label>
-              <input
-                name="page_number"
-                value={form.page_number}
-                onChange={handleChange}
-                placeholder="Page"
-                className={inputCls}
-              />
-            </div>
 
             <div>
               <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1">

@@ -8,7 +8,7 @@ import {
   sendTransactionalEmail,
 } from '@/lib/email'
 import { prisma } from '@/lib/prisma'
-import { validateAndFormatAddress } from '@/lib/address'
+import { lookupPhoneLineStatus, isConfirmedInactive, phoneLineStatusExplanation } from '@/lib/phoneLineStatus'
 import {
   EMAIL_RE,
   NAME_RE,
@@ -25,8 +25,8 @@ export async function POST(req: Request) {
     const firstName = cleanName(body?.firstName)
     const middleName = cleanName(body?.middleName)
     const surname = cleanName(body?.surname)
-    const phoneNumber = validateInternationalPhone(body?.phoneNumber, body?.phoneCountry)
-    const address = validateAndFormatAddress(body?.addressInfo)
+    const rawPhone = typeof body?.phoneNumber === 'string' ? body.phoneNumber.trim() : ''
+    const phoneNumber = rawPhone ? validateInternationalPhone(rawPhone, body?.phoneCountry) : null
     const email = normalizeEmail(body?.email)
     const password =
       typeof body?.password === 'string'
@@ -61,7 +61,7 @@ export async function POST(req: Request) {
       )
     }
 
-    if (!phoneNumber) {
+    if (rawPhone && !phoneNumber) {
       return NextResponse.json(
         {
           message:
@@ -74,13 +74,6 @@ export async function POST(req: Request) {
     if (!EMAIL_RE.test(email)) {
       return NextResponse.json(
         { message: 'Please enter a valid email address.' },
-        { status: 400 }
-      )
-    }
-
-    if (!address) {
-      return NextResponse.json(
-        { message: 'Please enter a complete address.' },
         { status: 400 }
       )
     }
@@ -114,6 +107,16 @@ export async function POST(req: Request) {
       )
     }
 
+    const phoneLine = phoneNumber
+      ? await lookupPhoneLineStatus(phoneNumber)
+      : { status: 'not_checked' as const, checked: false }
+    if (isConfirmedInactive(phoneLine)) {
+      return NextResponse.json(
+        { message: 'The carrier reports that this phone number is inactive or unassigned. Check the number or leave it blank.' },
+        { status: 400 }
+      )
+    }
+
     const hashedPassword = await bcrypt.hash(password, 12)
 
     const user = await prisma.user.create({
@@ -122,7 +125,7 @@ export async function POST(req: Request) {
         middleName: middleName || null,
         surname,
         phoneNumber,
-        address,
+        address: null,
         email,
         password: hashedPassword,
         role: 'USER',
@@ -147,6 +150,8 @@ export async function POST(req: Request) {
           ? 'Account created. Check your email to verify your account.'
           : 'Account created. Email delivery is not configured, so use the development verification link below.',
         verificationRequired: true,
+        phoneLineStatus: phoneLine.status,
+        phoneStatusNote: phoneNumber ? phoneLineStatusExplanation(phoneLine) : undefined,
         developmentVerificationUrl:
           process.env.NODE_ENV === 'production'
             ? undefined

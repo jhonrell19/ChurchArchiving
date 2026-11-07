@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { inputCls } from '../data/ui'
 import TemplateDataFields, { type TemplateRecordData } from './TemplateDataFields'
 
@@ -46,6 +46,9 @@ export default function ArchivesPage() {
   const [ocrLoading, setOcrLoading] = useState(false)
   const [ocrText, setOcrText] = useState('')
   const [ocrSuggestions, setOcrSuggestions] = useState<Record<string, string>>({})
+  const [ocrWarnings, setOcrWarnings] = useState<string[]>([])
+  const [ocrReviewed, setOcrReviewed] = useState(false)
+  const ocrRequestCounter = useRef(0)
 
   const loadDocuments = async () => {
     try {
@@ -87,6 +90,10 @@ export default function ArchivesPage() {
       alert('Please upload a scanned PDF or image.')
       return
     }
+    if (ocrText && !ocrReviewed) {
+      alert('Review the OCR-populated form against the original scan and tick the review checkbox before saving.')
+      return
+    }
 
     const formData = new FormData()
 
@@ -126,6 +133,8 @@ export default function ArchivesPage() {
       setFile(null)
       setOcrText('')
       setOcrSuggestions({})
+      setOcrWarnings([])
+      setOcrReviewed(false)
       setShowForm(false)
       await loadDocuments()
     } catch (err) {
@@ -135,15 +144,14 @@ export default function ArchivesPage() {
 
   }
 
-const previewOcr = async () => {
-  if (!file) {
-    alert('Choose a scanned PDF or image first.')
-    return
-  }
-
+// OCR processing starts automatically when staff selects a new scan.
+// Suggestions fill only *empty* fields; a staff member must review them.
+const previewOcr = async (selectedFile: File) => {
+  const requestIndex = ++ocrRequestCounter.current
+  const submittedCategory = form.sacrament_type
   const formData = new FormData()
-  formData.append('file', file)
-
+  formData.append('file', selectedFile)
+  formData.append('sacrament_type', submittedCategory)
   try {
     setOcrLoading(true)
     const res = await fetch('/api/backend/api/archive/ocr-preview', {
@@ -151,18 +159,66 @@ const previewOcr = async () => {
       body: formData,
     })
     const data = await res.json().catch(() => ({}))
+    if (requestIndex !== ocrRequestCounter.current) return
     if (!res.ok) {
-      alert(data.error || 'OCR preview failed.')
+      setOcrWarnings([data.error || 'OCR preview failed. Enter official fields manually.'])
       return
     }
+    const extracted = (data.recordData || {}) as TemplateRecordData
+    const archive = (data.archiveFields || {}) as Record<string, string>
     setOcrText(data.text || '')
     setOcrSuggestions(data.suggestions || {})
+    setOcrWarnings(Array.isArray(data.warnings) ? data.warnings : [])
+    setOcrReviewed(false)
+
+    // Never overwrite an existing staff-entered value.
+    setRecordData(previous => {
+      const next: TemplateRecordData = { ...previous }
+      for (const [key, val] of Object.entries(extracted)) {
+        if (!val) continue
+        if (key === 'husband' || key === 'wife') {
+          const nameKey = key as 'husband' | 'wife'
+          const existing = previous[nameKey] || {}
+          const suggested = val as Record<string, string>
+          next[nameKey] = {
+            ...suggested,
+            ...Object.fromEntries(Object.entries(existing).filter(([, v]) => !!v)),
+          }
+        } else {
+          const recordKey = key as keyof TemplateRecordData
+          // This assignment operates on the object key at runtime; the values
+          // originate from the server parser's narrow typed form schema.
+          if (!previous[recordKey] || (Array.isArray(previous[recordKey]) && previous[recordKey].length === 0)) {
+            (next as unknown as Record<string, unknown>)[key] = val
+          }
+        }
+      }
+      return next
+    })
+    setForm(previous => ({
+      ...previous,
+      person_name: previous.person_name || archive.person_name || '',
+      date_of_record: previous.date_of_record || archive.date_of_record || '',
+      parish: previous.parish || archive.parish || '',
+      priest: previous.priest || archive.priest || '',
+    }))
   } catch (error) {
-    console.warn('OCR preview error:', error)
-    alert('OCR preview is unavailable right now.')
+    if (requestIndex !== ocrRequestCounter.current) return
+    console.warn('OCR preview request failed:', error)
+    setOcrWarnings(['OCR service is unavailable. The form can still be filled manually.'])
   } finally {
-    setOcrLoading(false)
+    if (requestIndex === ocrRequestCounter.current) setOcrLoading(false)
   }
+}
+
+const selectScannedFile = (selected: File | null) => {
+  ocrRequestCounter.current += 1
+  setFile(selected)
+  setOcrText('')
+  setOcrSuggestions({})
+  setOcrWarnings([])
+  setOcrReviewed(false)
+  if (selected && runOcr) void previewOcr(selected)
 }
 
 const deleteDocument = async (id: number) => {
@@ -349,7 +405,7 @@ const records = documents.filter(doc =>
               <input
                 type="file"
                 accept=".pdf,.jpg,.jpeg,.png"
-                onChange={e => setFile(e.target.files?.[0] || null)}
+                onChange={e => selectScannedFile(e.target.files?.[0] || null)}
                 required
                 className={inputCls}
               />
@@ -360,38 +416,29 @@ const records = documents.filter(doc =>
                 </label>
                 <button
                   type="button"
-                  onClick={() => void previewOcr()}
+                  onClick={() => file && void previewOcr(file)}
                   disabled={!file || ocrLoading}
                   className="font-display text-[10px] tracking-wider border border-blue-200 text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg disabled:opacity-50"
                 >
                   {ocrLoading ? 'Reading scan...' : 'Preview OCR'}
                 </button>
               </div>
+              {ocrLoading && <p className="font-body text-[12px] text-blue-700 mt-2">Extracting text and matching official form fields…</p>}
+              {ocrWarnings.length > 0 && (
+                <div role="status" className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  {ocrWarnings.map((warning, index) => <p key={index} className="font-body text-[11px] text-amber-800">{warning}</p>)}
+                </div>
+              )}
               {(ocrText || Object.keys(ocrSuggestions).length > 0) && (
                 <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 p-3">
                   <p className="font-display text-[10px] tracking-wider text-blue-800 mb-1">OCR PREVIEW — VERIFY BEFORE USING</p>
-                  {Object.keys(ocrSuggestions).length > 0 && (
-                    <div className="mb-2">
-                      <p className="font-body text-[11px] text-blue-700">
-                        Suggestions: {Object.entries(ocrSuggestions).map(([key, value]) => `${key}: ${value}`).join(' · ')}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setForm(prev => ({
-                            ...prev,
-                            person_name: ocrSuggestions.possibleName || prev.person_name,
-                            date_of_record: /^\d{4}-\d{2}-\d{2}$/.test(ocrSuggestions.dateHint || '')
-                              ? ocrSuggestions.dateHint
-                              : prev.date_of_record,
-                          }))
-                        }
-                        className="mt-2 font-display text-[9px] tracking-wider bg-blue-600 text-white px-2.5 py-1.5 rounded-lg"
-                      >
-                        Use Safe Suggestions
-                      </button>
-                    </div>
-                  )}
+                  <p className="font-body text-[11px] text-blue-800 mb-2">
+                    Recognized fields were placed in the official form above wherever a field was blank. Check spelling, dates, and names against the scanned original.
+                  </p>
+                  <label className="flex items-start gap-2 font-body text-[12px] text-blue-900 my-2">
+                    <input type="checkbox" checked={ocrReviewed} onChange={e => setOcrReviewed(e.target.checked)} />
+                    I compared the extracted values with the original document and corrected any errors.
+                  </label>
                   <p className="font-body text-[11px] text-slate-600 whitespace-pre-wrap max-h-32 overflow-auto">
                     {ocrText || 'No text recognized.'}
                   </p>
@@ -427,6 +474,7 @@ const records = documents.filter(doc =>
                 sacrament_type: type.value,
               }))
               setRecordData({})
+              selectScannedFile(null)
             }}
             className={`flex items-center gap-2 font-display text-[11px] tracking-wider px-4 py-2 rounded-lg border transition-all ${
               activeTab === type.value

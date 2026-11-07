@@ -46,7 +46,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           message:
-            'Please verify your email address or use Phone Sign In before signing in.',
+            'Please verify your email address before signing in.',
           verificationRequired: true,
         },
         { status: 403 }

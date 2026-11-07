@@ -28,10 +28,11 @@ export function validateAndFormatAddress(input: unknown): string {
   const street = get(body.street)
   if (!COUNTRIES.has(country)) return ''
   if (region.length < 2 || region.length > 100 || city.length < 2 || city.length > 100) return ''
-  if (street.length < 3 || street.length > 150 || province.length > 100 || barangay.length > 100) return ''
+  if (street.length > 150 || province.length > 100 || barangay.length > 100) return ''
   if (country === 'PH') {
-    if (!/^\d{4}$/.test(postalCode) || barangay.length < 2) return ''
-  } else if (!/^[\p{L}\d -]{2,15}$/u.test(postalCode)) return ''
+    if (postalCode && !/^\d{4}$/.test(postalCode)) return ''
+    if (barangay.length < 2) return ''
+  } else if (postalCode && !/^[\p{L}\d -]{2,15}$/u.test(postalCode)) return ''
   const address = [street,barangay,city,province,region,postalCode,countryNames.of(country)||country].filter(Boolean).join(', ')
   return address.length >= 8 && address.length <= 500 ? address : ''
 }

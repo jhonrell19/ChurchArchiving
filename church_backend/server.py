@@ -33,6 +33,7 @@ from models import (
     BurialRecord,
 )
 from document_templates import generate_official_draft, TemplateNotConfiguredError, TemplateDataError
+from ocr_fields import parse_official_form_fields
 
 from faster_whisper import WhisperModel
 
@@ -869,51 +870,75 @@ def calculate_file_hash(file):
 
 
 def extract_text_from_path(file_path):
-    """Extract OCR text from image/PDF files when optional OCR tools exist.
+    """Extract digital PDF text first; use local Tesseract for scanned pages/images.
 
-    Requires pytesseract + Pillow. PDF OCR also uses PyMuPDF. The function
-    deliberately raises a readable RuntimeError when the local OCR engine is
-    not installed so the archive workflow can continue without silently
-    pretending OCR succeeded.
+    Never returns fabricated text. Exceptions are shown as OCR-preview errors and
+    do not silently populate fields. Limits protect local CPU/RAM resources.
     """
+    import shutil
     try:
         import pytesseract
-        from PIL import Image
+        from PIL import Image, ImageOps, UnidentifiedImageError
     except ImportError as exc:
         raise RuntimeError(
-            "OCR Python packages are not installed. Run: pip install pytesseract Pillow PyMuPDF"
+            "OCR Python dependencies missing: pip install pytesseract Pillow PyMuPDF"
         ) from exc
 
     extension = os.path.splitext(file_path)[1].lower()
-    texts = []
+    max_bytes = 15 * 1024 * 1024
+    if os.path.getsize(file_path) > max_bytes:
+        raise RuntimeError("OCR preview supports scans up to 15 MB.")
+
+    # Text-only PDFs do not require running an OCR engine at all.
+    def recognize(image):
+        if not shutil.which("tesseract"):
+            raise RuntimeError("Tesseract executable not found on PATH.")
+        try:
+            image = ImageOps.exif_transpose(image)
+            image = ImageOps.grayscale(image)
+            image = ImageOps.autocontrast(image)
+            if image.width < 1300:
+                factor = min(2.0, 1300 / max(image.width, 1))
+                image = image.resize((int(image.width * factor), int(image.height * factor)))
+            # PSM 6 reads horizontally across the label/value rows of typical
+            # church form scans (PSM 3 often reads an entire label column first).
+            return pytesseract.image_to_string(image, config="--psm 6", timeout=45)
+        except pytesseract.TesseractNotFoundError as exc:
+            raise RuntimeError("Tesseract OCR application was not found on PATH.") from exc
+        except RuntimeError as exc:
+            raise RuntimeError(f"OCR engine failed: {exc}") from exc
+        except pytesseract.TesseractError as exc:
+            raise RuntimeError("Tesseract failed to read this scan.") from exc
 
     if extension in {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"}:
         try:
-            texts.append(pytesseract.image_to_string(Image.open(file_path)))
-        except pytesseract.TesseractNotFoundError as exc:
-            raise RuntimeError(
-                "Tesseract OCR is not installed or not available on PATH."
-            ) from exc
-    elif extension == ".pdf":
+            with Image.open(file_path) as source_image:
+                return (recognize(source_image) or "").strip()
+        except (UnidentifiedImageError, OSError, ValueError) as exc:
+            raise RuntimeError("The uploaded image is damaged or unsupported.") from exc
+
+    if extension == ".pdf":
         try:
             import fitz
         except ImportError as exc:
-            raise RuntimeError("PDF OCR requires PyMuPDF. Run: pip install PyMuPDF") from exc
-
-        document = fitz.open(file_path)
+            raise RuntimeError("PDF extraction requires PyMuPDF: pip install PyMuPDF") from exc
+        texts = []
         try:
-            for page_index in range(min(len(document), 10)):
-                page = document.load_page(page_index)
-                pix = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
-                image = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-                texts.append(pytesseract.image_to_string(image))
-        finally:
-            document.close()
-    else:
-        raise RuntimeError("OCR supports PDF, JPG, JPEG, PNG, BMP, and TIFF files.")
+            with fitz.open(file_path) as document:
+                for page_index in range(min(len(document), 8)):
+                    page = document.load_page(page_index)
+                    embedded_text = (page.get_text("text") or "").strip()
+                    if len(embedded_text) >= 60:
+                        texts.append(embedded_text)
+                        continue
+                    pix = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
+                    with Image.frombytes("RGB", (pix.width, pix.height), pix.samples) as rendered:
+                        texts.append(recognize(rendered))
+        except (OSError, ValueError) as exc:
+            raise RuntimeError("The uploaded PDF is unreadable.") from exc
+        return "\n".join(t.strip() for t in texts if t and t.strip()).strip()
 
-    return "\n".join(part.strip() for part in texts if part and part.strip()).strip()
-
+    raise RuntimeError("OCR supports PDF, JPG, JPEG, PNG, BMP, and TIFF files.")
 
 def infer_archive_metadata_from_ocr(text_value):
     """Return conservative metadata suggestions from OCR text.
@@ -1565,6 +1590,12 @@ def api_archive_ocr_preview():
     extension = os.path.splitext(filename)[1].lower()
     if extension not in {".pdf", ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"}:
         return {"error": "OCR supports PDF and common image files."}, 400
+    if request.content_length and request.content_length > 15 * 1024 * 1024:
+        return {"error": "OCR preview supports files up to 15 MB."}, 413
+
+    category = (request.form.get("sacrament_type") or "").lower().strip()
+    if category not in allowed_types_for_current_role():
+        return {"error": "You cannot process this document category."}, 403
 
     preview_folder = os.path.join(BACKEND_DIR, "uploads", "ocr_preview")
     os.makedirs(preview_folder, exist_ok=True)
@@ -1573,9 +1604,13 @@ def api_archive_ocr_preview():
     try:
         file.save(temp_path)
         text_value = extract_text_from_path(temp_path)
+        parsed = parse_official_form_fields(text_value, category)
         return {
-            "text": text_value,
+            "text": text_value[:30000],
             "suggestions": infer_archive_metadata_from_ocr(text_value),
+            "recordData": parsed["recordData"],
+            "archiveFields": parsed["archiveFields"],
+            "warnings": parsed["warnings"],
         }, 200
     except RuntimeError as error:
         return {"error": str(error)}, 503

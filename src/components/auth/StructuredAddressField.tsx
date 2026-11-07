@@ -52,7 +52,7 @@ export default function StructuredAddressField({value,onChange}:{value:AddressIn
     <input className={fieldClass} value={value[key]} onChange={e=>change({[key]:e.target.value})} maxLength={130} required={required} placeholder={placeholder}/>
   </label>
   return <div className="md:col-span-2 space-y-3">
-    <h3 className="font-semibold text-navy-mid">Residential / mailing address *</h3>
+    <h3 className="font-semibold text-navy-mid">Residential / mailing address</h3>
     <label className="block text-sm font-medium text-navy-mid">Country
       <select className={fieldClass} value={value.country} onChange={e=>{
         setRegionCode('');setProvinceCode('');setCityCode('');setBarangayCode('');setOffline(false)
@@ -82,8 +82,8 @@ export default function StructuredAddressField({value,onChange}:{value:AddressIn
     </div>}
     {offline&&isPH&&<p role="status" className="text-xs text-amber-800">Location service is unavailable. Enter your location in the manual fields.</p>}
     <div className="grid gap-3 md:grid-cols-2">
-      {input('ZIP / Postal code','postalCode',true,'ZIP or postal code')}
-      <div className="md:col-span-2">{input('House no., block, street, phase, subdivision or unit','street',true,'House no., street, subdivision...')}</div>
+      {input('ZIP / Postal code (optional)','postalCode',false,'ZIP or postal code')}
+      <div className="md:col-span-2">{input('House no., block, street, phase, subdivision or unit (optional)','street',false,'House no., street, subdivision...')}</div>
     </div>
   </div>
 }

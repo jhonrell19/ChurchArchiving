@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { ReactNode } from 'react'
+import { parsePhoneNumberFromString } from 'libphonenumber-js/max'
 import InternationalPhoneField from '@/components/auth/InternationalPhoneField'
-import StructuredAddressField, { emptyAddress, formatAddress, type AddressInfo } from '@/components/auth/StructuredAddressField'
 
 export default function CompleteProfilePage() {
   const router = useRouter()
@@ -19,7 +19,6 @@ export default function CompleteProfilePage() {
     surname: '',
     phoneNumber: '',
     phoneCountry: 'PH',
-    address: '',
   })
 
   useEffect(() => {
@@ -49,8 +48,7 @@ export default function CompleteProfilePage() {
           middleName: user.middleName || '',
           surname: user.surname || '',
           phoneNumber: user.phoneNumber || '',
-          phoneCountry: 'PH',
-          address: user.address || '',
+          phoneCountry: parsePhoneNumberFromString(user.phoneNumber || '', 'PH')?.country || 'PH',
         })
       } catch (error) {
         console.error('LOAD PROFILE ERROR:', error)
@@ -62,8 +60,6 @@ export default function CompleteProfilePage() {
 
     void loadProfile()
   }, [router])
-
-  const [addressInfo, setAddressInfo] = useState<AddressInfo>(emptyAddress)
 
   const change = (
     event: React.ChangeEvent<
@@ -88,7 +84,7 @@ export default function CompleteProfilePage() {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({...form, addressInfo, address: formatAddress(addressInfo)}),
+          body: JSON.stringify(form),
         }
       )
 
@@ -140,9 +136,7 @@ export default function CompleteProfilePage() {
           </h1>
 
           <p className="text-slate-600 text-sm mt-2">
-            Your Google identity is verified. Add the remaining
-            parish information before using requests and other
-            protected services.
+            Your Google email is verified. Confirm your name to continue. Your phone is optional; an address can be added later in your profile.
           </p>
         </div>
 
@@ -198,7 +192,6 @@ export default function CompleteProfilePage() {
             </Field>
           </div>
 
-          <StructuredAddressField value={addressInfo} onChange={setAddressInfo}/>
 
           <button
             type="submit"

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { validateAndFormatAddress } from '@/lib/address'
+import { lookupPhoneLineStatus, isConfirmedInactive } from '@/lib/phoneLineStatus'
 import {
   NAME_RE,
   cleanName,
@@ -32,8 +32,8 @@ export async function PATCH(request: Request) {
     const firstName = cleanName(body?.firstName)
     const middleName = cleanName(body?.middleName)
     const surname = cleanName(body?.surname)
-    const phoneNumber = validateInternationalPhone(body?.phoneNumber, body?.phoneCountry)
-    const address = validateAndFormatAddress(body?.addressInfo)
+    const rawPhone = typeof body?.phoneNumber === 'string' ? body.phoneNumber.trim() : ''
+    const phoneNumber = rawPhone ? validateInternationalPhone(rawPhone, body?.phoneCountry) : null
     if (!firstName || !surname) {
       return NextResponse.json(
         { message: 'Please complete all required fields.' },
@@ -52,7 +52,7 @@ export async function PATCH(request: Request) {
       )
     }
 
-    if (!phoneNumber) {
+    if (rawPhone && !phoneNumber) {
       return NextResponse.json(
         {
           message:
@@ -62,11 +62,11 @@ export async function PATCH(request: Request) {
       )
     }
 
-    if (!address) {
-      return NextResponse.json(
-        { message: 'Please enter a complete address.' },
-        { status: 400 }
-      )
+    if (phoneNumber) {
+      const check = await lookupPhoneLineStatus(phoneNumber)
+      if (isConfirmedInactive(check)) {
+        return NextResponse.json({ message: 'Carrier reports the number is inactive or unassigned. Correct it or leave it blank.' }, { status: 400 })
+      }
     }
 
     const user = await prisma.user.update({
@@ -75,8 +75,8 @@ export async function PATCH(request: Request) {
         firstName,
         middleName: middleName || null,
         surname,
-        phoneNumber,
-        address,
+        phoneNumber: phoneNumber ?? currentUser.phoneNumber,
+        // Existing saved address stays unchanged; the user can edit it in their profile.
       },
     })
 

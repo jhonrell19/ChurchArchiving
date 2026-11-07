@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import InternationalPhoneField from '@/components/auth/InternationalPhoneField'
-import StructuredAddressField, { emptyAddress, formatAddress, type AddressInfo } from '@/components/auth/StructuredAddressField'
 
 import GoogleAuthButton from '@/components/auth/GoogleAuthButton'
 
@@ -24,13 +23,10 @@ export default function RegisterPage() {
     surname: '',
     phoneNumber: '',
     phoneCountry: 'PH',
-    address: '',
     email: '',
     password: '',
     confirmPassword: '',
   })
-
-  const [addressInfo, setAddressInfo] = useState<AddressInfo>(emptyAddress)
 
   const change = (
     event: React.ChangeEvent<
@@ -61,7 +57,7 @@ export default function RegisterPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({...form, addressInfo, address: formatAddress(addressInfo)}),
+        body: JSON.stringify(form),
       })
 
       const data = await response.json().catch(() => ({}))
@@ -72,8 +68,7 @@ export default function RegisterPage() {
       }
 
       setVerificationMessage(
-        data.message ||
-          'Account created successfully.'
+        [data.message || 'Account created successfully.', data.phoneStatusNote].filter(Boolean).join(' ')
       )
       setDevelopmentVerificationUrl(
         data.developmentVerificationUrl || ''
@@ -109,8 +104,7 @@ export default function RegisterPage() {
 
           <p className="text-slate-600 mt-2 text-sm">
             Register with the form below or continue with Google.
-            Your phone number is collected only as parish contact
-            information.
+            A contact number is optional. You can add your address later from your profile.
           </p>
         </div>
 
@@ -162,7 +156,6 @@ export default function RegisterPage() {
               inputClass={inputClass}
             />
           </div>
-          <StructuredAddressField value={addressInfo} onChange={setAddressInfo}/>
 
           <div className="md:col-span-2">
             <Field label="Email Address *">
@@ -217,6 +210,11 @@ export default function RegisterPage() {
               : 'Create Account'}
           </button>
         </form>
+
+        <p className="text-center text-xs text-slate-600 mt-4">
+          We use your details to create and secure your parish account.
+          {' '}Read our <Link href="/privacy" className="text-blue-700 underline">Privacy Notice</Link>.
+        </p>
 
         <div className="flex items-center gap-3 my-7">
           <div className="h-px bg-slate-200 flex-1" />

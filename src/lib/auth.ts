@@ -26,14 +26,9 @@ export function getRoleHome(role: Role) {
 export function isUserProfileComplete(user: {
   firstName: string | null
   surname: string | null
-  phoneNumber: string | null
-  address: string | null
 }) {
   return Boolean(
-    user.firstName?.trim() &&
-      user.surname?.trim() &&
-      user.phoneNumber?.trim() &&
-      user.address?.trim()
+    user.firstName?.trim() && user.surname?.trim()
   )
 }
 

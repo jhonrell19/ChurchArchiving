@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { parsePhoneNumberFromString } from 'libphonenumber-js/max'
+import InternationalPhoneField from '@/components/auth/InternationalPhoneField'
+import StructuredAddressField, { emptyAddress, type AddressInfo } from '@/components/auth/StructuredAddressField'
 
 type UserProfile = {
   id: number
@@ -49,6 +52,15 @@ export default function ProfilePage() {
   const [user, setUser] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [editing, setEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saveMessage, setSaveMessage] = useState('')
+  const [phone, setPhone] = useState('')
+  const [phoneCountry, setPhoneCountry] = useState('PH')
+  const [phoneEdited, setPhoneEdited] = useState(false)
+  const [editAddress, setEditAddress] = useState(false)
+  const [clearAddress, setClearAddress] = useState(false)
+  const [addressInfo, setAddressInfo] = useState<AddressInfo>(emptyAddress)
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -71,6 +83,11 @@ export default function ProfilePage() {
         }
 
         setUser(data.user)
+        setPhone(data.user.phoneNumber || '')
+        if (data.user.phoneNumber) {
+          const parsed = parsePhoneNumberFromString(data.user.phoneNumber, 'PH')
+          setPhoneCountry(parsed?.country || 'PH')
+        }
       } catch (err) {
         console.warn('Profile load error:', err)
         setError(err instanceof Error ? err.message : 'Unable to load profile.')
@@ -82,6 +99,49 @@ export default function ProfilePage() {
     loadProfile()
   }, [router])
 
+
+  const saveContact = async () => {
+    if (!user) return
+    const payload: Record<string, unknown> = {}
+    if (phoneEdited) {
+      payload.phoneNumber = phone
+      payload.phoneCountry = phoneCountry
+    }
+    if (clearAddress) payload.clearAddress = true
+    else if (editAddress) payload.addressInfo = addressInfo
+    if (!Object.keys(payload).length) {
+      setSaveMessage('Choose a field to update first.')
+      return
+    }
+
+    setSaving(true)
+    setSaveMessage('')
+    try {
+      const res = await fetch('/api/auth/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const result = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(result.message || 'Unable to save contact details.')
+      setUser(previous => previous ? {
+        ...previous,
+        phoneNumber: result.phoneNumber ?? null,
+        address: result.address ?? null,
+      } : previous)
+      setPhone(result.phoneNumber || '')
+      setEditing(false)
+      setPhoneEdited(false)
+      setEditAddress(false)
+      setClearAddress(false)
+      setAddressInfo({ ...emptyAddress })
+      setSaveMessage(['Contact details saved.', result.phoneStatusNote].filter(Boolean).join(' '))
+    } catch (err) {
+      setSaveMessage(err instanceof Error ? err.message : 'Unable to save.')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -142,10 +202,48 @@ export default function ProfilePage() {
       </div>
 
 
+      <div className="bg-white border border-gold/20 rounded-xl p-5 mb-4 space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="font-display font-semibold text-navy-mid">Optional contact details</h3>
+            <p className="text-xs text-slate-600 mt-1">Update your phone or save a mailing address for future requests.</p>
+          </div>
+          <button type="button" onClick={() => { setEditing(v => !v); setSaveMessage('') }}
+            className="rounded-lg border border-gold/30 px-4 py-2 text-sm text-navy-mid hover:bg-amber-50">
+            {editing ? 'Close' : 'Edit'}
+          </button>
+        </div>
+
+        {saveMessage && <p role="status" className="text-sm text-navy-mid">{saveMessage}</p>}
+        {editing && <div className="space-y-4">
+          <InternationalPhoneField country={phoneCountry} phoneNumber={phone}
+            onCountryChange={v => { setPhoneCountry(v); setPhoneEdited(true) }}
+            onPhoneChange={v => { setPhone(v); setPhoneEdited(true) }}
+            inputClass="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-navy-mid" />
+          <label className="flex gap-2 items-center text-sm text-navy-mid">
+            <input type="checkbox" checked={editAddress} onChange={e => {
+              setEditAddress(e.target.checked); setClearAddress(false)
+            }} />
+            {user.address ? 'Replace saved address' : 'Add an address (optional)'}
+          </label>
+          {editAddress && <StructuredAddressField value={addressInfo} onChange={setAddressInfo} />}
+          {user.address && <label className="flex gap-2 items-center text-sm text-navy-mid">
+            <input type="checkbox" checked={clearAddress} onChange={e => {
+              setClearAddress(e.target.checked); if (e.target.checked) setEditAddress(false)
+            }} />Remove saved address
+          </label>}
+          <button type="button" onClick={() => void saveContact()} disabled={saving}
+            className="bg-navy text-white rounded-xl px-5 py-3 text-sm disabled:opacity-50">
+            {saving ? 'Saving...' : 'Save contact details'}
+          </button>
+        </div>}
+      </div>
+
+
       <div className="bg-gold/5 border border-gold/20 rounded-xl p-4 flex items-start gap-3">
         <i className="ti ti-info-circle text-gold text-[18px] mt-0.5 flex-shrink-0" aria-hidden="true" />
         <p className="font-body text-[13px] text-[#4a6a8a] leading-relaxed">
-          Your profile information is based on the account used during login. To request changes, please contact the parish office.
+          To change your account name or email address, contact the parish office. Contact details can be updated above.
         </p>
       </div>
     </div>

@@ -13,18 +13,19 @@ type Props = {
   onCountryChange: (value: string) => void
   onPhoneChange: (value: string) => void
   inputClass: string
+  required?: boolean
 }
 
-export default function InternationalPhoneField({ country, phoneNumber, onCountryChange, onPhoneChange, inputClass }: Props) {
+export default function InternationalPhoneField({ country, phoneNumber, onCountryChange, onPhoneChange, inputClass, required = false }: Props) {
   const selected = countries.find(item => item.code === country)
   return (
     <div className="space-y-2">
-      <label htmlFor="phone-country" className="block text-sm font-semibold text-navy-mid">Phone country / calling code *</label>
-      <select id="phone-country" value={country} required onChange={event => { onCountryChange(event.target.value); onPhoneChange('') }} className={inputClass}>
+      <label htmlFor="phone-country" className="block text-sm font-semibold text-navy-mid">Phone country / calling code</label>
+      <select id="phone-country" value={country} onChange={event => { onCountryChange(event.target.value); onPhoneChange('') }} className={inputClass}>
         {countries.map(item => <option key={item.code} value={item.code}>{item.name} (+{item.dial})</option>)}
       </select>
-      <label htmlFor="registration-phone" className="block text-sm font-semibold text-navy-mid">Mobile / contact number *</label>
-      <input id="registration-phone" type="tel" value={phoneNumber} required maxLength={40}
+      <label htmlFor="registration-phone" className="block text-sm font-semibold text-navy-mid">Mobile / contact number {required ? '*' : '(optional)'}</label>
+      <input id="registration-phone" type="tel" value={phoneNumber} required={required} maxLength={40}
         onChange={event => onPhoneChange(event.target.value)} autoComplete="tel" inputMode="tel"
         placeholder={country === 'PH' ? '09171234567' : `+${selected?.dial || ''} ...`}
         className={inputClass} />

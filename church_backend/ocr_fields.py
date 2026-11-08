@@ -123,6 +123,9 @@ def parse_official_form_fields(text: str, sacrament_type: str) -> dict[str, Any]
                     record[key] = iso
                 else:
                     warnings.append(f"Review {key.replace('_', ' ')} manually: date was ambiguous or unrecognized.")
+            elif key == "contact_number":
+                if found.strip().casefold() not in {"none", "n/a", "not provided", "not available", "unknown", "-"}:
+                    record[key] = found
             elif key == "sponsors":
                 # Comma/semicolon-separated sponsor names on an explicit label.
                 names = [_clean(p) for p in re.split(r"[;,]", found) if _clean(p)]

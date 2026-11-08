@@ -61,6 +61,10 @@ function isAllowed(role: Role, method: string, path: string) {
     return false
   }
 
+  if (/^api\/requests\/\d+\/(cancel|hide)$/.test(path)) {
+    return m === 'POST' && role === 'USER'
+  }
+
   if (/^api\/requests\/\d+$/.test(path)) {
     return m === 'GET' && ['USER', 'ADMIN', 'BURIAL_ADMIN'].includes(role)
   }

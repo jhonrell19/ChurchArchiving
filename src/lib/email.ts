@@ -27,8 +27,7 @@ export async function sendTransactionalEmail(input: SendEmailInput) {
   })
 
   if (!response.ok) {
-    const body = await response.text().catch(() => '')
-    console.error('EMAIL SEND ERROR:', response.status, body)
+    console.error('EMAIL SEND ERROR (provider HTTP status):', response.status)
     return { sent: false, reason: 'Email provider rejected the request.' }
   }
 

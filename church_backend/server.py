@@ -9,6 +9,7 @@ from flask import (
     redirect,
 
     send_from_directory,
+    send_file,
 
     jsonify,
 
@@ -34,6 +35,7 @@ from models import (
 )
 from document_templates import generate_official_draft, TemplateNotConfiguredError, TemplateDataError
 from ocr_fields import parse_official_form_fields
+from tesseract_runtime import find_tesseract_executable
 
 from faster_whisper import WhisperModel
 
@@ -43,11 +45,15 @@ from reportlab.lib.styles import getSampleStyleSheet
 
 from werkzeug.utils import secure_filename
 
+from io import BytesIO
+from types import SimpleNamespace
+
 import subprocess
 import threading
 
 import os
 import posixpath
+import hmac
 import json
 import re
 from collections import Counter
@@ -81,6 +87,8 @@ else:
     )
 
 app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY", "dev-only-change-me")
+if os.getenv("SMART_PARISH_ENV", "development").lower() == "production" and len(app.config["SECRET_KEY"]) < 32:
+    raise RuntimeError("A strong FLASK_SECRET_KEY is required in production.")
 
 INTERNAL_API_KEY = os.environ.get("FLASK_INTERNAL_KEY")
 
@@ -144,6 +152,7 @@ REQUEST_SCHEMA_COLUMNS = {
     "record_date_hint": "VARCHAR(100)",
     "record_details": "VARCHAR(500)",
     "draft_file": "VARCHAR(500)",
+    "history_hidden": "BOOLEAN NOT NULL DEFAULT 0",
 }
 
 DOCUMENT_SCHEMA_COLUMNS = {
@@ -206,73 +215,9 @@ def ensure_runtime_schema():
             )
         )
 
-        # Keep records created by the older prototype visible in the new
-        # Burial Admin category.
-        connection.execute(
-            text(
-                "UPDATE document SET sacrament_type = 'burial' "
-                "WHERE sacrament_type = 'death'"
-            )
-        )
-        connection.execute(
-            text(
-                "UPDATE certificate_request SET sacrament_type = 'burial' "
-                "WHERE sacrament_type = 'death'"
-            )
-        )
-
-        connection.execute(
-            text(
-                """
-                UPDATE certificate_request
-                SET generated_file = NULL,
-                    status = CASE WHEN status = 'Ready' THEN 'Approved' ELSE status END
-                WHERE matched_document_id IS NOT NULL
-                  AND generated_file IS NOT NULL
-                  AND REPLACE(generated_file, '\\', '/') = (
-                      SELECT REPLACE(document.filepath, '\\', '/')
-                      FROM document
-                      WHERE document.id = certificate_request.matched_document_id
-                  )
-                  AND REPLACE(generated_file, '\\', '/') NOT LIKE 'uploads/releases/%'
-                """
-            )
-        )
-
-        connection.execute(
-            text(
-                """
-                UPDATE certificate_request
-                SET status = CASE
-                    WHEN matched_document_id IS NOT NULL THEN 'Approved'
-                    ELSE 'Pending'
-                END
-                WHERE status = 'Released'
-                  AND (payment_status != 'Paid' OR generated_file IS NULL)
-                """
-            )
-        )
-
-        connection.execute(
-            text(
-                """
-                UPDATE document
-                SET department = 'main'
-                WHERE sacrament_type IN ('baptismal', 'confirmation', 'marriage')
-                  AND (department IS NULL OR TRIM(department) = '')
-                """
-            )
-        )
-        connection.execute(
-            text(
-                """
-                UPDATE document
-                SET department = 'burial'
-                WHERE sacrament_type IN ('burial', 'land_agreement')
-                  AND (department IS NULL OR TRIM(department) = '')
-                """
-            )
-        )
+        # Data cleanup intentionally NOT performed at server startup.
+        # Legacy status/department transformations must be individually reviewed,
+        # backed up, and performed by a deliberate migration, not on every boot.
 
     # Drop any pooled SQLite connection that may have cached the old schema
     # before the ALTER TABLE statements.  All request handlers will open a
@@ -300,10 +245,26 @@ def ensure_runtime_schema():
 
 
 with app.app_context():
-    db.create_all()
-    ensure_runtime_schema()
+    # Local development can create missing tables and add missing nullable or
+    # defaulted columns. Production is schema-verification only: never migrate
+    # or modify parish records merely by restarting a service.
+    if os.getenv("SMART_PARISH_ENV", "development").lower() == "production":
+        from sqlalchemy import inspect as sqlalchemy_inspect
+        schema = sqlalchemy_inspect(db.engine)
+        required = {"certificate_request": REQUEST_SCHEMA_COLUMNS,
+                    "document": DOCUMENT_SCHEMA_COLUMNS}
+        for table_name, columns in required.items():
+            if not schema.has_table(table_name):
+                raise RuntimeError(f"Missing archive table {table_name}; run approved migrations before starting production")
+            existing = {col["name"] for col in schema.get_columns(table_name)}
+            missing = set(columns) - existing
+            if missing:
+                raise RuntimeError(f"Missing archive columns in {table_name}: {sorted(missing)}. Run approved migrations first")
+    else:
+        db.create_all()
+        ensure_runtime_schema()
     print(f"[Smart Parish] Archive DB: {db.engine.url.database}")
-    print("[Smart Parish] Request schema verified: requester_user_id OK")
+    print("[Smart Parish] Archive schema verification complete")
 
 
 MAIN_ADMIN_TYPES = ["baptismal", "confirmation", "marriage"]
@@ -371,6 +332,11 @@ def serialize_request(r):
                 "filepath": source.filepath,
                 "recordData": json.loads(source.record_data) if source.record_data else {},
             }
+
+    if getattr(g, "user_role", None) == "USER":
+        # A pending or approved request does not authorize reading the
+        # matching sacramental archive's personal information.
+        matched_document = None
 
     return {
 
@@ -573,7 +539,7 @@ def protect_backend_boundary():
 
 
 
-    if request.headers.get("X-Internal-Key") != INTERNAL_API_KEY:
+    if not hmac.compare_digest(request.headers.get("X-Internal-Key", ""), INTERNAL_API_KEY):
 
         return {"error": "Unauthorized"}, 401
 
@@ -875,7 +841,6 @@ def extract_text_from_path(file_path):
     Never returns fabricated text. Exceptions are shown as OCR-preview errors and
     do not silently populate fields. Limits protect local CPU/RAM resources.
     """
-    import shutil
     try:
         import pytesseract
         from PIL import Image, ImageOps, UnidentifiedImageError
@@ -891,8 +856,17 @@ def extract_text_from_path(file_path):
 
     # Text-only PDFs do not require running an OCR engine at all.
     def recognize(image):
-        if not shutil.which("tesseract"):
-            raise RuntimeError("Tesseract executable not found on PATH.")
+        executable = find_tesseract_executable()
+        if not executable:
+            raise RuntimeError(
+                "Tesseract OCR executable not found. On Windows, check "
+                "C:\\Program Files\\Tesseract-OCR\\tesseract.exe or configure "
+                "TESSERACT_CMD with its full path, then restart Flask. "
+                "The scan was not saved or modified by OCR preview."
+            )
+        # Setting pytesseract's command directly avoids relying on the PATH
+        # inherited by the already-running Flask process.
+        pytesseract.pytesseract.tesseract_cmd = executable
         try:
             image = ImageOps.exif_transpose(image)
             image = ImageOps.grayscale(image)
@@ -1302,8 +1276,6 @@ def upload():
 
         db.session.commit()
 
-
-
         log = AuditLog(
 
             user="Admin",
@@ -1576,6 +1548,209 @@ def view_file(filepath):
 
 
 
+
+# A completed, watermarked IFI template is the primary archive PDF.
+# The original scan is retained separately in the existing metadata JSON,
+# avoiding any change to the current SQLite schema.
+ARCHIVE_TEMPLATE_TYPES = {'baptismal', 'confirmation', 'marriage'}
+ARCHIVE_SOURCE_KEY = '_archive_original_scan'
+
+
+def _archive_metadata(document):
+    try:
+        value = json.loads(document.extracted_metadata or '{}')
+    except (TypeError, ValueError):
+        value = {}
+    return value if isinstance(value, dict) else {}
+
+
+def _archive_original_scan(document):
+    """Return the source scan path + name for new and legacy archives."""
+    original = _archive_metadata(document).get(ARCHIVE_SOURCE_KEY)
+    if isinstance(original, dict):
+        path = normalize_path(original.get('path') or '')
+        name = original.get('filename') or posixpath.basename(path)
+        if path:
+            return path, str(name)
+    # Prior versions used Document.filepath for the uploaded scan.
+    path = normalize_path(document.filepath)
+    if not path.lower().endswith('.pdf') or not path.startswith('uploads/archive_filled/'):
+        return path, document.filename or posixpath.basename(path)
+    return None, None
+
+
+def _archive_filled_pdf_path(document):
+    import hashlib
+    stable = (document.file_hash or '').strip()
+    if not stable:
+        source_path, _ = _archive_original_scan(document)
+        material = f"{document.id}|{source_path}|{document.person_name}|{document.date_of_record}"
+        stable = hashlib.sha256(material.encode('utf-8')).hexdigest()
+    category = secure_filename(document.sacrament_type or 'document')
+    return f"uploads/archive_filled/{document.id}_{stable[:12]}_{category}_DRAFT.pdf"
+
+
+def _archive_is_filled_primary(document):
+    return normalize_path(document.filepath) == _archive_filled_pdf_path(document)
+
+
+def _save_archive_filled_pdf(document):
+    """Atomically write a watermarked filled template PDF, never modify scan."""
+    import tempfile
+    import fitz
+
+    if document.sacrament_type not in ARCHIVE_TEMPLATE_TYPES:
+        raise TemplateNotConfiguredError('A filled template is not available for this document type.')
+
+    relative_path = _archive_filled_pdf_path(document)
+    target = backend_storage_path(relative_path)
+    os.makedirs(os.path.dirname(target), exist_ok=True)
+
+    pdf_buffer = BytesIO()
+    generate_official_draft(None, document, pdf_buffer)
+    with fitz.open(stream=pdf_buffer.getvalue(), filetype='pdf') as pdf:
+        for page in pdf:
+            page.insert_text(
+                (26, 29), 'ARCHIVAL DRAFT - NOT AN ISSUED CERTIFICATE',
+                fontsize=9, color=(0.85, 0.10, 0.10), overlay=True,
+            )
+        pdf_bytes = pdf.tobytes(garbage=3, deflate=True)
+
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(mode='wb', dir=os.path.dirname(target), suffix='.pdf', delete=False) as temp:
+            tmp_path = temp.name
+            temp.write(pdf_bytes)
+        os.replace(tmp_path, target)
+    finally:
+        if tmp_path and os.path.isfile(tmp_path):
+            os.unlink(tmp_path)
+    return relative_path
+
+
+def _promote_archive_primary(document):
+    """Only switch the primary file after the template PDF exists on disk."""
+    if document.sacrament_type not in ARCHIVE_TEMPLATE_TYPES:
+        raise TemplateNotConfiguredError('No official form template for this category.')
+    if _archive_is_filled_primary(document):
+        return document.filepath
+
+    try:
+        reviewed_fields = json.loads(document.record_data or '{}')
+    except (TypeError, ValueError):
+        reviewed_fields = {}
+    if not isinstance(reviewed_fields, dict) or not reviewed_fields:
+        raise TemplateDataError('No reviewed Official Form Data exists for this archive. Add verified fields before converting it.')
+
+    scan_path, scan_filename = _archive_original_scan(document)
+    if not scan_path or not scan_path.startswith(f'uploads/{document.sacrament_type}/'):
+        raise TemplateDataError('Original source scan could not be identified. No archive data was changed.')
+    if not os.path.isfile(backend_storage_path(scan_path)):
+        raise TemplateDataError('Original source scan is missing. No archive data was changed.')
+
+    filled_path = _save_archive_filled_pdf(document)
+    if not os.path.isfile(backend_storage_path(filled_path)):
+        raise TemplateDataError('Generated PDF was not saved. No archive data was changed.')
+    metadata = _archive_metadata(document)
+    metadata[ARCHIVE_SOURCE_KEY] = {'path': scan_path, 'filename': scan_filename}
+    document.extracted_metadata = json.dumps(metadata, ensure_ascii=False)
+    document.filepath = filled_path
+    document.filename = posixpath.basename(filled_path)
+    return filled_path
+
+
+def _archive_file_links(document):
+    if document.sacrament_type not in ARCHIVE_TEMPLATE_TYPES:
+        return {}
+    scan_path, scan_name = _archive_original_scan(document)
+    return {
+        'isFilledPrimary': _archive_is_filled_primary(document),
+        'filledTemplateUrl': f'/api/backend/api/archive/documents/{document.id}/filled-template',
+        'originalScanUrl': (
+            f'/api/backend/api/archive/documents/{document.id}/original-scan'
+            if scan_path else None
+        ),
+        'originalScanFilename': scan_name,
+    }
+
+
+@app.route('/api/archive/documents/<int:document_id>/original-scan', methods=['GET'])
+def api_archive_original_scan(document_id):
+    denied = require_roles('ADMIN')
+    if denied:
+        return denied
+    document = db.session.get(Document, document_id)
+    if document is None or not document.active or document.sacrament_type not in MAIN_ADMIN_TYPES:
+        return {'error': 'Archive record not found.'}, 404
+    scan_path, scan_name = _archive_original_scan(document)
+    if not scan_path or not scan_path.startswith(f'uploads/{document.sacrament_type}/'):
+        return {'error': 'Original scan is unavailable.'}, 404
+    if not os.path.isfile(backend_storage_path(scan_path)):
+        return {'error': 'Original scan file is missing.'}, 404
+    response = send_file(backend_storage_path(scan_path), as_attachment=False, download_name=scan_name)
+    response.headers['Cache-Control'] = 'no-store, private'
+    return response
+
+
+@app.route('/api/archive/documents/<int:document_id>/promote-filled-template', methods=['POST'])
+def api_archive_promote_filled_template(document_id):
+    """One-time, explicit migration of a legacy scanned-primary archive."""
+    denied = require_roles('ADMIN')
+    if denied:
+        return denied
+    document = db.session.get(Document, document_id)
+    if document is None or not document.active or document.sacrament_type not in MAIN_ADMIN_TYPES:
+        return {'error': 'Archive record not found.'}, 404
+    try:
+        was_primary = _archive_is_filled_primary(document)
+        relative_path = _promote_archive_primary(document)
+        if not was_primary:
+            db.session.add(AuditLog(
+                user=getattr(g, 'user_email', None) or 'Admin',
+                action=f'Promoted archive #{document.id} filled template to primary PDF (original scan retained)',
+                document_id=document.id,
+            ))
+            db.session.commit()
+        return {'message': 'Filled template is now the primary archive document.',
+                'filepath': relative_path, 'isFilledPrimary': True}, 200
+    except (TemplateDataError, TemplateNotConfiguredError) as exc:
+        db.session.rollback()
+        return {'error': str(exc)}, 400
+    except Exception:
+        db.session.rollback()
+        app.logger.exception('Failed to promote archive #%s', document_id)
+        return {'error': 'Cannot update archive primary document. Nothing was committed.'}, 500
+
+
+@app.route('/api/archive/documents/<int:document_id>/filled-template', methods=['GET'])
+def api_archive_filled_template(document_id):
+    denied = require_roles('ADMIN')
+    if denied:
+        return denied
+    document = db.session.get(Document, document_id)
+    if document is None or not document.active or document.sacrament_type not in MAIN_ADMIN_TYPES:
+        return {'error': 'Archive record not found.'}, 404
+
+    try:
+        relative_path = _archive_filled_pdf_path(document)
+        target = backend_storage_path(relative_path)
+        if not os.path.isfile(target):
+            _save_archive_filled_pdf(document)
+        response = send_file(
+            target,
+            mimetype='application/pdf',
+            as_attachment=False,
+            download_name=f"{secure_filename(document.certificate_number or str(document.id))}_FILLED_DRAFT.pdf",
+        )
+        response.headers['Cache-Control'] = 'no-store, private'
+        return response
+    except (TemplateDataError, TemplateNotConfiguredError) as exc:
+        return {'error': str(exc)}, 400
+    except Exception:
+        app.logger.exception('Archive filled-template generation failed for document %s', document_id)
+        return {'error': 'Cannot generate filled form. Check backend logs and template assets.'}, 500
+
+
 @app.route("/api/archive/ocr-preview", methods=["POST"])
 def api_archive_ocr_preview():
     denied = require_roles("ADMIN", "BURIAL_ADMIN")
@@ -1622,6 +1797,72 @@ def api_archive_ocr_preview():
             pass
 
 
+@app.route("/api/archive/template-preview", methods=["POST"])
+def api_archive_template_preview():
+    """Render a temporary filled draft from the in-progress archive form.
+
+    No database write or official release occurs. The existing blank PNG is
+    used as the background for a new, disposable preview PDF.
+    """
+    denied = require_roles("ADMIN")
+    if denied:
+        return denied
+
+    if request.content_length and request.content_length > 100 * 1024:
+        return {"error": "Preview form data is too large."}, 413
+
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return {"error": "Expected JSON form data."}, 400
+
+    category = (payload.get("sacrament_type") or "").strip().lower() if isinstance(payload.get("sacrament_type"), str) else ""
+    if category not in {"baptismal", "confirmation", "marriage"}:
+        return {"error": "Select Baptismal, Confirmation, or Marriage."}, 400
+
+    record_data = payload.get("record_data") or {}
+    if not isinstance(record_data, dict):
+        return {"error": "Official form data must be an object."}, 400
+    if not record_data and not str(payload.get("person_name") or "").strip():
+        return {"error": "Extract or enter the record details before previewing."}, 400
+
+    source_document = SimpleNamespace(
+        sacrament_type=category,
+        person_name=str(payload.get("person_name") or "").strip()[:200],
+        date_of_record=str(payload.get("date_of_record") or "").strip()[:40],
+        record_data=record_data,
+    )
+
+    try:
+        buffer = BytesIO()
+        generate_official_draft(None, source_document, buffer)
+        pdf_bytes = buffer.getvalue()
+
+        # An unmistakable label prevents the transient preview being
+        # confused with a verified, approved or signed certificate.
+        import fitz
+        with fitz.open(stream=pdf_bytes, filetype="pdf") as draft:
+            for page in draft:
+                page.insert_text(
+                    (28, 30), "DRAFT PREVIEW - NOT AN OFFICIAL CERTIFICATE",
+                    fontsize=9, color=(0.85, 0.12, 0.12), overlay=True,
+                )
+            pdf_bytes = draft.tobytes(garbage=3, deflate=True)
+
+        result = send_file(
+            BytesIO(pdf_bytes),
+            mimetype="application/pdf",
+            as_attachment=False,
+            download_name=f"{category}_filled_template_PREVIEW.pdf",
+        )
+        result.headers["Cache-Control"] = "no-store, private"
+        return result
+    except (TemplateNotConfiguredError, TemplateDataError) as error:
+        return {"error": str(error)}, 400
+    except Exception:
+        app.logger.exception("Official template preview failed")
+        return {"error": "Could not generate the template preview. Check backend logs."}, 500
+
+
 @app.route("/api/health")
 def api_health():
     try:
@@ -1632,7 +1873,7 @@ def api_health():
             "whisperLoaded": _whisper_model is not None,
         }, 200
     except Exception as error:
-        return {"status": "error", "error": str(error)}, 500
+        return {"status": "error", "error": "The parish service encountered an internal error. Check backend logs."}, 500
 
 
 @app.route("/api/archive/upload", methods=["POST"])
@@ -1702,6 +1943,32 @@ def api_upload_document():
 
 
 
+        # The uploaded scan is evidence, not an executable or an arbitrary
+        # user-controlled file. Check both extension and file signature.
+        original_name = secure_filename(file.filename or "")
+        extension = os.path.splitext(original_name)[1].lower()
+        supported = {".pdf", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}
+        if extension not in supported:
+            return {"error": "Upload a PDF or supported image scan."}, 400
+        file.stream.seek(0, os.SEEK_END)
+        scan_bytes = file.stream.tell()
+        file.stream.seek(0)
+        if scan_bytes <= 0 or scan_bytes > 15 * 1024 * 1024:
+            return {"error": "The scanned file must be between 1 byte and 15 MB."}, 413
+        signature = file.stream.read(12)
+        file.stream.seek(0)
+        signatures = {".pdf": signature.startswith(b"%PDF-"),
+                      ".png": signature.startswith(b"\x89PNG\r\n\x1a\n"),
+                      ".jpg": signature.startswith(b"\xff\xd8\xff"),
+                      ".jpeg": signature.startswith(b"\xff\xd8\xff"),
+                      ".tif": signature.startswith((b"II*\x00", b"MM\x00*")),
+                      ".tiff": signature.startswith((b"II*\x00", b"MM\x00*")),
+                      ".bmp": signature.startswith(b"BM")}
+        if not signatures[extension]:
+            return {"error": "File content does not match the selected scan type."}, 400
+        if sacrament_type in ARCHIVE_TEMPLATE_TYPES and request.form.get("review_confirmed") != "true":
+            return {"error": "Confirm that you reviewed all Official Form Data against the original scan before saving."}, 400
+
         file_hash = calculate_file_hash(file)
 
 
@@ -1752,27 +2019,21 @@ def api_upload_document():
 
         prefix = PREFIX_MAP.get(sacrament_type, "DOC")
 
-        year = date_of_record[:4] if date_of_record else "2026"
+        year = date_of_record[:4] if date_of_record and len(date_of_record) >= 4 else datetime.utcnow().strftime("%Y")
 
 
 
-        existing_count = Document.query.filter(
-
-            Document.active == True,
-
+        # Include inactive/recycled records so certificate numbers are never
+        # reused after soft deletion. Count() on active records was unsafe.
+        existing_numbers = db.session.query(Document.certificate_number).filter(
             Document.sacrament_type == sacrament_type,
-
-            Document.certificate_number.like(f"{prefix}-{year}-%")
-
-        ).count()
-
-
-
-        next_number = existing_count + 1
-
+            Document.certificate_number.like(f"{prefix}-{year}-%"),
+        ).all()
+        sequence = [int(match.group(1)) for (number,) in existing_numbers
+                    if number and (match := re.fullmatch(
+                        rf"{re.escape(prefix)}-{re.escape(year)}-(\d+)", number))]
+        next_number = max(sequence, default=0) + 1
         certificate_number = f"{prefix}-{year}-{next_number:03d}"
-
-
 
         department = get_department(sacrament_type)
 
@@ -1792,11 +2053,13 @@ def api_upload_document():
 
             return {"error": "Invalid filename"}, 400
 
-        filepath = f"{relative_folder}/{filename}"
+        # Store with a unique name: repeated uploads must never overwrite a
+        # previously archived scan with the same filename.
+        from uuid import uuid4
+        stored_filename = f"{uuid4().hex}_{filename}"
+        filepath = f"{relative_folder}/{stored_filename}"
 
         physical_filepath = backend_storage_path(filepath)
-
-
 
         file.save(physical_filepath)
 
@@ -1848,10 +2111,28 @@ def api_upload_document():
 
 
         db.session.add(new_document)
+        db.session.flush()  # Gives the record its archive ID before the commit.
+
+        # Save the reviewed filled IFI template as the PRIMARY archive document.
+        # The original scan is retained privately for verification and audits.
+        if sacrament_type in ARCHIVE_TEMPLATE_TYPES:
+            try:
+                if not record_data:
+                    raise TemplateDataError('Official Form Data is empty. Review or enter the extracted fields before saving.')
+                _promote_archive_primary(new_document)
+            except (TemplateDataError, TemplateNotConfiguredError) as exc:
+                db.session.rollback()
+                if os.path.isfile(physical_filepath):
+                    os.remove(physical_filepath)
+                return {'error': f'Could not save filled template: {exc}'}, 400
+            except Exception:
+                db.session.rollback()
+                if os.path.isfile(physical_filepath):
+                    os.remove(physical_filepath)
+                app.logger.exception('Filled template generation failed during upload')
+                return {'error': 'Could not generate filled template. Archive was not saved.'}, 500
 
         db.session.commit()
-
-
 
         log = AuditLog(
 
@@ -1890,6 +2171,7 @@ def api_upload_document():
                 "filename": new_document.filename,
 
                 "filepath": new_document.filepath,
+                **_archive_file_links(new_document),
                 "ocrAvailable": bool(new_document.ocr_text),
                 "ocrSuggestions": json.loads(new_document.extracted_metadata) if new_document.extracted_metadata else {},
                 "recordData": json.loads(new_document.record_data) if new_document.record_data else {}
@@ -1900,9 +2182,10 @@ def api_upload_document():
 
 
 
-    except Exception as e:
-
-        return {"error": str(e)}, 500
+    except Exception:
+        db.session.rollback()
+        app.logger.exception('Archive upload failed')
+        return {'error': 'Archive upload failed; check backend logs.'}, 500
 
 
 
@@ -2023,6 +2306,7 @@ def api_archive_documents():
                 "filename": d.filename,
 
                 "filepath": d.filepath,
+                **_archive_file_links(d),
 
                 "uploadedBy": d.uploaded_by,
                 "ocrText": d.ocr_text,
@@ -2112,6 +2396,7 @@ def api_archive_documents_by_type(sacrament_type):
                 "filename": d.filename,
 
                 "filepath": d.filepath,
+                **_archive_file_links(d),
 
                 "uploadedBy": d.uploaded_by,
                 "ocrText": d.ocr_text,
@@ -2509,9 +2794,7 @@ def api_create_request():
 
         return {
 
-            "error": str(e)
-
-        }, 500
+            "error": "The parish service encountered an internal error. Check backend logs."}, 500
 
 
 
@@ -2571,7 +2854,8 @@ def api_get_requests():
 
                 .filter_by(
 
-                    requester_user_id=user_id
+                    requester_user_id=user_id,
+                    history_hidden=False,
 
                 )
 
@@ -2687,12 +2971,51 @@ def api_get_requests():
 
         return {
 
-            "error": str(e)
-
-        }, 500
+            "error": "The parish service encountered an internal error. Check backend logs."}, 500
 
 
 
+
+
+@app.route("/api/requests/<int:request_id>/cancel", methods=["POST"])
+def api_cancel_own_request(request_id):
+    """Withdraw only an unpaid pending request; preserve all accounting history."""
+    denied = require_roles("USER")
+    if denied:
+        return denied
+    record = db.session.get(CertificateRequest, request_id)
+    if record is None or record.requester_user_id != current_user_id():
+        return {"error": "Request not found."}, 404
+    if record.status != "Pending" or record.payment_status == "Paid" or record.payment_reference:
+        return {"error": "Only pending, unpaid requests without an active checkout can be cancelled. Contact the parish office for others."}, 409
+    record.status = "Cancelled"
+    db.session.add(AuditLog(user=getattr(g, "user_email", "User"),
+                            action=f"Parishioner cancelled pending request #{record.id}",
+                            document_id=record.matched_document_id))
+    db.session.commit()
+    return {"message": "Request cancelled. It remains in the audit history.",
+            "request": serialize_request(record)}, 200
+
+
+@app.route("/api/requests/<int:request_id>/hide", methods=["POST"])
+def api_hide_own_request(request_id):
+    """Hide a terminal request in the user's UI, never delete the official record."""
+    denied = require_roles("USER")
+    if denied:
+        return denied
+    record = db.session.get(CertificateRequest, request_id)
+    if record is None or record.requester_user_id != current_user_id():
+        return {"error": "Request not found."}, 404
+    if record.status not in {"Cancelled", "Released", "Rejected"}:
+        return {"error": "Only cancelled, rejected or released requests can be hidden."}, 409
+    if record.status == "Released" and record.payment_status != "Paid":
+        return {"error": "Payment reconciliation required before hiding this request."}, 409
+    record.history_hidden = True
+    db.session.add(AuditLog(user=getattr(g, "user_email", "User"),
+                            action=f"Parishioner hid request #{record.id} from personal history (record retained)",
+                            document_id=record.matched_document_id))
+    db.session.commit()
+    return {"message": "Request hidden from your history. Parish records are retained."}, 200
 
 
 @app.route("/api/requests/<int:request_id>", methods=["GET"])
@@ -2779,7 +3102,7 @@ def api_demo_pay_request(request_id):
 
     except Exception as e:
         db.session.rollback()
-        return {"error": str(e)}, 500
+        return {"error": "The parish service encountered an internal error. Check backend logs."}, 500
 
 
 @app.route("/api/requests/<int:request_id>/status", methods=["PATCH"])
@@ -2864,7 +3187,7 @@ def api_update_request_status(request_id):
 
     except Exception as e:
         db.session.rollback()
-        return {"error": str(e)}, 500
+        return {"error": "The parish service encountered an internal error. Check backend logs."}, 500
 
 
 @app.route("/api/requests/<int:request_id>/select-record", methods=["PATCH"])
@@ -2957,7 +3280,7 @@ def api_select_source_record(request_id):
 
     except Exception as e:
         db.session.rollback()
-        return {"error": str(e)}, 500
+        return {"error": "The parish service encountered an internal error. Check backend logs."}, 500
 
 
 @app.route("/api/requests/<int:request_id>/release-document", methods=["POST"])
@@ -3045,7 +3368,7 @@ def api_upload_release_document(request_id):
 
     except Exception as e:
         db.session.rollback()
-        return {"error": str(e)}, 500
+        return {"error": "The parish service encountered an internal error. Check backend logs."}, 500
 
 
 @app.route("/api/requests/<int:request_id>/generate-document", methods=["POST"])
@@ -3108,7 +3431,7 @@ def api_generate_release_document(request_id):
         return {"error": str(error)}, 400
     except Exception as error:
         db.session.rollback()
-        return {"error": str(error)}, 500
+        return {"error": "The parish service encountered an internal error. Check backend logs."}, 500
 
 
 @app.route("/api/requests/<int:request_id>/download", methods=["GET"])
@@ -3237,7 +3560,7 @@ def api_get_masses():
 
     except Exception as e:
 
-        return {"error": str(e)}, 500
+        return {"error": "The parish service encountered an internal error. Check backend logs."}, 500
 
 
 
@@ -3385,7 +3708,7 @@ def api_create_mass():
 
     except Exception as e:
 
-        return {"error": str(e)}, 500
+        return {"error": "The parish service encountered an internal error. Check backend logs."}, 500
 
 
 
@@ -3453,7 +3776,7 @@ def api_update_mass_status(mass_id):
 
     except Exception as e:
 
-        return {"error": str(e)}, 500
+        return {"error": "The parish service encountered an internal error. Check backend logs."}, 500
 
 
 
@@ -3545,7 +3868,7 @@ def api_update_mass_transcription(mass_id):
 
     except Exception as e:
 
-        return {"error": str(e)}, 500
+        return {"error": "The parish service encountered an internal error. Check backend logs."}, 500
 
 
 
@@ -3589,7 +3912,7 @@ def api_delete_mass(mass_id):
 
     except Exception as e:
 
-        return {"error": str(e)}, 500
+        return {"error": "The parish service encountered an internal error. Check backend logs."}, 500
 
 
 
@@ -3657,7 +3980,7 @@ def api_get_transcriptions():
 
     except Exception as e:
 
-        return {"error": str(e)}, 500
+        return {"error": "The parish service encountered an internal error. Check backend logs."}, 500
 
 
 
@@ -3713,7 +4036,7 @@ def api_get_announcements():
 
     except Exception as e:
 
-        return {"error": str(e)}, 500
+        return {"error": "The parish service encountered an internal error. Check backend logs."}, 500
 
 
 
@@ -3813,7 +4136,7 @@ def api_create_announcement():
 
     except Exception as e:
 
-        return {"error": str(e)}, 500
+        return {"error": "The parish service encountered an internal error. Check backend logs."}, 500
 
 
 
@@ -3857,7 +4180,7 @@ def api_delete_announcement(announcement_id):
 
     except Exception as e:
 
-        return {"error": str(e)}, 500
+        return {"error": "The parish service encountered an internal error. Check backend logs."}, 500
 
 
 
@@ -4015,7 +4338,7 @@ def api_user_dashboard_summary():
 
     except Exception as e:
 
-        return {"error": str(e)}, 500
+        return {"error": "The parish service encountered an internal error. Check backend logs."}, 500
 
 
 
@@ -4193,7 +4516,7 @@ def api_transcribe_mass_ai(mass_id):
 
     except Exception as e:
 
-        return {"error": str(e)}, 500
+        return {"error": "The parish service encountered an internal error. Check backend logs."}, 500
 
 
 
@@ -4272,7 +4595,7 @@ def api_deleted_documents():
 
     except Exception as e:
 
-        return {"error": str(e)}, 500
+        return {"error": "The parish service encountered an internal error. Check backend logs."}, 500
 
 
 
@@ -4348,7 +4671,7 @@ def api_soft_delete_document(document_id):
 
     except Exception as e:
 
-        return {"error": str(e)}, 500
+        return {"error": "The parish service encountered an internal error. Check backend logs."}, 500
 
 
 
@@ -4424,7 +4747,7 @@ def api_restore_document(document_id):
 
     except Exception as e:
 
-        return {"error": str(e)}, 500
+        return {"error": "The parish service encountered an internal error. Check backend logs."}, 500
 
 
 

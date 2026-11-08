@@ -15,6 +15,10 @@ type ArchiveDocument = {
   documentType: string
   filename: string
   filepath: string
+  filledTemplateUrl?: string | null
+  originalScanUrl?: string | null
+  originalScanFilename?: string | null
+  isFilledPrimary?: boolean
   uploadedBy: string
 }
 
@@ -49,6 +53,68 @@ export default function ArchivesPage() {
   const [ocrWarnings, setOcrWarnings] = useState<string[]>([])
   const [ocrReviewed, setOcrReviewed] = useState(false)
   const ocrRequestCounter = useRef(0)
+  const [templatePreviewUrl, setTemplatePreviewUrl] = useState<string | null>(null)
+  const [templatePreviewLoading, setTemplatePreviewLoading] = useState(false)
+  const [templatePreviewError, setTemplatePreviewError] = useState('')
+  const previewUrlRef = useRef<string | null>(null)
+  const previewVersionRef = useRef(0)
+
+  const discardTemplatePreview = () => {
+    previewVersionRef.current += 1
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current)
+    previewUrlRef.current = null
+    setTemplatePreviewUrl(null)
+    setTemplatePreviewError('')
+  }
+
+  useEffect(() => () => {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current)
+  }, [])
+
+  const previewFilledTemplate = async () => {
+    discardTemplatePreview()
+    const hasReviewedOrEnteredFields = Object.values(recordData).some(value =>
+      Array.isArray(value) ? value.some(item => String(item).trim()) :
+      typeof value === 'object' && value !== null
+        ? Object.values(value).some(nested => String(nested || '').trim())
+        : Boolean(String(value || '').trim())
+    )
+    if (!hasReviewedOrEnteredFields) {
+      setTemplatePreviewError(
+        'No document details are available yet. Fix the OCR error and click Preview OCR, or enter the Official Form Data manually before previewing.'
+      )
+      return
+    }
+    const revision = previewVersionRef.current
+    setTemplatePreviewLoading(true)
+    try {
+      const res = await fetch('/api/backend/api/archive/template-preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sacrament_type: form.sacrament_type,
+          person_name: form.person_name,
+          date_of_record: form.date_of_record,
+          record_data: recordData,
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || data.message || 'Could not generate the filled template.')
+      }
+      const blob = await res.blob()
+      if (revision !== previewVersionRef.current) return
+      const url = URL.createObjectURL(blob)
+      previewUrlRef.current = url
+      setTemplatePreviewUrl(url)
+    } catch (error) {
+      if (revision === previewVersionRef.current) {
+        setTemplatePreviewError(error instanceof Error ? error.message : 'Template preview failed.')
+      }
+    } finally {
+      setTemplatePreviewLoading(false)
+    }
+  }
 
   const loadDocuments = async () => {
     try {
@@ -77,6 +143,8 @@ export default function ArchivesPage() {
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
+    discardTemplatePreview()
+    setOcrReviewed(false)
     setForm(prev => ({
       ...prev,
       [e.target.name]: e.target.value,
@@ -90,7 +158,7 @@ export default function ArchivesPage() {
       alert('Please upload a scanned PDF or image.')
       return
     }
-    if (ocrText && !ocrReviewed) {
+    if (!ocrReviewed) {
       alert('Review the OCR-populated form against the original scan and tick the review checkbox before saving.')
       return
     }
@@ -104,6 +172,7 @@ export default function ArchivesPage() {
     formData.append('file', file)
     formData.append('runOcr', runOcr ? 'true' : 'false')
     formData.append('record_data', JSON.stringify(recordData))
+    formData.append('review_confirmed', ocrReviewed ? 'true' : 'false')
 
     try {
       const res = await fetch('/api/backend/api/archive/upload', {
@@ -118,7 +187,7 @@ export default function ArchivesPage() {
         return
       }
 
-      alert('Record archived successfully')
+      alert('Archive saved: the filled official-template DRAFT PDF is the primary document. The original scan is retained separately.')
 
       setForm({
   person_name: '',
@@ -129,6 +198,7 @@ export default function ArchivesPage() {
   document_type: 'Scanned Certificate',
 })
 
+      discardTemplatePreview()
       setRecordData({})
       setFile(null)
       setOcrText('')
@@ -172,6 +242,7 @@ const previewOcr = async (selectedFile: File) => {
     setOcrReviewed(false)
 
     // Never overwrite an existing staff-entered value.
+    discardTemplatePreview()
     setRecordData(previous => {
       const next: TemplateRecordData = { ...previous }
       for (const [key, val] of Object.entries(extracted)) {
@@ -212,6 +283,7 @@ const previewOcr = async (selectedFile: File) => {
 }
 
 const selectScannedFile = (selected: File | null) => {
+  discardTemplatePreview()
   ocrRequestCounter.current += 1
   setFile(selected)
   setOcrText('')
@@ -248,6 +320,25 @@ const deleteDocument = async (id: number) => {
   }
 }
 
+const makeFilledTemplatePrimary = async (record: ArchiveDocument) => {
+  if (!confirm(`Convert ${record.personName}'s existing archive to use the filled IFI template PDF as its primary document? The scanned original will be preserved.`)) return
+  try {
+    const res = await fetch(`/api/backend/api/archive/documents/${record.id}/promote-filled-template`, {
+      method: 'POST',
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      alert(data.error || 'Could not update the primary archive document.')
+      return
+    }
+    await loadDocuments()
+    alert('The filled IFI template PDF is now the primary archive document. The original scan remains available.')
+  } catch (error) {
+    console.error('Archive primary PDF promotion error:', error)
+    alert('Could not contact the parish backend. No change was confirmed.')
+  }
+}
+
 const records = documents.filter(doc =>
   doc.sacramentType === activeTab &&
   (
@@ -272,6 +363,7 @@ const records = documents.filter(doc =>
 
         <button
           onClick={() => {
+            discardTemplatePreview()
             setForm(prev => ({
               ...prev,
               sacrament_type: activeTab,
@@ -395,7 +487,11 @@ const records = documents.filter(doc =>
             <TemplateDataFields
               sacramentType={form.sacrament_type}
               value={recordData}
-              onChange={setRecordData}
+              onChange={next => {
+                discardTemplatePreview()
+                setOcrReviewed(false)
+                setRecordData(next)
+              }}
             />
 
             <div className="md:col-span-3">
@@ -412,7 +508,7 @@ const records = documents.filter(doc =>
               <div className="mt-3 flex items-center gap-3 flex-wrap">
                 <label className="flex items-center gap-2 font-body text-[12px] text-slate-600">
                   <input type="checkbox" checked={runOcr} onChange={e => setRunOcr(e.target.checked)} />
-                  Extract OCR text when saving
+                  Run OCR on uploaded scan
                 </label>
                 <button
                   type="button"
@@ -422,7 +518,34 @@ const records = documents.filter(doc =>
                 >
                   {ocrLoading ? 'Reading scan...' : 'Preview OCR'}
                 </button>
+                <button
+                  type="button"
+                  onClick={() => void previewFilledTemplate()}
+                  disabled={templatePreviewLoading || ocrLoading}
+                  className="font-display text-[10px] tracking-wider border border-emerald-300 text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-lg disabled:opacity-50"
+                >
+                  {templatePreviewLoading ? 'Generating template...' : 'Preview Filled Official Template'}
+                </button>
               </div>
+              {templatePreviewError && (
+                <p role="alert" className="font-body text-[12px] text-red-700 mt-2">{templatePreviewError}</p>
+              )}
+              {templatePreviewUrl && (
+                <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <p className="font-display text-[11px] font-semibold text-emerald-900">Filled parish template — DRAFT PREVIEW</p>
+                    <a href={templatePreviewUrl} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline text-[12px]">Open PDF</a>
+                  </div>
+                  <p className="font-body text-[12px] text-slate-700 mb-2">
+                    This is a temporary PDF created from the fields above, using your original template image. It is not an official issued certificate. Check all names and dates before saving.
+                  </p>
+                  <iframe title="Filled official form PDF preview" src={templatePreviewUrl} className="w-full h-[540px] bg-white rounded-md border border-emerald-100" />
+                </div>
+              )}
+              <label className="mt-3 flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 font-body text-[12px] text-blue-900">
+                <input type="checkbox" checked={ocrReviewed} onChange={e => setOcrReviewed(e.target.checked)} />
+                I have compared every completed Official Form Data field against the original scan and corrected any errors before saving. This is an archival draft, not an issued certificate.
+              </label>
               {ocrLoading && <p className="font-body text-[12px] text-blue-700 mt-2">Extracting text and matching official form fields…</p>}
               {ocrWarnings.length > 0 && (
                 <div role="status" className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
@@ -435,10 +558,6 @@ const records = documents.filter(doc =>
                   <p className="font-body text-[11px] text-blue-800 mb-2">
                     Recognized fields were placed in the official form above wherever a field was blank. Check spelling, dates, and names against the scanned original.
                   </p>
-                  <label className="flex items-start gap-2 font-body text-[12px] text-blue-900 my-2">
-                    <input type="checkbox" checked={ocrReviewed} onChange={e => setOcrReviewed(e.target.checked)} />
-                    I compared the extracted values with the original document and corrected any errors.
-                  </label>
                   <p className="font-body text-[11px] text-slate-600 whitespace-pre-wrap max-h-32 overflow-auto">
                     {ocrText || 'No text recognized.'}
                   </p>
@@ -454,7 +573,7 @@ const records = documents.filter(doc =>
 
             <button
               type="button"
-              onClick={() => setShowForm(false)}
+              onClick={() => { discardTemplatePreview(); setShowForm(false) }}
               className="font-display text-[11px] tracking-wider text-[#6b8caa] border border-gold/20 px-4 py-2 rounded-lg"
             >
               Cancel
@@ -468,6 +587,7 @@ const records = documents.filter(doc =>
           <button
             key={type.value}
             onClick={() => {
+              discardTemplatePreview()
               setActiveTab(type.value)
               setForm(prev => ({
                 ...prev,
@@ -495,7 +615,7 @@ const records = documents.filter(doc =>
         <i className="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-[#9ab0c4] text-[15px]" />
         <input
           type="text"
-          placeholder="Search by name, book no., certificate no., or filename..."
+          placeholder="Search by name, certificate number, or filename..."
           value={search}
           onChange={e => setSearch(e.target.value)}
           className={`pl-9 pr-4 py-2.5 ${inputCls}`}
@@ -559,13 +679,51 @@ const records = documents.filter(doc =>
                   </td>
 
                   <td className="px-5 py-3 font-body text-[#6b8caa] text-[12px]">
-                    {record.filename}
+                    {record.filledTemplateUrl ? (
+                      <div className="flex flex-col gap-1.5">
+                        <a
+                          href={record.filledTemplateUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-700 underline font-semibold"
+                          title="Completed IFI template; archival draft, not an issued certificate"
+                        >
+                          {record.isFilledPrimary ? 'Primary: Filled IFI Template (PDF Draft)' : 'Preview Filled IFI Template (PDF Draft)'}
+                        </a>
+                        {record.originalScanUrl && (
+                          <a
+                            href={record.originalScanUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[#6b8caa] underline"
+                            title="Unmodified scanned source document"
+                          >
+                            Original Scan ({record.originalScanFilename || 'source file'})
+                          </a>
+                        )}
+                        {!record.isFilledPrimary && (
+                          <button
+                            type="button"
+                            onClick={() => void makeFilledTemplatePrimary(record)}
+                            className="text-left text-emerald-700 underline font-semibold"
+                            title="One-time conversion of an older scanned-primary archive; preserves the original"
+                          >
+                            Make Filled Template Primary
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <a href={`/api/backend/files/${record.filepath}`} target="_blank" rel="noopener noreferrer" className="underline">
+                        {record.filename}
+                      </a>
+                    )}
                   </td>
 
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-2">
                       <a
-                        href={`/api/backend/files/${record.filepath}`}
+                        href={record.filledTemplateUrl || `/api/backend/files/${record.filepath}`}
+                        title="View filled IFI template"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="p-1.5 rounded-lg border border-gold/20 text-gold bg-gold/5"
@@ -574,11 +732,20 @@ const records = documents.filter(doc =>
                       </a>
 
                       <button
-                        onClick={() => window.open(`/api/backend/files/${record.filepath}`, '_blank')}
+                        onClick={() => window.open(record.filledTemplateUrl || `/api/backend/files/${record.filepath}`, '_blank')}
                         className="p-1.5 rounded-lg border border-gold/20 text-[#6b8caa]"
+                        title="Open PDF for printing"
                       >
                         <i className="ti ti-printer text-[14px]" />
                       </button>
+                      <a
+                        href={record.filledTemplateUrl || `/api/backend/files/${record.filepath}`}
+                        download={`${record.certificateNumber || record.id}_ARCHIVAL_DRAFT.pdf`}
+                        className="p-1.5 rounded-lg border border-gold/20 text-[#6b8caa]"
+                        title="Download completed template draft"
+                      >
+                        <i className="ti ti-download text-[14px]" />
+                      </a>
 
                     <button
   onClick={() => deleteDocument(record.id)}

@@ -81,6 +81,8 @@ class CertificateRequest(db.Model):
         db.String(300)
     )
 
+    history_hidden = db.Column(db.Boolean, nullable=False, default=False)
+
     record_date_hint = db.Column(db.String(100), nullable=True)
     record_details = db.Column(db.String(500), nullable=True)
 

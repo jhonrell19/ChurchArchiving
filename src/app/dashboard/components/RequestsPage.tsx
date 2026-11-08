@@ -194,6 +194,21 @@ export default function RequestsPage() {
     }
   }
 
+  const performRequestAction = async (id: number, action: 'cancel' | 'hide') => {
+    const prompt = action === 'cancel'
+      ? 'Cancel this pending certificate request? This cannot be undone.'
+      : 'Hide this request from your history? Parish staff will retain official and payment records.'
+    if (!window.confirm(prompt)) return
+    try {
+      const res = await fetch(`/api/backend/api/requests/${id}/${action}`, { method: 'POST' })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(payload.error || 'Request action failed.')
+      await loadRequests()
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Unable to update request.')
+    }
+  }
+
   const loadProfile = async () => {
     try {
       setProfileLoading(true)
@@ -823,6 +838,9 @@ export default function RequestsPage() {
                           </p>
                         )}
 
+                        {req.status === 'Cancelled' && (
+                          <p className="font-body text-[12px] text-slate-600">You cancelled this unpaid request.</p>
+                        )}
                         {req.status === 'Rejected' && (
                           <p className="font-body text-[12px] text-red-600">
                             This request was rejected. Check the admin remarks for details.
@@ -831,6 +849,21 @@ export default function RequestsPage() {
                       </div>
 
                       <div className="flex items-center gap-2 flex-wrap">
+                        {req.status === 'Pending' && req.paymentStatus !== 'Paid' && !req.paymentReference && (
+                          <button type="button"
+                            onClick={() => void performRequestAction(req.id, 'cancel')}
+                            className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 font-display text-[11px] text-red-700 hover:bg-red-100">
+                            Cancel Request
+                          </button>
+                        )}
+                        {['Cancelled', 'Rejected', 'Released'].includes(req.status) && (
+                          <button type="button"
+                            onClick={() => void performRequestAction(req.id, 'hide')}
+                            className="rounded-lg border border-slate-200 bg-white px-3 py-2 font-display text-[11px] text-slate-700 hover:bg-slate-50"
+                            title="Hide from your personal view without deleting the parish record">
+                            Hide From My History
+                          </button>
+                        )}
                         {canDemoPay && (
                           <button
                             type="button"

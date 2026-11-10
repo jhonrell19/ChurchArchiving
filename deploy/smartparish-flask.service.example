@@ -1,0 +1,17 @@
+[Unit]
+Description=Smart Parish Flask API
+After=network.target
+[Service]
+Type=simple
+User=smartparish
+Group=smartparish
+WorkingDirectory=/opt/smartparish/church_backend
+EnvironmentFile=/etc/smartparish/production.env
+ExecStart=/opt/smartparish/venv/bin/waitress-serve --host=127.0.0.1 --port=5000 wsgi:app
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+ProtectHome=true
+[Install]
+WantedBy=multi-user.target

@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
-import InternationalPhoneField from '@/components/auth/InternationalPhoneField'
 
 import GoogleAuthButton from '@/components/auth/GoogleAuthButton'
 
@@ -14,15 +13,14 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
   const [verificationMessage, setVerificationMessage] =
     useState('')
-  const [developmentVerificationUrl, setDevelopmentVerificationUrl] =
-    useState('')
+  const [registeredEmail, setRegisteredEmail] = useState('')
+  const [resending, setResending] = useState(false)
 
   const [form, setForm] = useState({
     firstName: '',
     middleName: '',
     surname: '',
     phoneNumber: '',
-    phoneCountry: 'PH',
     email: '',
     password: '',
     confirmPassword: '',
@@ -47,9 +45,14 @@ export default function RegisterPage() {
       return
     }
 
+    if (form.phoneNumber.trim() && !/^09\d{9}$/.test(form.phoneNumber.trim())) {
+      alert('Enter an 11-digit Philippine mobile number starting with 09, or leave it blank.')
+      return
+    }
+
     setLoading(true)
     setVerificationMessage('')
-    setDevelopmentVerificationUrl('')
+    setRegisteredEmail('')
 
     try {
       const response = await fetch('/api/auth/register', {
@@ -70,9 +73,7 @@ export default function RegisterPage() {
       setVerificationMessage(
         [data.message || 'Account created successfully.', data.phoneStatusNote].filter(Boolean).join(' ')
       )
-      setDevelopmentVerificationUrl(
-        data.developmentVerificationUrl || ''
-      )
+      setRegisteredEmail(form.email.trim().toLowerCase())
 
       if (!data.verificationRequired) {
         router.push('/login')
@@ -84,6 +85,25 @@ export default function RegisterPage() {
       )
     } finally {
       setLoading(false)
+    }
+  }
+
+  const resendVerification = async () => {
+    if (!registeredEmail) return
+    setResending(true)
+    try {
+      const response = await fetch('/api/auth/resend-verification', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: registeredEmail }),
+      })
+      const data = await response.json().catch(() => ({}))
+      setVerificationMessage(data.message || (response.ok
+        ? 'Check your inbox for the verification email.'
+        : 'Unable to resend verification email.'))
+    } catch {
+      setVerificationMessage('Email service is unreachable. Please try again later.')
+    } finally {
+      setResending(false)
     }
   }
 
@@ -104,7 +124,7 @@ export default function RegisterPage() {
 
           <p className="text-slate-600 mt-2 text-sm">
             Register with the form below or continue with Google.
-            A contact number is optional. You can add your address later from your profile.
+            A Philippine mobile number is optional. You can add your address later from your profile.
           </p>
         </div>
 
@@ -148,13 +168,24 @@ export default function RegisterPage() {
           </Field>
 
           <div className="md:col-span-2">
-            <InternationalPhoneField
-              country={form.phoneCountry}
-              phoneNumber={form.phoneNumber}
-              onCountryChange={v=>setForm(p=>({...p,phoneCountry:v}))}
-              onPhoneChange={v=>setForm(p=>({...p,phoneNumber:v}))}
-              inputClass={inputClass}
-            />
+            <Field label="Philippine mobile number (optional)">
+              <input
+                type="tel"
+                name="phoneNumber"
+                value={form.phoneNumber}
+                onChange={change}
+                inputMode="numeric"
+                pattern="09[0-9]{9}"
+                maxLength={11}
+                placeholder="09XXXXXXXXX"
+                autoComplete="tel-national"
+                aria-describedby="registration-phone-help"
+                className={inputClass}
+              />
+            </Field>
+            <p id="registration-phone-help" className="mt-2 text-xs text-slate-600">
+              Enter 11 digits beginning with 09. Format validation does not verify that the number is active or belongs to you.
+            </p>
           </div>
 
           <div className="md:col-span-2">
@@ -234,13 +265,11 @@ export default function RegisterPage() {
               {verificationMessage}
             </p>
 
-            {developmentVerificationUrl && (
-              <a
-                href={developmentVerificationUrl}
-                className="block mt-2 text-blue-700 text-xs underline break-all"
-              >
-                Development verification link
-              </a>
+            {registeredEmail && (
+              <button type="button" onClick={resendVerification} disabled={resending}
+                className="mt-3 rounded-lg border border-green-600 px-3 py-2 text-xs font-semibold text-green-800 disabled:opacity-50">
+                {resending ? 'Sending...' : 'Resend verification email'}
+              </button>
             )}
           </div>
         )}

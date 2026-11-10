@@ -6,9 +6,12 @@ import {
   isUserProfileComplete,
   SESSION_COOKIE,
   SESSION_MAX_AGE_SECONDS,
+  STAFF_SESSION_MAX_AGE_SECONDS,
 } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { MFA_PENDING_COOKIE, MFA_PENDING_MAX_AGE, issueStaffMfaChallenge, mfaKeyConfigured } from '@/lib/staffMfa'
 import { normalizeEmail } from '@/lib/validation'
+import { loginAllowed, loginFailed, loginSucceeded } from '@/lib/loginThrottle'
 
 export async function POST(req: Request) {
   try {
@@ -24,6 +27,11 @@ export async function POST(req: Request) {
       )
     }
 
+    if (!loginAllowed(email)) {
+      return NextResponse.json({ message: 'Too many attempts. Try again later.' },
+        { status: 429, headers: { 'Retry-After': '900' } })
+    }
+
     const user = await prisma.user.findUnique({
       where: { email },
     })
@@ -32,6 +40,7 @@ export async function POST(req: Request) {
       !user ||
       !(await bcrypt.compare(password, user.password))
     ) {
+      loginFailed(email)
       return NextResponse.json(
         { message: 'Invalid email or password.' },
         { status: 401 }
@@ -53,11 +62,34 @@ export async function POST(req: Request) {
       )
     }
 
+    if (user.role !== 'USER' && !user.emailVerified) {
+      return NextResponse.json({ message: 'Staff account requires verification.' }, { status: 403 })
+    }
+
+    // Password alone must NEVER grant staff a full browser session.
+    if (user.role !== 'USER') {
+      if (!mfaKeyConfigured()) {
+        return NextResponse.json({ message: 'Staff MFA is not configured on this server. Contact the system administrator.' }, { status: 503 })
+      }
+      const pendingToken = await issueStaffMfaChallenge(user.id)
+      loginSucceeded(email)
+      const response = NextResponse.json(
+        { message: 'Complete authenticator verification.', mfaRequired: true },
+        { headers: { 'Cache-Control': 'no-store' } }
+      )
+      response.cookies.set(MFA_PENDING_COOKIE, pendingToken, {
+        httpOnly: true, secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax', path: '/', maxAge: MFA_PENDING_MAX_AGE,
+      })
+      return response
+    }
+
+    loginSucceeded(email)
     const needsProfileCompletion =
       user.role === 'USER' &&
       !isUserProfileComplete(user)
 
-    const { token } = await createSession(user.id)
+    const { token } = await createSession(user.id, user.role !== 'USER')
 
     const response = NextResponse.json(
       {
@@ -87,7 +119,7 @@ export async function POST(req: Request) {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
-      maxAge: SESSION_MAX_AGE_SECONDS,
+      maxAge: user.role === 'USER' ? SESSION_MAX_AGE_SECONDS : STAFF_SESSION_MAX_AGE_SECONDS,
     })
 
     response.cookies.set('token', '', {

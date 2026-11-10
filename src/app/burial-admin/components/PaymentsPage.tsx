@@ -11,6 +11,7 @@ export default function PaymentsPage() {
   const [payments, setPayments] = useState<CemeteryPayment[]>([])
   const [selected, setSelected] = useState('')
   const [message, setMessage] = useState('')
+  const [approvedCemeteryFees, setApprovedCemeteryFees] = useState({ openingPermit: 0, perpetualDuesPerYear: 0 })
   const [form, setForm] = useState({
     amount: '',
     paymentType: 'INSTALLMENT',
@@ -18,6 +19,7 @@ export default function PaymentsPage() {
     receiptNumber: '',
     paymentDate: '',
     notes: '',
+    duesYears: '1',
   })
 
   const selectedReservation = useMemo(() => reservations.find(item => item.id === Number(selected)) || null, [reservations, selected])
@@ -33,6 +35,14 @@ export default function PaymentsPage() {
     if (!r2.ok) throw new Error(d2.error || d2.message || 'Failed to load payments.')
     setReservations(d1.reservations || [])
     setPayments(d2.payments || [])
+    const pricing = await fetch('/api/backend/api/requests/pricing', { cache: 'no-store' })
+    if (pricing.ok) {
+      const fees = await pricing.json()
+      setApprovedCemeteryFees({
+        openingPermit: Number(fees.cemeteryFees?.openingPermit) || 0,
+        perpetualDuesPerYear: Number(fees.cemeteryFees?.perpetualDuesPerYear) || 0,
+      })
+    }
   }
 
   useEffect(() => {
@@ -45,14 +55,14 @@ export default function PaymentsPage() {
     const response = await fetch(`/api/backend/api/cemetery/reservations/${selectedReservation.id}/payments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, amount: Number(form.amount || 0) }),
+      body: JSON.stringify({ ...form, amount: Number(form.amount || 0), duesYears: Number(form.duesYears) }),
     })
     const data = await response.json().catch(() => ({}))
     if (!response.ok) {
       setMessage(data.error || data.message || 'Unable to record payment.')
       return
     }
-    setForm({ amount: '', paymentType: 'INSTALLMENT', paymentMethod: 'CASH', receiptNumber: '', paymentDate: '', notes: '' })
+    setForm({ amount: '', paymentType: 'INSTALLMENT', paymentMethod: 'CASH', receiptNumber: '', paymentDate: '', notes: '', duesYears: '1' })
     setMessage('Payment recorded successfully.')
     await load()
   }
@@ -61,7 +71,7 @@ export default function PaymentsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-navy-mid">Payment Management</h1>
-        <p className="mt-1 text-sm text-slate-600">Record cash/GCash receipts, down payments, installments, full payments, perpetual dues, and interment fees.</p>
+        <p className="mt-1 text-sm text-slate-600">Record verified staff-received cash/GCash receipts, installments, annual dues and cemetery permits. This does not confirm PayMongo transfers.</p>
       </div>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -71,16 +81,31 @@ export default function PaymentsPage() {
             <option value="">Select reservation *</option>
             {reservations.map(item => <option key={item.id} value={item.id}>{item.buyerName} — {item.slot?.slotCode || 'No slot'} — Balance {peso(item.balance)}</option>)}
           </select>
-          <input required type="number" min="1" className="rounded-xl border border-slate-200 px-3 py-2" placeholder="Amount *" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} />
-          <select className="rounded-xl border border-slate-200 px-3 py-2" value={form.paymentType} onChange={e => setForm({ ...form, paymentType: e.target.value })}>
+          <input required type="number" min="1" className="rounded-xl border border-slate-200 px-3 py-2" placeholder="Amount *" value={form.amount} readOnly={['OPENING_PERMIT','PERPETUAL_DUES'].includes(form.paymentType)} onChange={e => setForm({ ...form, amount: e.target.value })} />
+          <select className="rounded-xl border border-slate-200 px-3 py-2" value={form.paymentType} onChange={e => {
+            const paymentType = e.target.value
+            const fixed = paymentType === 'OPENING_PERMIT' ? approvedCemeteryFees.openingPermit
+              : paymentType === 'PERPETUAL_DUES' ? approvedCemeteryFees.perpetualDuesPerYear * Number(form.duesYears || 1) : 0
+            setForm({ ...form, paymentType, amount: fixed ? String(fixed) : '' })
+          }}>
             <option value="RESERVATION_FEE">Reservation Fee</option>
             <option value="DOWN_PAYMENT">Down Payment</option>
             <option value="INSTALLMENT">Installment</option>
             <option value="FULL_PAYMENT">Full Payment</option>
-            <option value="PERPETUAL_DUES">Perpetual Dues</option>
+            <option value="PERPETUAL_DUES">Perpetual Dues (annual)</option>
+            <option value="OPENING_PERMIT">Cemetery Opening Permit</option>
             <option value="INTERMENT_FEE">Interment Fee</option>
             <option value="OTHER">Other</option>
           </select>
+          {form.paymentType === 'PERPETUAL_DUES' && (
+            <label className="text-sm text-slate-700">Number of years (₱{approvedCemeteryFees.perpetualDuesPerYear}/year)
+              <input required type="number" min="1" max="50" step="1" className="block w-full rounded-xl border border-slate-200 px-3 py-2" value={form.duesYears}
+                onChange={e => {
+                  const years = e.target.value
+                  setForm({ ...form, duesYears: years, amount: String(approvedCemeteryFees.perpetualDuesPerYear * Number(years || 0)) })
+                }} />
+            </label>
+          )}
           <select className="rounded-xl border border-slate-200 px-3 py-2" value={form.paymentMethod} onChange={e => setForm({ ...form, paymentMethod: e.target.value })}>
             <option value="CASH">Cash</option>
             <option value="GCASH">GCash</option>

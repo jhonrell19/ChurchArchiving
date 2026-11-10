@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma'
 
 export const SESSION_COOKIE = 'parish_session'
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7
+export const STAFF_SESSION_MAX_AGE_SECONDS = 60 * 60 * 12
 
 function hashSessionToken(token: string) {
   return createHash('sha256').update(token).digest('hex')
@@ -32,11 +33,11 @@ export function isUserProfileComplete(user: {
   )
 }
 
-export async function createSession(userId: number) {
+export async function createSession(userId: number, staff = false) {
   const token = randomBytes(32).toString('base64url')
   const tokenHash = hashSessionToken(token)
   const expiresAt = new Date(
-    Date.now() + SESSION_MAX_AGE_SECONDS * 1000
+    Date.now() + (staff ? STAFF_SESSION_MAX_AGE_SECONDS : SESSION_MAX_AGE_SECONDS) * 1000
   )
 
   // Keep one active browser session per account. A new login

@@ -101,7 +101,28 @@ def main():
         ok=bool(value) and value not in ('dev-only-change-me','changeme')
         if key in ('FLASK_SECRET_KEY','FLASK_INTERNAL_KEY'):ok=ok and len(value)>=32
         log('PASS' if ok else ('FAIL' if strict else 'WARN'),f'{key} configured')
-    log('WARN','PayMongo remains test-mode; live payments are NOT enabled or approved')
+    pmode=env_file_key('PAYMONGO_MODE') or 'test'
+    pkey=env_file_key('PAYMONGO_SECRET_KEY')
+    sig=env_file_key('PAYMONGO_WEBHOOK_SECRET')
+    if pmode=='live':
+        checks=[
+            ('Live PayMongo key',pkey.startswith('sk_live_')),
+            ('Live webhook signing key configured',len(sig)>=16),
+            ('Explicit live payment approval',env_file_key('PAYMONGO_LIVE_ENABLED')=='YES'),
+            ('Parish fees approved',env_file_key('CERT_FEES_APPROVED')=='YES'),
+            ('Production runtime',env_file_key('SMART_PARISH_ENV')=='production'),
+        ]
+        for name,good in checks:log('PASS' if good else 'FAIL',name)
+        for category in ('BAPTISMAL','CONFIRMATION','MARRIAGE','OWNERSHIP','LAND_AGREEMENT','URGENT'):
+            fee=env_file_key('CERT_FEE_'+category)
+            log('PASS' if fee.isdigit() else 'FAIL','Approved fee configured: '+category)
+    else:
+        log('WARN','PayMongo TEST mode — no real funds should be accepted')
+    if (ROOT/'scripts/create-staff-accounts.ts').exists():
+        code=(ROOT/'scripts/create-staff-accounts.ts').read_text(encoding='utf-8')
+        log('FAIL' if "bcrypt.hash(\n      'Admin12345'" in code else 'PASS','No hardcoded staff provisioning password detected')
+    log('WARN','Admin MFA not implemented; do not enroll real staff without an approved MFA solution')
+    log('WARN','Browser acceptance and external API settlement tests must be performed on hosting')
     log('WARN','Cemetery inquiry/chat and SMS OTP are not implemented; do not claim production support')
     log('WARN','Full live browser, webhook, mail, role-access and upload persistence tests are still necessary')
     print(f'SUMMARY PASS={pass_count} WARN={warnings} FAIL={fail_count}')

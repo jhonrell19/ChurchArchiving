@@ -6,9 +6,9 @@ import { createEmailVerificationToken } from '@/lib/accountTokens'
 import {
   appBaseUrl,
   sendTransactionalEmail,
+  isTransactionalEmailConfigured,
 } from '@/lib/email'
 import { prisma } from '@/lib/prisma'
-import { lookupPhoneLineStatus, isConfirmedInactive, phoneLineStatusExplanation } from '@/lib/phoneLineStatus'
 import {
   EMAIL_RE,
   NAME_RE,
@@ -26,7 +26,11 @@ export async function POST(req: Request) {
     const middleName = cleanName(body?.middleName)
     const surname = cleanName(body?.surname)
     const rawPhone = typeof body?.phoneNumber === 'string' ? body.phoneNumber.trim() : ''
-    const phoneNumber = rawPhone ? validateInternationalPhone(rawPhone, body?.phoneCountry) : null
+    // Registration accepts optional Philippine mobile numbers only.
+    // Normalize accepted numbers to E.164 for storage and future SMS integrations.
+    const phoneNumber = rawPhone && /^09\d{9}$/.test(rawPhone)
+      ? validateInternationalPhone(rawPhone, 'PH')
+      : null
     const email = normalizeEmail(body?.email)
     const password =
       typeof body?.password === 'string'
@@ -65,7 +69,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           message:
-            'Enter a valid contact number for the selected country. This checks numbering rules, not ownership.',
+            'Enter an 11-digit Philippine mobile number starting with 09, or leave it blank. Format does not prove ownership.',
         },
         { status: 400 }
       )
@@ -96,6 +100,15 @@ export async function POST(req: Request) {
       )
     }
 
+    // No public development verification URL: require a real mail provider
+    // before creating an account that cannot be activated by the owner.
+    if (!isTransactionalEmailConfigured()) {
+      return NextResponse.json(
+        { message: 'Email verification is temporarily unavailable. Please contact the parish office.' },
+        { status: 503 }
+      )
+    }
+
     const existingEmailUser = await prisma.user.findUnique({
       where: { email },
     })
@@ -104,16 +117,6 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { message: 'Email is already registered.' },
         { status: 409 }
-      )
-    }
-
-    const phoneLine = phoneNumber
-      ? await lookupPhoneLineStatus(phoneNumber)
-      : { status: 'not_checked' as const, checked: false }
-    if (isConfirmedInactive(phoneLine)) {
-      return NextResponse.json(
-        { message: 'The carrier reports that this phone number is inactive or unassigned. Check the number or leave it blank.' },
-        { status: 400 }
       )
     }
 
@@ -141,21 +144,18 @@ export async function POST(req: Request) {
     const mail = await sendTransactionalEmail({
       to: user.email,
       subject: 'Verify your Smart Parish account',
-      html: `<p>Hello ${firstName},</p><p>Please verify your Smart Parish email address by clicking the link below:</p><p><a href="${verifyUrl}">Verify email address</a></p><p>This link expires in 24 hours.</p>`,
+      // Do not interpolate user-entered names into an email HTML template.
+      html: `<p>Welcome to Smart Parish.</p><p>To verify your email address, use the secure link below:</p><p><a href="${verifyUrl}">Verify email address</a></p><p>This link expires in 24 hours. If you did not register, ignore this message.</p>`,
     })
 
     return NextResponse.json(
       {
         message: mail.sent
-          ? 'Account created. Check your email to verify your account.'
-          : 'Account created. Email delivery is not configured, so use the development verification link below.',
+          ? 'Account created. Check your inbox and spam folder for your verification email.'
+          : 'Account created but the email could not be delivered. Please use Resend Verification later or contact the parish office.',
         verificationRequired: true,
-        phoneLineStatus: phoneLine.status,
-        phoneStatusNote: phoneNumber ? phoneLineStatusExplanation(phoneLine) : undefined,
-        developmentVerificationUrl:
-          process.env.NODE_ENV === 'production'
-            ? undefined
-            : verifyUrl,
+        phoneLineStatus: 'not_checked',
+        phoneStatusNote: phoneNumber ? 'Phone format checked. After verifying your email and signing in, you can verify your mobile number by SMS in your profile.' : undefined,
       },
       { status: 201 }
     )

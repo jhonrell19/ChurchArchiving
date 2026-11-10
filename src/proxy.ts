@@ -11,6 +11,25 @@ const protectedPrefixes = [
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
+  // Browser-origin boundary for cookie-authenticated mutations. This does not
+  // replace auth/role checks in application routes or proxy-level rate limits.
+  if (pathname.startsWith('/api/') &&
+      !['GET', 'HEAD', 'OPTIONS'].includes(request.method.toUpperCase()) &&
+      pathname !== '/api/paymongo/webhook') {
+    const origin = request.headers.get('origin')
+    const configured = process.env.APP_BASE_URL?.replace(/\/$/, '')
+    const production = process.env.NODE_ENV === 'production'
+    // ngrok terminates HTTPS while the local dev server may see localhost internally.
+    // Trust ONLY the explicitly configured public URL, never wildcard ngrok domains.
+    const allowed = production ? [configured] : [request.nextUrl.origin, configured]
+    const site = request.headers.get('sec-fetch-site')
+    if (site === 'cross-site' ||
+        (origin && !allowed.includes(origin)) ||
+        (production && (!configured || !origin || origin !== configured))) {
+      return NextResponse.json({ message: 'Invalid request origin.' }, { status: 403 })
+    }
+  }
+
 
   const isProtected = protectedPrefixes.some(prefix =>
     pathname.startsWith(prefix)
@@ -39,5 +58,6 @@ export const config = {
     '/admin/:path*',
     '/burial-admin/:path*',
     '/complete-profile/:path*',
+    '/api/:path*',
   ],
 }

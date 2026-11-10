@@ -18,6 +18,16 @@ type RequestType =
   | 'Certificate of Ownership'
   | 'Land Agreement'
 
+type AvailableCemeterySlot = {
+  id: number
+  slotCode: string
+  section: string | null
+  block: string | null
+  lotNumber: string
+  lotType: string
+  mapLabel: string | null
+}
+
 type CertificateRequest = {
   id: number
   requesterUserId: number | null
@@ -57,15 +67,13 @@ type MeResponseUser = {
   address?: string | null
 }
 
-const DEMO_BASE_FEES: Record<RequestType, number> = {
-  Baptismal: 200,
-  Confirmation: 200,
+const INITIAL_FEES: Record<RequestType, number> = {
+  Baptismal: 0,
+  Confirmation: 0,
   Marriage: 0,
   'Certificate of Ownership': 0,
   'Land Agreement': 0,
 }
-
-const DEMO_URGENT_FEE = 100
 
 const REQUEST_TYPES: RequestType[] = [
   'Baptismal',
@@ -160,6 +168,40 @@ export default function RequestsPage() {
   const [requests, setRequests] = useState<CertificateRequest[]>([])
   const [requestsError, setRequestsError] = useState('')
   const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [availableSlots, setAvailableSlots] = useState<AvailableCemeterySlot[]>([])
+  const [slotsLoading, setSlotsLoading] = useState(false)
+  const [slotsError, setSlotsError] = useState('')
+  const [selectedSlotId, setSelectedSlotId] = useState<number | null>(null)
+  const [parishFees, setParishFees] = useState(INITIAL_FEES)
+  const [urgentFee, setUrgentFee] = useState(0)
+  const [pricingReady, setPricingReady] = useState(false)
+  const [paymentMode, setPaymentMode] = useState('test')
+  const [serviceFees, setServiceFees] = useState<Record<string, number>>({})
+  const [cemeteryFees, setCemeteryFees] = useState<Record<string, number>>({})
+  useEffect(() => {
+    let active = true
+    fetch('/api/backend/api/requests/pricing', { cache: 'no-store' })
+      .then(async r => { if (!r.ok) throw new Error('pricing unavailable'); return r.json() })
+      .then(data => {
+        if (!active) return
+        const f = data.fees || {}
+        setParishFees({
+          Baptismal: Number(f.baptismal) || 0,
+          Confirmation: Number(f.confirmation) || 0,
+          Marriage: Number(f.marriage) || 0,
+          'Certificate of Ownership': Number(f.ownership) || 0,
+          'Land Agreement': Number(f.land_agreement) || 0,
+        })
+        setUrgentFee(Number(data.urgentFee) || 0)
+        setPaymentMode(data.onlinePaymentMode === 'live' ? 'live' : 'test')
+        setServiceFees(data.serviceFees || {})
+        setCemeteryFees(data.cemeteryFees || {})
+        setPricingReady(true)
+      })
+      .catch(() => { if (active) setPricingReady(false) })
+    return () => { active = false }
+  }, [])
+
 
   const [formData, setFormData] = useState({
     personName: '',
@@ -255,6 +297,34 @@ export default function RequestsPage() {
     })
   }, [])
 
+  useEffect(() => {
+    if (activeType !== 'Land Agreement') return
+    let active = true
+    // Availability is advisory until staff independently approves a reservation.
+    const load = async () => {
+      setSlotsLoading(true)
+      setSlotsError('')
+      try {
+        const response = await fetch('/api/backend/api/user/cemetery/available-slots', { cache: 'no-store' })
+        const result = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(result.error || 'Unable to load cemetery lots.')
+        if (!active) return
+        const visible = Array.isArray(result.slots) ? result.slots as AvailableCemeterySlot[] : []
+        setAvailableSlots(visible)
+        setSelectedSlotId(previous => visible.some(slot => slot.id === previous) ? previous : null)
+      } catch (error) {
+        if (!active) return
+        setSlotsError(error instanceof Error ? error.message : 'Unable to load cemetery lots.')
+        setAvailableSlots([])
+        setSelectedSlotId(null)
+      } finally {
+        if (active) setSlotsLoading(false)
+      }
+    }
+    void load()
+    return () => { active = false }
+  }, [activeType])
+
   const handleChange = (name: 'personName' | 'purpose' | 'notes' | 'recordDateHint' | 'recordDetails', value: string) => {
     setFormData(prev => ({
       ...prev,
@@ -265,6 +335,11 @@ export default function RequestsPage() {
   const handleSubmit = async () => {
     if (!profile) {
       alert('Your account information is still loading. Please try again.')
+      return
+    }
+
+    if (activeType === 'Land Agreement' && !selectedSlotId) {
+      alert('Please choose an available cemetery lot first.')
       return
     }
 
@@ -294,7 +369,8 @@ export default function RequestsPage() {
             : formData.purpose.trim(),
           isUrgent: formData.isUrgent,
           recordDateHint: formData.recordDateHint.trim(),
-          recordDetails: activeType === 'Certificate of Ownership' ? formData.recordDetails.trim() : '', 
+          recordDetails: activeType === 'Certificate of Ownership' ? formData.recordDetails.trim() : '',
+          cemeterySlotId: activeType === 'Land Agreement' ? selectedSlotId : undefined,
         }),
       })
 
@@ -318,6 +394,7 @@ export default function RequestsPage() {
 
       await loadRequests()
       setView('history')
+      setSelectedSlotId(null)
 
       window.setTimeout(() => setSuccessMsg(null), 6000)
     } catch (err) {
@@ -343,8 +420,8 @@ export default function RequestsPage() {
     }
   }
 
-  const previewBaseFee = DEMO_BASE_FEES[activeType]
-  const previewUrgentFee = formData.isUrgent ? DEMO_URGENT_FEE : 0
+  const previewBaseFee = parishFees[activeType]
+  const previewUrgentFee = formData.isUrgent ? urgentFee : 0
   const previewTotal = previewBaseFee + previewUrgentFee
 
   return (
@@ -357,6 +434,21 @@ export default function RequestsPage() {
         Request parish certificates, certificates of ownership, or land agreement copies.
         Your registered account information is used automatically for every request.
       </p>
+
+      {pricingReady && (
+        <section className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <h3 className="font-semibold text-navy-mid text-sm">Published Parish Service Fees</h3>
+          <p className="mt-1 text-xs text-slate-700">Service fees are separate from certificate-copy fees. These services require staff scheduling; this panel does not initiate online payment.</p>
+          <div className="mt-3 grid gap-2 text-xs text-navy-mid sm:grid-cols-2 lg:grid-cols-3">
+            <div>Baptism service: <strong>{formatPeso(serviceFees.baptism)}</strong></div>
+            <div>Burial service: <strong>{formatPeso(serviceFees.burial)}</strong></div>
+            <div>Matrimony service: <strong>{formatPeso(serviceFees.matrimony)}</strong></div>
+            <div>Cemetery opening permit: <strong>{formatPeso(cemeteryFees.openingPermit)}</strong></div>
+            <div>Perpetual dues: <strong>{formatPeso(cemeteryFees.perpetualDuesPerYear)} / year</strong></div>
+          </div>
+          <p className="mt-2 text-xs text-slate-700">Baptismal Certificate: {formatPeso(parishFees.Baptismal)} · Confirmation Certificate: {formatPeso(parishFees.Confirmation)}. Other certificate-copy prices require parish confirmation.</p>
+        </section>
+      )}
 
       {successMsg && (
         <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-start gap-3 mb-6">
@@ -497,7 +589,7 @@ export default function RequestsPage() {
                 )}
               </div>
 
-              <div className="md:col-span-2">
+              {urgentFee > 0 && <div className="md:col-span-2">
                 <label className="flex items-start gap-3 rounded-xl border border-orange-200 bg-orange-50 p-4 cursor-pointer">
                   <input
                     type="checkbox"
@@ -516,17 +608,18 @@ export default function RequestsPage() {
                       Urgent Request
                     </p>
                     <p className="font-body text-orange-700 text-[12px] mt-1">
-                      Urgent processing adds a demo fee of {formatPeso(DEMO_URGENT_FEE)}.
+                      Urgent processing adds {formatPeso(urgentFee)} according to the parish fee schedule.
                     </p>
                   </div>
                 </label>
-              </div>
+              </div>}
 
               <div className="md:col-span-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                {!pricingReady && <p className="text-sm text-amber-700">Parish fees are unavailable. The final amount must be confirmed by staff before payment.</p>}
                 <div className="flex justify-between text-[13px] mb-1">
                   <span className="text-emerald-900">Document Fee</span>
                   <span className="font-semibold text-emerald-900">
-                    {formatPeso(previewBaseFee)}
+                    {previewBaseFee > 0 ? formatPeso(previewBaseFee) : 'Parish confirmation required'}
                   </span>
                 </div>
 
@@ -538,18 +631,18 @@ export default function RequestsPage() {
                 </div>
 
                 <div className="flex justify-between border-t border-emerald-200 pt-2 font-semibold text-emerald-800">
-                  <span>Total Demo Fee</span>
+                  <span>Estimated Request Fee</span>
                   <span>{formatPeso(previewTotal)}</span>
                 </div>
 
                 <p className="font-body text-[11px] text-emerald-700 mt-2">
-                  Demo only. No real money is charged yet. QR Ph will be integrated later.
+                  {paymentMode === 'live' ? 'Final payment is collected securely through the parish PayMongo checkout after approval.' : 'Test checkout mode. No real money is charged; prices must be approved by the parish.'}
                 </p>
               </div>
 
               <div>
                 <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1.5">
-                  {activeType === 'Certificate of Ownership' ? 'Registered Lot Holder' : 'Name on Record'} <span className="text-gold">*</span>
+                  {activeType === 'Certificate of Ownership' ? 'Registered Lot Holder' : activeType === 'Land Agreement' ? 'Applicant Name' : 'Name on Record'} <span className="text-gold">*</span>
                 </label>
                 <input
                   value={formData.personName}
@@ -582,6 +675,40 @@ export default function RequestsPage() {
                   className={inputCls}
                 />
               </div>
+
+              {activeType === 'Land Agreement' && (
+                <div className="md:col-span-2 rounded-xl border border-sky-200 bg-sky-50 p-4">
+                  <label htmlFor="cemetery-available-slot" className="block font-display text-[13px] font-semibold text-navy-mid mb-2">
+                    Available Cemetery Lots <span className="text-red-600">*</span>
+                  </label>
+                  <p className="text-[12px] text-slate-700 mb-3">
+                    Choose a lot to inquire about. This does not reserve a lot or confirm a purchase. Burial Admin will verify availability and pricing.
+                  </p>
+                  {slotsLoading ? <p className="text-[13px]">Loading available lots...</p> : slotsError ? (
+                    <p role="alert" className="text-[13px] text-red-700">{slotsError} Refresh the page and try again.</p>
+                  ) : availableSlots.length === 0 ? (
+                    <p className="text-[13px] text-amber-800">No lots are currently listed as available. Contact the Burial Office.</p>
+                  ) : (
+                    <select
+                      id="cemetery-available-slot"
+                      value={selectedSlotId ?? ''}
+                      onChange={event => setSelectedSlotId(event.target.value ? Number(event.target.value) : null)}
+                      className={inputCls}
+                      required
+                    >
+                      <option value="">Select a cemetery lot</option>
+                      {availableSlots.map(slot => (
+                        <option key={slot.id} value={slot.id}>
+                          {slot.slotCode} — {slot.section || 'No section'} / {slot.block || 'No block'} / Lot {slot.lotNumber}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {selectedSlotId != null && availableSlots.some(slot => slot.id === selectedSlotId) && (
+                    <p className="text-[12px] text-slate-700 mt-3">Selected lot: {availableSlots.find(slot => slot.id === selectedSlotId)?.slotCode}. Pending staff review.</p>
+                  )}
+                </div>
+              )}
 
               {activeType === 'Certificate of Ownership' && (
                 <div>
@@ -619,7 +746,7 @@ export default function RequestsPage() {
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={loading || profileLoading || !profile}
+                disabled={loading || profileLoading || !profile || (activeType === 'Land Agreement' && (slotsLoading || Boolean(slotsError) || !selectedSlotId))}
                 className="flex items-center justify-center gap-2 font-display text-[12px] tracking-wider bg-navy text-gold px-5 py-2.5 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <i className="ti ti-send text-[14px]" />
@@ -662,7 +789,7 @@ export default function RequestsPage() {
             <div className="space-y-4">
               {requests.map(req => {
                 const displayType = toDisplayType(req.sacramentType)
-                const canDemoPay =
+                const canPayOnline =
                   req.paymentStatus !== 'Paid' &&
                   req.totalFee > 0 &&
                   (req.status === 'Approved' || req.status === 'Ready')
@@ -810,7 +937,7 @@ export default function RequestsPage() {
 
                         {req.status === 'Approved' && req.paymentStatus !== 'Paid' && (
                           <p className="font-body text-[12px] text-amber-700">
-                            Your request is approved. PayMongo test checkout is available.
+                            Your request is approved. PayMongo {paymentMode === 'live' ? 'checkout' : 'test checkout'} is available.
                           </p>
                         )}
 
@@ -864,7 +991,7 @@ export default function RequestsPage() {
                             Hide From My History
                           </button>
                         )}
-                        {canDemoPay && (
+                        {canPayOnline && (
                           <button
                             type="button"
                             onClick={() => void payMongoCheckout(req.id)}

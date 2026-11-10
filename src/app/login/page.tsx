@@ -19,8 +19,6 @@ export default function LoginPage() {
     useState('')
   const [verificationMessage, setVerificationMessage] =
     useState('')
-  const [developmentVerificationUrl, setDevelopmentVerificationUrl] =
-    useState('')
 
   const change = (
     event: React.ChangeEvent<HTMLInputElement>
@@ -36,7 +34,6 @@ export default function LoginPage() {
 
     setLoading(true)
     setVerificationMessage('')
-    setDevelopmentVerificationUrl('')
 
     try {
       const response = await fetch('/api/auth/login', {
@@ -64,6 +61,12 @@ export default function LoginPage() {
         } else {
           alert(data.message || 'Login failed.')
         }
+        return
+      }
+
+      if (data.mfaRequired) {
+        router.replace('/staff-mfa')
+        router.refresh()
         return
       }
 
@@ -123,9 +126,6 @@ export default function LoginPage() {
 
       setVerificationMessage(
         data.message || 'Verification request processed.'
-      )
-      setDevelopmentVerificationUrl(
-        data.developmentVerificationUrl || ''
       )
     } catch {
       setVerificationMessage(
@@ -245,14 +245,6 @@ export default function LoginPage() {
               Resend verification link
             </button>
 
-            {developmentVerificationUrl && (
-              <a
-                href={developmentVerificationUrl}
-                className="block mt-2 text-blue-700 text-xs underline break-all"
-              >
-                Development verification link
-              </a>
-            )}
           </div>
         )}
 

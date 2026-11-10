@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { destroySessionToken, SESSION_COOKIE } from '@/lib/auth'
+import { MFA_PENDING_COOKIE } from '@/lib/staffMfa'
 
 export async function POST(request: NextRequest) {
   const sessionToken = request.cookies.get(SESSION_COOKIE)?.value
@@ -15,7 +16,7 @@ export async function POST(request: NextRequest) {
     { headers: { 'Cache-Control': 'no-store' } }
   )
 
-  for (const cookieName of [SESSION_COOKIE, 'token']) {
+  for (const cookieName of [SESSION_COOKIE, MFA_PENDING_COOKIE, 'token']) {
     response.cookies.set(cookieName, '', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',

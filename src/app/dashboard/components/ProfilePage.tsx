@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { parsePhoneNumberFromString } from 'libphonenumber-js/max'
 import InternationalPhoneField from '@/components/auth/InternationalPhoneField'
 import StructuredAddressField, { emptyAddress, type AddressInfo } from '@/components/auth/StructuredAddressField'
+import PhoneOtpPanel from '@/components/auth/PhoneOtpPanel'
 
 type UserProfile = {
   id: number
@@ -239,6 +240,8 @@ export default function ProfilePage() {
         </div>}
       </div>
 
+
+      <PhoneOtpPanel phoneNumber={user.phoneNumber} />
 
       <div className="bg-gold/5 border border-gold/20 rounded-xl p-4 flex items-start gap-3">
         <i className="ti ti-info-circle text-gold text-[18px] mt-0.5 flex-shrink-0" aria-hidden="true" />

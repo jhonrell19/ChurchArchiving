@@ -42,6 +42,9 @@ model User {
   sessions                Session[]
   emailVerificationTokens EmailVerificationToken[]
   passwordResetTokens     PasswordResetToken[]
+  staffMfa                StaffMfa?
+  staffMfaChallenges      StaffMfaChallenge[]
+  phoneVerification       PhoneVerification?
 }
 
 model Session {
@@ -81,4 +84,46 @@ model PasswordResetToken {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+// Additive security tables: apply scripts/migrate_account_security.py after backing up dev.db.
+model StaffMfa {
+  id                Int      @id @default(autoincrement())
+  userId            Int      @unique
+  secretEncrypted   String
+  recoveryCodesJson String
+  lastUsedStep      Int      @default(-1)
+  confirmedAt       DateTime @default(now())
+  createdAt         DateTime @default(now())
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model StaffMfaChallenge {
+  id                   Int      @id @default(autoincrement())
+  userId               Int
+  tokenHash            String   @unique
+  setupSecretEncrypted String?
+  attempts             Int      @default(0)
+  expiresAt            DateTime
+  createdAt            DateTime @default(now())
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model PhoneVerification {
+  id              Int       @id @default(autoincrement())
+  userId          Int       @unique
+  phoneNumber     String
+  otpHash         String?
+  expiresAt       DateTime?
+  lastSentAt      DateTime?
+  sendWindowStart DateTime?
+  sendsInWindow   Int       @default(0)
+  attempts        Int       @default(0)
+  verifiedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

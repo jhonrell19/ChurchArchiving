@@ -38,8 +38,8 @@ export function toE164PhilippinePhone(value: unknown) {
 export function validatePassword(password: string) {
   const errors: string[] = []
 
-  if (password.length < 8) {
-    errors.push('at least 8 characters')
+  if (password.length < 12) {
+    errors.push('at least 12 characters')
   }
   if (!/[A-Z]/.test(password)) {
     errors.push('one uppercase letter')
@@ -49,6 +49,9 @@ export function validatePassword(password: string) {
   }
   if (!/\d/.test(password)) {
     errors.push('one number')
+  }
+  if (!/[^A-Za-z0-9]/.test(password)) {
+    errors.push('one symbol')
   }
 
   return errors

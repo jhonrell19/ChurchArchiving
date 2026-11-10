@@ -1,5 +1,6 @@
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
+import parishFees from '../../../config/parish_fees.json'
 
 const SCHEDULE = [
   { day: 'Sunday',    time: '8:00 AM',  tag: 'Morning Mass'  },
@@ -102,6 +103,30 @@ export default function ServicesPage() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* Published rates; this is informational, not an online checkout. */}
+      <section className="bg-amber-50 px-7 py-14">
+        <div className="mx-auto max-w-4xl">
+          <h2 className="text-center font-display text-navy-mid text-2xl font-semibold mb-3">Parish Fee Schedule</h2>
+          <p className="text-center text-sm text-slate-700 mb-6">Service fees and certificate copy fees are different charges. Confirm arrangements with parish staff before paying.</p>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 text-sm text-navy-mid">
+            {[
+              ['Baptism service', parishFees.sacramentalServices.baptism],
+              ['Burial service', parishFees.sacramentalServices.burial],
+              ['Matrimony service', parishFees.sacramentalServices.matrimony],
+              ['Baptismal certificate copy', parishFees.certificateCopies.baptismal],
+              ['Confirmation certificate copy', parishFees.certificateCopies.confirmation],
+              ['Cemetery opening permit', parishFees.cemetery.openingPermit],
+              ['Perpetual cemetery dues (per year)', parishFees.cemetery.perpetualDuesPerYear],
+            ].map(([label, amount]) => (
+              <div key={String(label)} className="flex justify-between gap-2 rounded-lg bg-white border border-amber-100 p-3">
+                <span>{label}</span><strong>₱{Number(amount).toLocaleString('en-PH')}</strong>
+              </div>
+            ))}
+          </div>
+          <p className="mt-4 text-xs text-slate-600">These prices do not authorize a payment on their own. Marriage certificate copies, ownership copies and land agreement copies require separate parish confirmation.</p>
         </div>
       </section>
 

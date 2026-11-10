@@ -55,6 +55,8 @@ function isAllowed(role: Role, method: string, path: string) {
     return role === 'USER' && m === 'GET'
   }
 
+  if (path === 'api/requests/pricing') return m === 'GET' && ['USER', 'ADMIN', 'BURIAL_ADMIN'].includes(role)
+
   if (path === 'api/requests') {
     if (m === 'POST') return role === 'USER'
     if (m === 'GET') return ['USER', 'ADMIN', 'BURIAL_ADMIN'].includes(role)

@@ -1,0 +1,22 @@
+{
+  "effectiveDate": "2026-11-09",
+  "currency": "PHP",
+  "certificateCopies": {
+    "baptismal": 200,
+    "confirmation": 200,
+    "marriage": null,
+    "ownership": null,
+    "land_agreement": null
+  },
+  "sacramentalServices": {
+    "baptism": 2000,
+    "burial": 2000,
+    "matrimony": 5000
+  },
+  "cemetery": {
+    "openingPermit": 1000,
+    "perpetualDuesPerYear": 300
+  },
+  "urgentSurcharge": null,
+  "notes": "A sacrament service is not a certificate copy. Unpriced categories are inquiries only, not automatic online charges."
+}

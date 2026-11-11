@@ -10,6 +10,9 @@ const nextConfig: NextConfig = {
   "exporter-lily-shack.ngrok-free.dev",
 ],
 
+ experimental: {
+    proxyClientMaxBodySize: '100mb',
+  },
 };
 
 

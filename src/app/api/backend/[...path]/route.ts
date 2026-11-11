@@ -195,9 +195,36 @@ async function forward(request: NextRequest, context: { params: Promise<{ path: 
 )
 
   try {
-    const body = ['GET', 'HEAD'].includes(request.method.toUpperCase())
-      ? undefined
-      : await request.arrayBuffer()
+    // Mass creation uses multipart/form-data. Re-encode its parts instead of
+    // forwarding a raw byte buffer with an inherited boundary header: the
+    // upstream Flask parser must receive a matching Content-Type/boundary.
+    // All other API endpoints retain their existing forwarding behavior.
+    let body: ArrayBuffer | FormData | undefined
+    if (['GET', 'HEAD'].includes(request.method.toUpperCase())) {
+      body = undefined
+    } else if (
+      path === 'api/masses' &&
+      request.method.toUpperCase() === 'POST' &&
+      (request.headers.get('content-type') || '').toLowerCase().startsWith('multipart/form-data')
+    ) {
+      const massForm = await request.formData()
+      const title = massForm.get('title')
+
+      if (typeof title !== 'string' || !title.trim()) {
+        console.error('Mass upload: multipart title field missing at Next.js proxy.')
+        return NextResponse.json(
+          { error: 'Mass title was not received by the Next.js API. Check the form request payload.' },
+          { status: 400 }
+        )
+      }
+
+      // fetch() sets the correct multipart boundary for the new FormData.
+      // Do NOT pass the browser's original Content-Type/boundary through.
+      headers.delete('content-type')
+      body = massForm
+    } else {
+      body = await request.arrayBuffer()
+    }
 
     const upstreamResponse = await fetch(upstreamUrl, {
       method: request.method,

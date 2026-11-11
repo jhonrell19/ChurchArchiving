@@ -1,5 +1,8 @@
 'use client'
 
+import ParishLogo from '../components/ParishLogo'
+
+
 import Link from 'next/link'
 import { useState } from 'react'
 
@@ -31,7 +34,7 @@ export default function ForgotPasswordPage() {
     <div className="min-h-screen bg-gradient-to-br from-[#fffaf0] via-white to-[#eaf4ff] flex items-center justify-center px-6 py-20">
       <div className="w-full max-w-md bg-white border border-amber-100 rounded-3xl p-10 shadow-xl shadow-slate-200/60">
         <div className="text-center mb-7">
-          <div className="text-gold text-4xl mb-3">✝</div>
+          <div className="mb-3 flex justify-center"><ParishLogo height={88} /></div>
           <h1 className="font-display text-navy-mid text-lg font-semibold">Password Recovery</h1>
           <p className="font-body text-slate-500 text-[13px] mt-2">Enter the email address registered to your parish account.</p>
         </div>

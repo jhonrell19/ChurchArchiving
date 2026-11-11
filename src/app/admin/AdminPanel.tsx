@@ -1,5 +1,8 @@
 'use client'
 
+import ParishLogo from '../components/ParishLogo'
+
+
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ADMIN_NAV } from './data/navigation'
@@ -93,7 +96,7 @@ export default function AdminPanel() {
       >
         <div className="px-6 py-6 border-b border-slate-100 bg-gradient-to-br from-amber-50 to-white">
           <div className="flex items-center gap-3">
-            <span className="text-gold text-xl">✝</span>
+            <ParishLogo height={48} />
             <div>
               <p className="font-display text-navy-mid text-[12px] tracking-wide leading-tight font-semibold">
                 Smart Parish System

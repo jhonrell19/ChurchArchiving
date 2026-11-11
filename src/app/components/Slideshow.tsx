@@ -6,6 +6,7 @@ import Link from 'next/link'
 const SLIDES = [
   {
     background: 'from-[#0d2a47] via-[#17456f] to-[#d8b35c]',
+    image: '/slides/slide1.jpg',
     label: 'Welcome',
     title: 'Iglesia Filipina Independiente',
     verse: '"For God so loved the world that he gave his one and only Son." — John 3:16',
@@ -14,6 +15,7 @@ const SLIDES = [
   },
   {
     background: 'from-[#17365a] via-[#345f82] to-[#efe4c7]',
+    image: '/slides/slide2.jpg',
     label: 'Our Church',
     title: 'A Place of Faith & Tradition',
     verse: '"The Lord is my shepherd; I shall not want." — Psalm 23:1',
@@ -22,6 +24,7 @@ const SLIDES = [
   },
   {
     background: 'from-[#122b46] via-[#24577f] to-[#cfaa4d]',
+    image: '/slides/slide3.png',
     label: 'Worship With Us',
     title: 'Sunday Mass Every Week',
     verse: '"Where two or three gather in my name, there am I." — Matthew 18:20',
@@ -30,6 +33,7 @@ const SLIDES = [
   },
   {
     background: 'from-[#1c3b5b] via-[#567995] to-[#f4ead2]',
+    image: '/slides/slide4.jpg',
     label: 'Community',
     title: 'Growing Together in Christ',
     verse: '"Love one another as I have loved you." — John 13:34',
@@ -69,6 +73,12 @@ export default function Slideshow() {
             ${s.background} transition-opacity duration-1000
             ${i === cur ? 'opacity-100' : 'opacity-0'}`}
         >
+          <div
+            className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+            style={{
+              backgroundImage: `linear-gradient(rgba(7, 25, 48, 0.55), rgba(7, 25, 48, 0.55)), url("${s.image}")`,
+            }}
+          />
           <div className="absolute inset-0 bg-white/10" />
           <div className="absolute inset-0 bg-grid-gold pointer-events-none" />
 

@@ -1,5 +1,8 @@
 'use client'
 
+import ParishLogo from '../components/ParishLogo'
+
+
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
@@ -143,8 +146,8 @@ export default function LoginPage() {
 
       <div className="relative z-10 w-full max-w-md bg-white border border-amber-100 rounded-3xl px-8 md:px-10 py-10 shadow-xl shadow-slate-200/60">
         <div className="text-center mb-8">
-          <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center">
-            <span className="text-gold text-3xl">✝</span>
+          <div className="mx-auto mb-4 flex items-center justify-center">
+            <ParishLogo height={96} />
           </div>
 
           <h1 className="font-display text-navy-mid text-lg tracking-wide mb-2 font-semibold">

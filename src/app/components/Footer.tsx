@@ -1,5 +1,8 @@
 'use client'
 
+import ParishLogo from './ParishLogo'
+
+
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 
@@ -28,7 +31,7 @@ export default function Footer() {
       <div className="max-w-5xl mx-auto flex flex-col items-center gap-5">
 
         <div className="flex items-center gap-4">
-          <span className="text-gold/80 text-3xl">✝</span>
+          <ParishLogo height={56} />
           <div>
             <p className="font-display text-gold text-sm tracking-wide mb-1">
               Iglesia Filipina Independiente

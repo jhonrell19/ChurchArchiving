@@ -1,5 +1,8 @@
 'use client'
 
+import ParishLogo from '../components/ParishLogo'
+
+
 import Link from 'next/link'
 import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
@@ -40,7 +43,7 @@ function VerifyEmailContent() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#fffaf0] via-white to-[#eaf4ff] flex items-center justify-center px-6 py-20">
       <div className="w-full max-w-md bg-white border border-amber-100 rounded-3xl p-10 text-center shadow-xl shadow-slate-200/60">
-        <div className="text-gold text-4xl mb-4">✝</div>
+        <div className="mb-4 flex justify-center"><ParishLogo height={88} /></div>
         <h1 className="font-display text-navy-mid text-xl font-semibold mb-3">
           Email Verification
         </h1>
@@ -80,7 +83,7 @@ function VerifyEmailFallback() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#fffaf0] via-white to-[#eaf4ff] flex items-center justify-center px-6 py-20">
       <div className="w-full max-w-md bg-white border border-amber-100 rounded-3xl p-10 text-center shadow-xl shadow-slate-200/60">
-        <div className="text-gold text-4xl mb-4">✝</div>
+        <div className="mb-4 flex justify-center"><ParishLogo height={88} /></div>
         <h1 className="font-display text-navy-mid text-xl font-semibold mb-3">
           Email Verification
         </h1>

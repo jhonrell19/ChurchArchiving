@@ -1,5 +1,8 @@
 'use client'
 
+import ParishLogo from '../components/ParishLogo'
+
+
 import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
@@ -66,7 +69,7 @@ function ResetPasswordForm() {
     <div className="min-h-screen bg-gradient-to-br from-[#fffaf0] via-white to-[#eaf4ff] flex items-center justify-center px-6 py-20">
       <div className="w-full max-w-md bg-white border border-amber-100 rounded-3xl p-10 shadow-xl shadow-slate-200/60">
         <div className="text-center mb-8">
-          <span className="block text-gold text-4xl mb-3">✝</span>
+          <div className="mb-3 flex justify-center"><ParishLogo height={88} /></div>
           <h1 className="font-display text-navy-mid text-lg font-semibold">
             Reset Password
           </h1>

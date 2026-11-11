@@ -1,5 +1,8 @@
 'use client'
 
+import ParishLogo from '../components/ParishLogo'
+
+
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { ReactNode } from 'react'
@@ -127,8 +130,8 @@ export default function CompleteProfilePage() {
     <div className="min-h-screen bg-gradient-to-br from-[#fffaf0] via-white to-[#eaf4ff] flex items-center justify-center px-6 py-16">
       <div className="w-full max-w-2xl bg-white border border-amber-100 rounded-3xl p-8 md:p-10 shadow-xl">
         <div className="text-center mb-8">
-          <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center">
-            <span className="text-gold text-3xl">✝</span>
+          <div className="mx-auto mb-4 flex items-center justify-center">
+            <ParishLogo height={96} />
           </div>
 
           <h1 className="text-2xl font-semibold text-navy-mid">

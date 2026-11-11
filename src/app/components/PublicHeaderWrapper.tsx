@@ -1,5 +1,8 @@
 'use client'
 
+import ParishLogo from './ParishLogo'
+
+
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 
@@ -22,7 +25,7 @@ export default function PublicHeaderWrapper() {
     <header className="bg-navy border-b border-gold/20">
       <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="text-gold text-xl">✝</span>
+          <ParishLogo height={44} />
           <div>
             <p className="font-display text-gold text-[13px] tracking-wide">
               Iglesia Filipina Independiente

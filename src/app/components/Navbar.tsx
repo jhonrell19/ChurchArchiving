@@ -1,5 +1,8 @@
 'use client'
 
+import ParishLogo from './ParishLogo'
+
+
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -54,7 +57,7 @@ export default function Navbar() {
       <div className="max-w-6xl mx-auto px-7 flex items-center justify-between" style={{ height: '68px' }}>
 
         <Link href="/" className="flex items-center gap-3">
-          <span className="text-gold text-2xl animate-pulse-cross">✝</span>
+          <ParishLogo height={44} />
           <div className="flex flex-col">
             <span className="font-display text-gold text-[13px] tracking-wide leading-tight">Iglesia Filipina Independiente</span>
             <span className="font-body text-gold/50 text-[10px] tracking-widest">Maragondon, Cavite</span>

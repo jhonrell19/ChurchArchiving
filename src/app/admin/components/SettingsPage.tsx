@@ -1,6 +1,6 @@
 'use client'
 
-
+import CertificateFeesEditor from './CertificateFeesEditor'
 export default function SettingsPage() {
 
   
@@ -13,6 +13,9 @@ export default function SettingsPage() {
   return (
     <div className="max-w-lg">
       <h2 className="font-display text-navy-mid text-xl font-semibold mb-1">Settings</h2>
+
+       <CertificateFeesEditor />
+
       <p className="font-body text-[#6b8caa] text-[14px] mb-6">System and administrator account settings.</p>
       <div className="space-y-4">
         {fields.map(({ label, value, icon }) => (

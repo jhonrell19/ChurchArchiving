@@ -83,6 +83,51 @@ const REQUEST_TYPES: RequestType[] = [
   'Land Agreement',
 ]
 
+const PURPOSE_OPTIONS: Record<RequestType, string[]> = {
+  Baptismal: [
+    'School Requirements',
+    'Employment Requirements',
+    'Church Requirements',
+    'Personal Record',
+    'Government or Legal Requirements',
+    'Other (Specify in Notes)',
+  ],
+
+  Confirmation: [
+    'Church Marriage Requirements',
+    'School Requirements',
+    'Employment Requirements',
+    'Personal Record',
+    'Government or Legal Requirements',
+    'Other (Specify in Notes)',
+  ],
+
+  Marriage: [
+    'Civil Registration Requirements',
+    'Government or Legal Requirements',
+    'Visa or Immigration Requirements',
+    'Personal Record',
+    'Other (Specify in Notes)',
+  ],
+
+  'Certificate of Ownership': [
+    'Proof of Cemetery Lot Ownership',
+    'Request Copy of Ownership Certificate',
+    'Replacement of Lost or Damaged Certificate',
+    'Cemetery Lot Ownership Verification',
+    'Correction of Ownership Details',
+    'Other (Specify in Notes)',
+  ],
+
+  'Land Agreement': [
+    'Apply for Cemetery Lot Agreement',
+    'Request Copy of Existing Land Agreement',
+    'Review or Update Agreement Information',
+    'Clarification of Cemetery Lot Terms',
+    'Other (Specify in Notes)',
+  ],
+}
+
 const REQUEST_TYPE_ICONS: Record<RequestType, string> = {
   Baptismal: REQUEST_ICONS.Baptismal || 'ti-droplet',
   Confirmation: REQUEST_ICONS.Confirmation || 'ti-shield-check',
@@ -349,10 +394,24 @@ export default function RequestsPage() {
     }
 
     if (!formData.purpose.trim()) {
-      alert('Please enter the request purpose.')
-      return
-    }
+  alert('Please select a request purpose.')
+  return
+}
 
+if (
+  !PURPOSE_OPTIONS[activeType].includes(formData.purpose)
+) {
+  alert('Please select a valid purpose for this document.')
+  return
+}
+
+if (
+  formData.purpose === 'Other (Specify in Notes)' &&
+  !formData.notes.trim()
+) {
+  alert('Please specify your purpose in the Notes field.')
+  return
+}
     try {
       setLoading(true)
 
@@ -506,7 +565,14 @@ export default function RequestsPage() {
               <button
                 type="button"
                 key={type}
-                onClick={() => setActiveType(type)}
+                onClick={() => {
+  setActiveType(type)
+
+  setFormData((prev) => ({
+    ...prev,
+    purpose: '',
+  }))
+}}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all ${
                   activeType === type
                     ? 'bg-navy border-navy text-gold'
@@ -653,16 +719,29 @@ export default function RequestsPage() {
               </div>
 
               <div>
-                <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1.5">
-                  Purpose <span className="text-gold">*</span>
-                </label>
-                <input
-                  value={formData.purpose}
-                  onChange={e => handleChange('purpose', e.target.value)}
-                  placeholder="School, employment, personal copy, etc."
-                  className={inputCls}
-                />
-              </div>
+  <label
+    htmlFor="request-purpose"
+    className="block font-display text-[11px] tracking-wider text-navy-mid mb-1.5"
+  >
+    Purpose <span className="text-gold">*</span>
+  </label>
+
+  <select
+    id="request-purpose"
+    value={formData.purpose}
+    onChange={(e) => handleChange('purpose', e.target.value)}
+    className={inputCls}
+    required
+  >
+    <option value="">Select Purpose</option>
+
+    {PURPOSE_OPTIONS[activeType].map((purpose) => (
+      <option key={purpose} value={purpose}>
+        {purpose}
+      </option>
+    ))}
+  </select>
+</div>
 
               <div>
                 <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1.5">

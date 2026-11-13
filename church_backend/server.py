@@ -299,6 +299,75 @@ CERTIFICATE_BASE_FEES = dict(CERTIFICATE_COPY_FEES)
 CERTIFICATE_URGENT_FEE = 0
 
 
+# Editable certificate-request fee catalog.
+# Amounts are whole Philippine pesos.
+FEE_CODES = (
+    "baptismal",
+    "confirmation",
+    "marriage",
+    "ownership",
+    "land_agreement",
+    "urgent",
+)
+
+
+def initialize_certificate_fees():
+    """Create and seed the catalog in development only."""
+    if os.getenv("SMART_PARISH_ENV", "development").lower() == "production":
+        return  # Production requires an approved database migration.
+
+    with app.app_context():
+        db.session.execute(text("""
+            CREATE TABLE IF NOT EXISTS certificate_fee_settings (
+                code TEXT PRIMARY KEY,
+                amount_php INTEGER NOT NULL CHECK (amount_php >= 0),
+                updated_by TEXT NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+
+        defaults = {
+            **CERTIFICATE_BASE_FEES,
+            "urgent": CERTIFICATE_URGENT_FEE,
+        }
+
+        for code in FEE_CODES:
+            db.session.execute(
+                text("""
+                    INSERT OR IGNORE INTO certificate_fee_settings
+                        (code, amount_php, updated_by)
+                    VALUES (:code, :amount, 'INITIAL_CATALOG')
+                """),
+                {
+                    "code": code,
+                    "amount": int(defaults.get(code, 0)),
+                },
+            )
+
+        db.session.commit()
+
+
+def get_certificate_fees():
+    """Always read the currently published fees from the database."""
+    rows = db.session.execute(text("""
+        SELECT code, amount_php
+        FROM certificate_fee_settings
+    """)).fetchall()
+
+    fees = {row[0]: int(row[1]) for row in rows}
+
+    missing = set(FEE_CODES) - set(fees)
+    if missing:
+        raise RuntimeError(
+            "Certificate fee catalog is incomplete: "
+            + ", ".join(sorted(missing))
+        )
+
+    return fees
+
+
+initialize_certificate_fees()
+
 
 
 def current_user_id():
@@ -2643,37 +2712,28 @@ def api_create_request():
                 return {"error": "That cemetery lot is no longer available. Refresh the list."}, 409
             record_details = f"Lot inquiry: {selected_slot.slot_code} (slot #{selected_slot.id})"
 
-        if is_urgent and CERTIFICATE_URGENT_FEE == 0:
-            return {"error": "Urgent processing is not available until parish fees are approved."}, 400
+        
+        # Get the current certificate prices set by Main Admin
+        published_fees = get_certificate_fees()
 
-        base_fee = CERTIFICATE_BASE_FEES.get(
+        current_urgent_fee = published_fees["urgent"]
 
-            sacrament_type,
+        if is_urgent and current_urgent_fee == 0:
+            return {
+                "error": "Urgent processing is not currently available."
+            }, 400
 
-            0
-
-        )
-
-
+        # Use the price configured by Main Admin
+        base_fee = published_fees[sacrament_type]
 
         urgent_fee = (
-
-            CERTIFICATE_URGENT_FEE
-
-            if is_urgent
-
-            else 0
-
+            current_urgent_fee if is_urgent else 0
         )
 
-
-
+        # Store the quoted price for this request
         total_fee = (
-
             base_fee
-
             + urgent_fee
-
         )
 
 
@@ -5330,20 +5390,112 @@ def api_cemetery_file(filepath):
 
 
 
-@app.route('/api/requests/pricing', methods=['GET'])
+
+@app.route("/api/requests/pricing", methods=["GET", "PATCH"])
 def certificate_pricing():
-    denied = require_roles('USER', 'ADMIN', 'BURIAL_ADMIN')
-    if denied: return denied
+    if request.method == "PATCH":
+        denied = require_roles("ADMIN")
+        if denied:
+            return denied
+
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return {"error": "Expected JSON data."}, 400
+
+        submitted = payload.get("fees")
+        if not isinstance(submitted, dict):
+            return {"error": "Fee schedule is required."}, 400
+
+        if set(submitted) != set(FEE_CODES):
+            return {
+                "error": "Submit all certificate fees and the urgent surcharge."
+            }, 400
+
+        validated = {}
+        for code in FEE_CODES:
+            amount = submitted[code]
+
+            if type(amount) is not int or not (0 <= amount <= 1000000):
+                return {
+                    "error": f"Invalid fee for {code}. Enter whole pesos from 0 to 1,000,000."
+                }, 400
+
+            validated[code] = amount
+
+        try:
+            previous = get_certificate_fees()
+            changed = []
+
+            for code, new_amount in validated.items():
+                old_amount = previous[code]
+
+                if old_amount == new_amount:
+                    continue
+
+                db.session.execute(
+                    text("""
+                        UPDATE certificate_fee_settings
+                        SET amount_php = :amount,
+                            updated_by = :admin,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE code = :code
+                    """),
+                    {
+                        "amount": new_amount,
+                        "admin": getattr(g, "user_email", None) or "ADMIN",
+                        "code": code,
+                    },
+                )
+
+                changed.append(f"{code}: PHP {old_amount} -> PHP {new_amount}")
+
+            if changed:
+                db.session.add(
+                    AuditLog(
+                        user=getattr(g, "user_email", None) or "ADMIN",
+                        action="Updated certificate fee schedule: " + "; ".join(changed),
+                        document_id=None,
+                    )
+                )
+
+            db.session.commit()
+
+            return {
+                "message": "Certificate request prices saved.",
+                "fees": get_certificate_fees(),
+            }, 200
+
+        except Exception:
+            db.session.rollback()
+            app.logger.exception("Failed to update certificate prices")
+            return {
+                "error": "Unable to save certificate prices."
+            }, 500
+
+    denied = require_roles("USER", "ADMIN", "BURIAL_ADMIN")
+    if denied:
+        return denied
+
+    fees = get_certificate_fees()
+
     return {
-        'fees': CERTIFICATE_BASE_FEES,
-        'urgentFee': CERTIFICATE_URGENT_FEE,
-        'currency': 'PHP',
-        'onlinePaymentMode': os.getenv('PAYMONGO_MODE', 'test'),
-        'serviceFees': PARISH_FEES['sacramentalServices'],
-        'cemeteryFees': PARISH_FEES['cemetery'],
-        'note': PARISH_FEES['notes'],
-        'onlineCheckoutAvailableFor': ['baptismal', 'confirmation'],
+        "fees": {
+            code: fees[code]
+            for code in FEE_CODES
+            if code != "urgent"
+        },
+        "urgentFee": fees["urgent"],
+        "currency": "PHP",
+        "onlinePaymentMode": os.getenv("PAYMONGO_MODE", "test"),
+        "serviceFees": PARISH_FEES["sacramentalServices"],
+        "cemeteryFees": PARISH_FEES["cemetery"],
+        "note": PARISH_FEES["notes"],
+        "onlineCheckoutAvailableFor": [
+            "baptismal",
+            "confirmation",
+        ],
     }, 200
+
 
 
 # PAYMONGO_CERTIFICATE_V1 — server-authoritative checkout and reconciliation
@@ -5426,12 +5578,19 @@ def certificate_checkout(request_id):
         except Exception:
             app.logger.exception("Cannot safely reconcile previous PayMongo checkout")
             return {"error": "Unable to verify prior checkout. Retry later or contact staff."}, 502
-    price = CERTIFICATE_BASE_FEES.get(cert.sacrament_type, 0)
-    if price <= 0: return {"error": "Fee for this certificate has not been confirmed by the parish."}, 409
-    total = price + (CERTIFICATE_URGENT_FEE if cert.is_urgent else 0)
-    if cert.total_fee != total or cert.base_fee != price or cert.urgent_fee != total-price:
-        # Do not silently overwrite previously quoted amount; staff must reconcile it first.
-        return {"error": "Stored request fee does not match the configured parish fee. Please reconcile before checkout."}, 409
+    price = int(cert.base_fee or 0)
+    urgent = int(cert.urgent_fee or 0)
+    total = int(cert.total_fee or 0)
+
+    if price <= 0:
+        return {
+            "error": "This request has no approved payable certificate fee."
+        }, 409
+
+    if urgent < 0 or total != price + urgent:
+        return {
+            "error": "Stored request fee is inconsistent; contact staff."
+        }, 409
     public_url = os.getenv("APP_BASE_URL", "").rstrip("/")
     if not public_url.startswith("https://"):
         return {"error": "APP_BASE_URL must be a public HTTPS address for PayMongo checkout."}, 503
@@ -5495,9 +5654,15 @@ def paymongo_confirm_internal():
         if actual.get("livemode") is not (pay_mode == "live"): return {"error": "Payment environment mismatch"}, 409
         if actual.get("reference_number") != "PARISH-CERT-" + str(cert.id):
             return {"error": "Reference mismatch"}, 409
-        price = CERTIFICATE_BASE_FEES.get(cert.sacrament_type, 0)
-        total = price + (CERTIFICATE_URGENT_FEE if cert.is_urgent else 0)
-        if price <= 0 or cert.total_fee != total: return {"error": "Amount mismatch"}, 409
+        price = int(cert.base_fee or 0)
+        urgent = int(cert.urgent_fee or 0)
+        total = int(cert.total_fee or 0)
+
+        if price <= 0 or urgent < 0 or total != price + urgent:
+            return {
+                "error": "Stored request fee is inconsistent."
+            }, 409
+
         payments = actual.get("payments") or []
         verified_payments = [
             p for p in payments if isinstance(p, dict) and

@@ -5594,7 +5594,14 @@ def certificate_checkout(request_id):
     public_url = os.getenv("APP_BASE_URL", "").rstrip("/")
     if not public_url.startswith("https://"):
         return {"error": "APP_BASE_URL must be a public HTTPS address for PayMongo checkout."}, 503
-    methods = [s.strip() for s in os.getenv("PAYMONGO_METHODS", "card").split(",") if s.strip()]
+    
+    methods = [s.strip() for s in os.getenv("PAYMONGO_METHODS", "qrph").split(",") if s.strip()]
+
+    if methods != ["qrph"]:
+        return {
+            "error": "Only QR Ph payments are supported."
+        }, 503
+
     if not methods: return {"error": "No PayMongo methods configured"}, 500
     if pay_mode == 'live' and cert.total_fee <= 0:
         return {"error": "This request has no approved payable fee."}, 409

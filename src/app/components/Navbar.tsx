@@ -1,29 +1,31 @@
+
 'use client'
 
 import ParishLogo from './ParishLogo'
-
-
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 const LINKS = [
-  { href: '/',         label: 'Home'     },
-  { href: '/about',    label: 'About'    },
+  { href: '/', label: 'Home' },
+  { href: '/about', label: 'About' },
   { href: '/services', label: 'Services' },
-  { href: '/contact',  label: 'Contact'  },
+  { href: '/contact', label: 'Contact' },
 ]
 
 export default function Navbar() {
-  const [mounted, setMounted]   = useState(false)
+  const [mounted, setMounted] = useState(false)
   const [scrolled, setScrolled] = useState(false)
-  const [open, setOpen]         = useState(false)
+  const [open, setOpen] = useState(false)
   const pathname = usePathname()
 
   useEffect(() => {
     queueMicrotask(() => setMounted(true))
+
     const fn = () => setScrolled(window.scrollY > 50)
+
     window.addEventListener('scroll', fn)
+
     return () => window.removeEventListener('scroll', fn)
   }, [])
 
@@ -31,55 +33,116 @@ export default function Navbar() {
     queueMicrotask(() => setOpen(false))
   }, [pathname])
 
-  // --- CRITICAL RETURN ---
-  // If we are on the server, return nothing. This prevents the server/client HTML mismatch.
-  if (!mounted) {
-    return null 
+  if (!mounted) return null
+
+  if (
+    pathname.startsWith('/dashboard') ||
+    pathname.startsWith('/admin') ||
+    pathname.startsWith('/burial-admin')
+  ) {
+    return null
   }
 
-  // --- HIDE ON DASHBOARD & ADMIN ROUTES ---
-  // If the URL path starts with /dashboard or /admin, do not render the navbar.
-  if (
-  pathname.startsWith('/dashboard') ||
-  pathname.startsWith('/admin') ||
-  pathname.startsWith('/burial-admin')
-) {
-  return null
-}
+  const navBg = scrolled
+    ? 'bg-navy/95 shadow-[0_4px_24px_rgba(0,0,0,0.3)]'
+    : 'bg-navy'
 
-  // Now that we've checked !mounted, we know safely we are on the client side!
-  const navBg = scrolled ? 'bg-navy/95 shadow-[0_4px_24px_rgba(0,0,0,0.3)]' : 'bg-navy'
-  const linkCls = (href: string) => `font-display text-[11px] tracking-wider px-3 py-1.5 rounded border-b-[1.5px] transition-all duration-200 ${pathname === href ? 'text-gold border-gold' : 'text-gold/70 border-transparent hover:text-gold hover:border-gold'}`
-  const mobileLinkCls = (href: string) => `font-display text-[11px] tracking-wider py-2 border-b border-gold/10 ${pathname === href ? 'text-gold' : 'text-gold/60 hover:text-gold'}`
+  // Navigation text: 16px / 18px on large screens
+  const linkCls = (href: string) =>
+    `font-display text-base lg:text-lg font-bold tracking-wide
+    px-3 py-2 rounded border-b-[2px]
+    transition-all duration-200 ${
+      pathname === href
+        ? 'text-white border-gold'
+        : 'text-white border-transparent hover:border-gold'
+    }`
+
+  const mobileLinkCls = (href: string) =>
+    `font-display text-base font-bold tracking-wide
+    py-3 border-b border-gold/10 ${
+      pathname === href
+        ? 'text-white'
+        : 'text-white/90 hover:text-white'
+    }`
 
   return (
-    <nav className={`fixed top-0 left-0 right-0 z-50 border-b border-gold/20 transition-all duration-300 ${navBg}`}>
-      <div className="max-w-6xl mx-auto px-7 flex items-center justify-between" style={{ height: '68px' }}>
-
+    <nav
+      className={`fixed top-0 left-0 right-0 z-50 border-b border-gold/20 transition-all duration-300 ${navBg}`}
+    >
+      <div
+        className="max-w-8xl mx-auto px-5 flex items-center justify-between"
+        style={{ height: '76px' }}
+      >
+        {/* Church Logo and Name */}
         <Link href="/" className="flex items-center gap-3">
           <ParishLogo height={44} />
+
           <div className="flex flex-col">
-            <span className="font-display text-gold text-[13px] tracking-wide leading-tight">Iglesia Filipina Independiente</span>
-            <span className="font-body text-gold/50 text-[10px] tracking-widest">Maragondon, Cavite</span>
+            <span className="font-display text-white text-[16px] md:text-[18px] font-extrabold tracking-wide leading-tight">
+              Iglesia Filipina Independiente
+            </span>
+
+            <span className="font-body text-white text-[13px] font-bold tracking-wide">
+              Maragondon, Cavite
+            </span>
           </div>
         </Link>
 
-        <ul className="hidden md:flex items-center gap-1">
+        {/* Desktop Navigation */}
+        <ul className="hidden lg:flex items-center gap-2">
           {LINKS.map(({ href, label }) => (
-            <li key={href}><Link href={href} className={linkCls(href)}>{label}</Link></li>
+            <li key={href}>
+              <Link href={href} className={linkCls(href)}>
+                {label}
+              </Link>
+            </li>
           ))}
-          <li><Link href="/login" className="font-display text-[11px] tracking-wider text-gold px-4 py-1.5 rounded-md border border-gold/40 bg-gold/10 hover:bg-gold/20 transition-all duration-200 ml-2">Login</Link></li>
+
+          <li>
+            <Link
+              href="/login"
+              className="font-display text-lg font-bold tracking-wide text-white px-6 py-2 rounded-md border border-gold/60 bg-gold/10 hover:bg-gold/20 transition-all duration-200 ml-2"
+            >
+              Login
+            </Link>
+          </li>
         </ul>
 
-        <button className="md:hidden flex flex-col gap-1.5 p-1" onClick={() => setOpen(p => !p)} aria-label="Toggle menu">
-          {[0,1,2].map(i => <span key={i} className="block w-6 h-0.5 bg-gold rounded" />)}
+        {/* Mobile Menu Button */}
+        <button
+          className="lg:hidden flex flex-col gap-1.5 p-2"
+          onClick={() => setOpen(p => !p)}
+          aria-label="Toggle menu"
+          aria-expanded={open}
+        >
+          {[0, 1, 2].map(i => (
+            <span
+              key={i}
+              className="block w-6 h-0.5 bg-gold rounded"
+            />
+          ))}
         </button>
       </div>
 
+      {/* Mobile Navigation */}
       {open && (
-        <div className="md:hidden bg-navy border-t border-gold/10 px-7 py-4 flex flex-col gap-1">
-          {LINKS.map(({ href, label }) => <Link key={href} href={href} className={mobileLinkCls(href)}>{label}</Link>)}
-          <Link href="/login" className="font-display text-[11px] tracking-wider text-gold px-4 py-1.5 rounded-md">Login</Link>
+        <div className="lg:hidden bg-navy border-t border-gold/10 px-7 py-4 flex flex-col gap-1">
+          {LINKS.map(({ href, label }) => (
+            <Link
+              key={href}
+              href={href}
+              className={mobileLinkCls(href)}
+            >
+              {label}
+            </Link>
+          ))}
+
+          <Link
+            href="/login"
+            className="font-display text-base font-bold tracking-wide text-white px-4 py-3 rounded-md"
+          >
+            Login
+          </Link>
         </div>
       )}
     </nav>

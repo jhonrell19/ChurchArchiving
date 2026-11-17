@@ -76,26 +76,26 @@ export default function Slideshow() {
           <div
             className="absolute inset-0 bg-cover bg-center bg-no-repeat"
             style={{
-              backgroundImage: `linear-gradient(rgba(7, 25, 48, 0.55), rgba(7, 25, 48, 0.55)), url("${s.image}")`,
+              backgroundImage: `linear-gradient(rgba(7, 25, 48, 0.64), rgba(7, 25, 48, 0.64)), url("${s.image}")`,
             }}
           />
           <div className="absolute inset-0 bg-white/10" />
           <div className="absolute inset-0 bg-grid-gold pointer-events-none" />
 
-          <div className="relative z-10 text-center px-6 max-w-2xl">
-            <span className="block font-display text-[11px] tracking-[3px] uppercase text-gold/70 mb-4">
+          <div className="relative z-10 text-center px-6 max-w-4xl">
+            <span className="block font-display text-[15px] md:text-[17px] font-bold tracking-[2px] uppercase text-white mb-4 drop-shadow-lg">
               {s.label}
             </span>
             <div className="text-gold text-4xl mb-4 animate-pulse-cross">✝</div>
             <h1
-              className="font-display font-semibold text-gold leading-tight mb-4"
-              style={{ fontSize: 'clamp(22px, 4vw, 42px)' }}
+              className="font-display font-extrabold text-white leading-tight mb-4 drop-shadow-[0_4px_16px_rgba(0,0,0,0.75)]"
+              style={{ fontSize: 'clamp(38px, 5.6vw, 68px)' }}
             >
               {s.title}
             </h1>
             <p
-              className="font-body italic text-txt-lt leading-relaxed max-w-lg mx-auto mb-7"
-              style={{ fontSize: 'clamp(13px, 2vw, 17px)' }}
+              className="font-body italic font-bold text-white leading-relaxed max-w-3xl mx-auto mb-7 drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)]"
+              style={{ fontSize: 'clamp(17px, 2.2vw, 23px)' }}
             >
               {s.verse}
             </p>

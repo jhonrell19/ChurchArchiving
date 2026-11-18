@@ -1,12 +1,25 @@
-FROM python:3.11-slim
+FROM python:3.12-slim-bookworm
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends ffmpeg tesseract-ocr \
-  && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates sudo libgomp1 ffmpeg tesseract-ocr tesseract-ocr-eng tesseract-ocr-tgl \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --shell /bin/bash parish \
+    && install -d -m 0700 -o parish -g parish /home/parish/.ssh \
+    && install -d -o parish -g parish /var/data
+COPY deploy/init-render-disk.sh /usr/local/sbin/init-parish-disk
+RUN chmod 0755 /usr/local/sbin/init-parish-disk \
+    && printf '%s\n' 'parish ALL=(root) NOPASSWD: /usr/local/sbin/init-parish-disk ""' >/etc/sudoers.d/parish-disk \
+    && chmod 0440 /etc/sudoers.d/parish-disk && visudo -cf /etc/sudoers.d/parish-disk
 WORKDIR /app
 COPY church_backend/requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt 'gunicorn>=22,<26'
-COPY church_backend/ /app/church_backend/
-COPY scripts/migrate_payment_ledger.py /app/scripts/migrate_payment_ledger.py
-COPY deploy/render-start-flask-free.sh /app/deploy/render-start-flask-free.sh
-CMD ["sh", "/app/deploy/render-start-flask-free.sh"]
+RUN pip install --no-cache-dir -r requirements.txt 'gunicorn>=23,<26' \
+    && python -c "from faster_whisper import WhisperModel; import fitz, PIL, pytesseract, psycopg" \
+    && ffmpeg -version >/dev/null && tesseract --version >/dev/null
+COPY church_backend/*.py /app/church_backend/
+COPY church_backend/templates/certificates/ /app/church_backend/templates/certificates/
+COPY config/parish_fees.json /app/config/parish_fees.json
+COPY prod-ca-2021.crt /app/prod-ca-2021.crt
+COPY deploy/render-start-flask.sh /app/deploy/render-start-flask.sh
+ENV PGSSLROOTCERT=/app/prod-ca-2021.crt
+USER parish
+CMD ["sh", "/app/deploy/render-start-flask.sh"]

@@ -261,7 +261,7 @@ async function forward(request: NextRequest, context: { params: Promise<{ path: 
 
     responseHeaders.set('Cache-Control', 'no-store')
 
-    return new NextResponse(await upstreamResponse.arrayBuffer(), {
+    return new NextResponse(upstreamResponse.body, {
       status: upstreamResponse.status,
       headers: responseHeaders,
     })

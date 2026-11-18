@@ -80,7 +80,7 @@ if _archive_url.drivername not in {"postgresql", "postgresql+psycopg"} or not _a
     raise RuntimeError("ARCHIVE_POSTGRES_URL must identify the PostgreSQL archive.")
 app.config["SQLALCHEMY_DATABASE_URI"] = _archive_url.set(drivername="postgresql+psycopg")
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-    "connect_args": {"sslmode": "require", "connect_timeout": 10},
+    "connect_args": {"sslmode": "verify-full" if os.getenv("PGSSLROOTCERT") else "require", "connect_timeout": 10},
     "pool_pre_ping": True, "pool_size": 3, "max_overflow": 2,
 }
 

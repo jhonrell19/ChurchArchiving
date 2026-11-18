@@ -1,0 +1,71 @@
+services:
+  - type: pserv
+    name: smart-parish-api
+    runtime: docker
+    plan: standard
+    region: singapore
+    branch: staging
+    autoDeployTrigger: commit
+    dockerfilePath: ./Dockerfile.smartparish-flask
+    disk:
+      name: parish-files
+      mountPath: /var/data
+      sizeGB: 5
+    envVars:
+      - key: ARCHIVE_POSTGRES_URL
+        sync: false
+      - key: FLASK_INTERNAL_KEY
+        generateValue: true
+      - key: FLASK_SECRET_KEY
+        generateValue: true
+      - key: SMART_PARISH_UPLOAD_ROOT
+        value: /var/data/uploads
+      - key: HF_HOME
+        value: /var/data/model-cache
+      - key: OMP_NUM_THREADS
+        value: "1"
+      - key: APP_BASE_URL
+        sync: false
+      - key: PAYMONGO_MODE
+        value: test
+      - key: PAYMONGO_METHODS
+        value: qrph
+      - key: PAYMONGO_SECRET_KEY
+        sync: false
+  - type: web
+    name: smart-parish-web
+    runtime: node
+    plan: free
+    region: singapore
+    branch: staging
+    autoDeployTrigger: commit
+    buildCommand: sh deploy/render-build-web.sh
+    startCommand: sh deploy/render-start-web.sh
+    healthCheckPath: /api/ready
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: NODE_ENV
+        value: production
+      - key: SMART_PARISH_ENV
+        value: production
+      - key: ARCHIVE_POSTGRES_URL
+        fromService: {type: pserv, name: smart-parish-api, envVarKey: ARCHIVE_POSTGRES_URL}
+      - key: FLASK_INTERNAL_KEY
+        fromService: {type: pserv, name: smart-parish-api, envVarKey: FLASK_INTERNAL_KEY}
+      - key: FLASK_HOSTPORT
+        fromService: {type: pserv, name: smart-parish-api, property: hostport}
+      - key: STAFF_MFA_ENCRYPTION_KEY
+        sync: false
+      - key: NEXT_PUBLIC_GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: PAYMONGO_MODE
+        value: test
+      - key: PAYMONGO_WEBHOOK_SECRET
+        sync: false

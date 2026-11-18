@@ -63,3 +63,11 @@ __pycache__/
 # Uploaded/generated documents
 /uploads/
 /church_backend/uploads/
+# Local handoff files and database sidecars
+/*.patch
+/*.zip
+*.db-wal
+*.db-shm
+*.db-journal
+/church_backend/generated/
+/smartparish_database_backups/

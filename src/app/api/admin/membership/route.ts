@@ -28,7 +28,10 @@ export async function POST(req: NextRequest) {
   if (!actor) return NextResponse.json({ message: 'Forbidden' }, { status: 403, headers: cache })
 
   // Explicit same-origin check in addition to SameSite cookies.
-  if (req.headers.get('origin') !== new URL(req.url).origin) {
+  const origin = req.headers.get('origin')
+  const publicOrigin = process.env.APP_BASE_URL?.replace(/\/$/, '')
+  const allowed = process.env.NODE_ENV === 'production' ? [publicOrigin] : [publicOrigin, new URL(req.url).origin]
+  if (!origin || !allowed.includes(origin)) {
     return NextResponse.json({ message: 'Invalid request origin' }, { status: 403 })
   }
 

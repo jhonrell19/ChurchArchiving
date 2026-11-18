@@ -1,16 +1,18 @@
+# Smart Parish evaluation preview, Render FREE only.
+# IMPORTANT: Uploads and AI model cache are EPHEMERAL and may disappear on redeploy.
+# Never use this configuration as real parish production storage.
 services:
-  - type: pserv
+  - type: web
     name: smart-parish-api
     runtime: docker
-    plan: standard
+    plan: free
     region: singapore
     branch: staging
     autoDeployTrigger: commit
-    dockerfilePath: ./Dockerfile.smartparish-flask
-    disk:
-      name: parish-files
-      mountPath: /var/data
-      sizeGB: 5
+    dockerfilePath: ./Dockerfile.smartparish-flask-free
+    # The existing Dockerfile starts a paid-disk initialization script.
+    # Override its CMD for a Free web service; use disposable local storage.
+    dockerCommand: "sh -c 'mkdir -p /tmp/parish-uploads /tmp/model-cache && exec gunicorn --chdir /app/church_backend --workers 1 --threads 2 --timeout 300 --bind 0.0.0.0:10000 wsgi:app'"
     envVars:
       - key: ARCHIVE_POSTGRES_URL
         sync: false
@@ -19,19 +21,20 @@ services:
       - key: FLASK_SECRET_KEY
         generateValue: true
       - key: SMART_PARISH_UPLOAD_ROOT
-        value: /var/data/uploads
+        value: /tmp/parish-uploads
       - key: HF_HOME
-        value: /var/data/model-cache
+        value: /tmp/model-cache
       - key: OMP_NUM_THREADS
         value: "1"
       - key: APP_BASE_URL
-        sync: false
+        fromService: {type: web, name: smart-parish-web, envVarKey: RENDER_EXTERNAL_URL}
       - key: PAYMONGO_MODE
         value: test
       - key: PAYMONGO_METHODS
         value: qrph
       - key: PAYMONGO_SECRET_KEY
         sync: false
+
   - type: web
     name: smart-parish-web
     runtime: node
@@ -41,7 +44,7 @@ services:
     autoDeployTrigger: commit
     buildCommand: sh deploy/render-build-web.sh
     startCommand: sh deploy/render-start-web.sh
-    healthCheckPath: /api/ready
+    # Avoid /api/ready as a platform health check: sleeping Free API may cause 503.
     envVars:
       - key: NODE_VERSION
         value: "24"
@@ -50,11 +53,11 @@ services:
       - key: SMART_PARISH_ENV
         value: production
       - key: ARCHIVE_POSTGRES_URL
-        fromService: {type: pserv, name: smart-parish-api, envVarKey: ARCHIVE_POSTGRES_URL}
+        fromService: {type: web, name: smart-parish-api, envVarKey: ARCHIVE_POSTGRES_URL}
       - key: FLASK_INTERNAL_KEY
-        fromService: {type: pserv, name: smart-parish-api, envVarKey: FLASK_INTERNAL_KEY}
-      - key: FLASK_HOSTPORT
-        fromService: {type: pserv, name: smart-parish-api, property: hostport}
+        fromService: {type: web, name: smart-parish-api, envVarKey: FLASK_INTERNAL_KEY}
+      - key: FLASK_API_URL
+        fromService: {type: web, name: smart-parish-api, envVarKey: RENDER_EXTERNAL_URL}
       - key: STAFF_MFA_ENCRYPTION_KEY
         sync: false
       - key: NEXT_PUBLIC_GOOGLE_CLIENT_ID

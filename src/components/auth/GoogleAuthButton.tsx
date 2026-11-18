@@ -12,10 +12,11 @@ import {
 type GoogleAuthIntent = 'login' | 'register'
 
 type Props = {
+  privacyConsent?: boolean
   intent: GoogleAuthIntent
 }
 
-export default function GoogleAuthButton({ intent }: Props) {
+export default function GoogleAuthButton({ intent, privacyConsent }: Props) {
   const router = useRouter()
   const buttonRef = useRef<HTMLDivElement | null>(null)
 
@@ -44,6 +45,7 @@ export default function GoogleAuthButton({ intent }: Props) {
           body: JSON.stringify({
             credential: googleResponse.credential,
             intent,
+            privacyConsent,
           }),
         })
 
@@ -79,7 +81,7 @@ export default function GoogleAuthButton({ intent }: Props) {
         setLoading(false)
       }
     },
-    [intent, router]
+    [intent, privacyConsent, router]
   )
 
   useEffect(() => {

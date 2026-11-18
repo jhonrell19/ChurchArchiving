@@ -133,6 +133,10 @@ export default function AdminPanel() {
               )}
             </button>
           ))}
+          <a href="/admin/member-approvals"
+            className="mt-3 block rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-[12px] font-semibold text-[#14264b] hover:bg-amber-100">
+            Parish Membership Approvals
+          </a>
         </nav>
 
         <div className="px-3 pb-4">

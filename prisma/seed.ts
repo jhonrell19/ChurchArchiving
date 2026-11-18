@@ -8,12 +8,9 @@
  *   SEED_BURIAL_ADMIN_EMAIL / SEED_BURIAL_ADMIN_PASSWORD
  * Do not commit these passwords, even to private repositories.
  */
-import { PrismaClient } from '@prisma/client'
-import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3'
+import 'dotenv/config'
+import { prisma } from '../src/lib/prisma'
 import bcrypt from 'bcryptjs'
-
-const adapter = new PrismaBetterSqlite3({ url: process.env.DATABASE_URL || 'file:./dev.db' })
-const prisma = new PrismaClient({ adapter })
 
 type StaffRole = 'ADMIN' | 'BURIAL_ADMIN'
 async function createMissingStaff(emailEnv: string, passwordEnv: string, role: StaffRole, firstName: string) {

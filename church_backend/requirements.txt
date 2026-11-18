@@ -13,3 +13,4 @@ pytesseract==0.3.13
 Pillow==11.3.0
 PyMuPDF==1.26.4
 waitress==3.0.2
+psycopg[binary]>=3.2,<4

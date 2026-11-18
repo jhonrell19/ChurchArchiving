@@ -66,6 +66,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: 'Staff account requires verification.' }, { status: 403 })
     }
 
+    if (user.role === 'USER' && user.membershipStatus !== 'approved') {
+      return NextResponse.json(
+        { message: user.membershipStatus === 'rejected'
+            ? 'Your parish membership registration was not approved. Contact the parish office.'
+            : 'Your email is verified, but parish membership approval is still pending.' },
+        { status: 403, headers: { 'Cache-Control': 'no-store' } }
+      )
+    }
+
     // Password alone must NEVER grant staff a full browser session.
     if (user.role !== 'USER') {
       if (!mfaKeyConfigured()) {

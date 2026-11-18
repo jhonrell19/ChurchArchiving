@@ -43,6 +43,10 @@ export async function POST(request: Request) {
     const intent: GoogleAuthIntent =
       body?.intent === 'register' ? 'register' : 'login'
 
+    if (intent === 'register' && body?.privacyConsent !== true) {
+      return NextResponse.json({ message: 'Please accept the Privacy Notice to register.' }, { status: 400 })
+    }
+
     if (!credential) {
       return NextResponse.json(
         { message: 'Google credential is required.' },
@@ -169,6 +173,7 @@ export async function POST(request: Request) {
           firstName: payload.given_name?.trim() || null,
           surname: payload.family_name?.trim() || null,
           role: 'USER',
+          membershipStatus: 'pending',
           emailVerified: true,
           googleSub,
         },
@@ -182,6 +187,16 @@ export async function POST(request: Request) {
             'Google authentication is available only for parishioner accounts.',
         },
         { status: 403 }
+      )
+    }
+
+    // Google verifies email identity, not church membership.
+    if (user.membershipStatus !== 'approved') {
+      return NextResponse.json(
+        { message: user.membershipStatus === 'rejected'
+            ? 'Your parish membership registration was not approved. Contact the parish office.'
+            : 'Your Google email is verified. Parish membership approval is still pending.' },
+        { status: 403, headers: { 'Cache-Control': 'no-store' } }
       )
     }
 

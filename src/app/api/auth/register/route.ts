@@ -22,6 +22,10 @@ export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => null)
 
+    if (body?.privacyConsent !== true) {
+      return NextResponse.json({ message: 'Please accept the Privacy Notice to register.' }, { status: 400 })
+    }
+
     const firstName = cleanName(body?.firstName)
     const middleName = cleanName(body?.middleName)
     const surname = cleanName(body?.surname)
@@ -132,6 +136,7 @@ export async function POST(req: Request) {
         email,
         password: hashedPassword,
         role: 'USER',
+        membershipStatus: 'pending',
         emailVerified: false,
       },
     })
@@ -151,7 +156,7 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         message: mail.sent
-          ? 'Account created. Check your inbox and spam folder for your verification email.'
+          ? 'Account created. Verify your email, then wait for parish administrator approval before signing in.'
           : 'Account created but the email could not be delivered. Please use Resend Verification later or contact the parish office.',
         verificationRequired: true,
         phoneLineStatus: 'not_checked',

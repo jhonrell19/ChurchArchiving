@@ -72,19 +72,17 @@ load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
 
 app = Flask(__name__)
 
-# Use one deterministic archive database path in development.  A relative
-# SQLite URI can be surprisingly easy to point at the wrong instance folder
-# when the backend is started in different ways, so resolve it explicitly.
-ARCHIVE_DB_PATH = os.path.join(BACKEND_DIR, "instance", "archive.db")
-os.makedirs(os.path.dirname(ARCHIVE_DB_PATH), exist_ok=True)
+from sqlalchemy.engine import make_url
+from sqlalchemy import event, inspect as inspect_database
 
-_archive_db_override = os.environ.get("ARCHIVE_DATABASE_URL")
-if _archive_db_override:
-    app.config["SQLALCHEMY_DATABASE_URI"] = _archive_db_override
-else:
-    app.config["SQLALCHEMY_DATABASE_URI"] = (
-        "sqlite:///" + ARCHIVE_DB_PATH.replace("\\", "/")
-    )
+_archive_url = make_url(os.environ["ARCHIVE_POSTGRES_URL"])
+if _archive_url.drivername not in {"postgresql", "postgresql+psycopg"} or not _archive_url.host:
+    raise RuntimeError("ARCHIVE_POSTGRES_URL must identify the PostgreSQL archive.")
+app.config["SQLALCHEMY_DATABASE_URI"] = _archive_url.set(drivername="postgresql+psycopg")
+app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+    "connect_args": {"sslmode": "require", "connect_timeout": 10},
+    "pool_pre_ping": True, "pool_size": 3, "max_overflow": 2,
+}
 
 app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY", "dev-only-change-me")
 if os.getenv("SMART_PARISH_ENV", "development").lower() == "production" and len(app.config["SECRET_KEY"]) < 32:
@@ -139,133 +137,24 @@ def get_whisper_model():
 db.init_app(app)
 
 
-REQUEST_SCHEMA_COLUMNS = {
-    "requester_user_id": "INTEGER",
-    "requester_address": "VARCHAR(500)",
-    "is_urgent": "BOOLEAN NOT NULL DEFAULT 0",
-    "base_fee": "INTEGER NOT NULL DEFAULT 0",
-    "urgent_fee": "INTEGER NOT NULL DEFAULT 0",
-    "total_fee": "INTEGER NOT NULL DEFAULT 0",
-    "payment_status": "VARCHAR(30) NOT NULL DEFAULT 'Unpaid'",
-    "payment_method": "VARCHAR(50)",
-    "payment_reference": "VARCHAR(100)",
-    "paid_at": "DATETIME",
-    "record_date_hint": "VARCHAR(100)",
-    "record_details": "VARCHAR(500)",
-    "draft_file": "VARCHAR(500)",
-    "history_hidden": "BOOLEAN NOT NULL DEFAULT 0",
-}
-
-DOCUMENT_SCHEMA_COLUMNS = {
-    "file_hash": "VARCHAR(200)",
-    "department": "VARCHAR(100)",
-    "ocr_text": "TEXT",
-    "extracted_metadata": "TEXT",
-    "record_data": "TEXT",
-}
-
-
-def ensure_runtime_schema():
-    """Bring the SQLite schema used by *this Flask process* up to date.
-
-    This is intentionally idempotent.  It prevents a restored/older
-    archive.db from being opened by the app with models that expect newer
-    columns.  It also eliminates ambiguity about which archive.db was
-    migrated because the ALTER statements run through Flask-SQLAlchemy's
-    own engine.
-    """
-
-    def column_names(connection, table_name):
-        rows = connection.execute(
-            text(f"PRAGMA table_info({table_name})")
-        ).fetchall()
-        return {row[1] for row in rows}
-
-    with db.engine.begin() as connection:
-        for table_name, required_columns in (
-            ("certificate_request", REQUEST_SCHEMA_COLUMNS),
-            ("document", DOCUMENT_SCHEMA_COLUMNS),
-        ):
-            existing = column_names(connection, table_name)
-
-            for column_name, definition in required_columns.items():
-                if column_name not in existing:
-                    app.logger.warning(
-                        "Adding missing database column %s.%s",
-                        table_name,
-                        column_name,
-                    )
-                    connection.execute(
-                        text(
-                            f"ALTER TABLE {table_name} "
-                            f"ADD COLUMN {column_name} {definition}"
-                        )
-                    )
-
-        connection.execute(
-            text(
-                "CREATE INDEX IF NOT EXISTS "
-                "ix_certificate_request_requester_user_id "
-                "ON certificate_request(requester_user_id)"
-            )
-        )
-        connection.execute(
-            text(
-                "CREATE INDEX IF NOT EXISTS ix_document_file_hash "
-                "ON document(file_hash)"
-            )
-        )
-
-        # Data cleanup intentionally NOT performed at server startup.
-        # Legacy status/department transformations must be individually reviewed,
-        # backed up, and performed by a deliberate migration, not on every boot.
-
-    # Drop any pooled SQLite connection that may have cached the old schema
-    # before the ALTER TABLE statements.  All request handlers will open a
-    # fresh connection after this point.
-    db.session.remove()
-    db.engine.dispose()
+with app.app_context():
+    @event.listens_for(db.engine, "begin")
+    def select_archive_schema(connection):
+        connection.exec_driver_sql("SET LOCAL search_path TO parish_private")
 
     with db.engine.connect() as connection:
-        request_columns = column_names(connection, "certificate_request")
-        missing = set(REQUEST_SCHEMA_COLUMNS) - request_columns
-        if missing:
-            raise RuntimeError(
-                "Archive database migration failed. Missing columns: "
-                + ", ".join(sorted(missing))
-            )
-
-        # Execute the exact column access that previously failed so startup
-        # stops immediately if Flask is somehow pointed at the wrong file.
-        connection.execute(
-            text(
-                "SELECT requester_user_id "
-                "FROM certificate_request LIMIT 1"
-            )
-        ).fetchall()
-
-
-with app.app_context():
-    # Local development can create missing tables and add missing nullable or
-    # defaulted columns. Production is schema-verification only: never migrate
-    # or modify parish records merely by restarting a service.
-    if os.getenv("SMART_PARISH_ENV", "development").lower() == "production":
-        from sqlalchemy import inspect as sqlalchemy_inspect
-        schema = sqlalchemy_inspect(db.engine)
-        required = {"certificate_request": REQUEST_SCHEMA_COLUMNS,
-                    "document": DOCUMENT_SCHEMA_COLUMNS}
-        for table_name, columns in required.items():
-            if not schema.has_table(table_name):
-                raise RuntimeError(f"Missing archive table {table_name}; run approved migrations before starting production")
-            existing = {col["name"] for col in schema.get_columns(table_name)}
-            missing = set(columns) - existing
-            if missing:
-                raise RuntimeError(f"Missing archive columns in {table_name}: {sorted(missing)}. Run approved migrations first")
-    else:
-        db.create_all()
-        ensure_runtime_schema()
-    print(f"[Smart Parish] Archive DB: {db.engine.url.database}")
-    print("[Smart Parish] Archive schema verification complete")
+        if connection.scalar(text("SELECT current_schema()")) != "parish_private":
+            raise RuntimeError("Private archive schema is unavailable.")
+        inspector = inspect_database(connection)
+        required = {table.name: set(table.columns.keys()) for table in db.metadata.tables.values()}
+        required["certificate_fee_settings"] = {"code", "amount_php", "updated_by", "updated_at"}
+        required["paymongo_verified_payment"] = {"provider_payment_id", "checkout_session_id",
+            "request_id", "amount_cents", "currency", "livemode", "verified_at"}
+        for name, fields in required.items():
+            actual = {c["name"] for c in inspector.get_columns(name, schema="parish_private")}
+            if fields - actual:
+                raise RuntimeError(f"Missing archive fields in {name}: {sorted(fields - actual)}")
+    print("[Smart Parish] PostgreSQL archive verified: parish_private")
 
 
 MAIN_ADMIN_TYPES = ["baptismal", "confirmation", "marriage"]
@@ -311,42 +200,6 @@ FEE_CODES = (
 )
 
 
-def initialize_certificate_fees():
-    """Create and seed the catalog in development only."""
-    if os.getenv("SMART_PARISH_ENV", "development").lower() == "production":
-        return  # Production requires an approved database migration.
-
-    with app.app_context():
-        db.session.execute(text("""
-            CREATE TABLE IF NOT EXISTS certificate_fee_settings (
-                code TEXT PRIMARY KEY,
-                amount_php INTEGER NOT NULL CHECK (amount_php >= 0),
-                updated_by TEXT NOT NULL,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-        """))
-
-        defaults = {
-            **CERTIFICATE_BASE_FEES,
-            "urgent": CERTIFICATE_URGENT_FEE,
-        }
-
-        for code in FEE_CODES:
-            db.session.execute(
-                text("""
-                    INSERT OR IGNORE INTO certificate_fee_settings
-                        (code, amount_php, updated_by)
-                    VALUES (:code, :amount, 'INITIAL_CATALOG')
-                """),
-                {
-                    "code": code,
-                    "amount": int(defaults.get(code, 0)),
-                },
-            )
-
-        db.session.commit()
-
-
 def get_certificate_fees():
     """Always read the currently published fees from the database."""
     rows = db.session.execute(text("""
@@ -366,7 +219,8 @@ def get_certificate_fees():
     return fees
 
 
-initialize_certificate_fees()
+with app.app_context():
+    get_certificate_fees()
 
 
 
@@ -5437,7 +5291,7 @@ def certificate_pricing():
                         UPDATE certificate_fee_settings
                         SET amount_php = :amount,
                             updated_by = :admin,
-                            updated_at = CURRENT_TIMESTAMP
+                            updated_at = CAST(CURRENT_TIMESTAMP AS TEXT)
                         WHERE code = :code
                     """),
                     {

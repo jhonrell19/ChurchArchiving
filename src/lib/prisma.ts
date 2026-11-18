@@ -1,9 +1,11 @@
 import { PrismaClient } from "@prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { authDatabaseUrl } from "./postgres-url";
 
-const adapter = new PrismaBetterSqlite3({
-  url: process.env.DATABASE_URL || "file:./dev.db",
-});
+const adapter = new PrismaPg(
+  { connectionString: authDatabaseUrl(), max: 4, connectionTimeoutMillis: 10000 },
+  { schema: "parish_auth" },
+);
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;

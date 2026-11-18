@@ -87,6 +87,7 @@ export async function getCurrentUser() {
           address: true,
           email: true,
           role: true,
+          membershipStatus: true,
           emailVerified: true,
           googleSub: true,
           createdAt: true,
@@ -97,6 +98,11 @@ export async function getCurrentUser() {
   })
 
   if (!session) return null
+
+  // Enforce member approval even for a pre-existing login session.
+  if (session.user.role === 'USER' && session.user.membershipStatus !== 'approved') {
+    return null
+  }
 
   if (session.expiresAt.getTime() <= Date.now()) {
     await prisma.session

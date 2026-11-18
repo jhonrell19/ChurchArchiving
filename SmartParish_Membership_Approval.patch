@@ -1,0 +1,271 @@
+--- a/prisma/schema.prisma
++++ b/prisma/schema.prisma
+@@ -30,6 +30,12 @@
+   password String
+ 
+   role Role @default(USER)
++
++  // Church administrator must approve each parishioner after email verification.
++  membershipStatus String @default("pending")
++  membershipReviewedAt DateTime?
++  membershipReviewedById Int?
++  membershipReviewReason String?
+ 
+   emailVerified Boolean @default(false)
+ 
+--- a/src/lib/auth.ts
++++ b/src/lib/auth.ts
+@@ -87,6 +87,7 @@
+           address: true,
+           email: true,
+           role: true,
++          membershipStatus: true,
+           emailVerified: true,
+           googleSub: true,
+           createdAt: true,
+@@ -97,6 +98,11 @@
+   })
+ 
+   if (!session) return null
++
++  // Enforce member approval even for a pre-existing login session.
++  if (session.user.role === 'USER' && session.user.membershipStatus !== 'approved') {
++    return null
++  }
+ 
+   if (session.expiresAt.getTime() <= Date.now()) {
+     await prisma.session
+--- a/src/app/api/auth/login/route.ts
++++ b/src/app/api/auth/login/route.ts
+@@ -64,6 +64,15 @@
+ 
+     if (user.role !== 'USER' && !user.emailVerified) {
+       return NextResponse.json({ message: 'Staff account requires verification.' }, { status: 403 })
++    }
++
++    if (user.role === 'USER' && user.membershipStatus !== 'approved') {
++      return NextResponse.json(
++        { message: user.membershipStatus === 'rejected'
++            ? 'Your parish membership registration was not approved. Contact the parish office.'
++            : 'Your email is verified, but parish membership approval is still pending.' },
++        { status: 403, headers: { 'Cache-Control': 'no-store' } }
++      )
+     }
+ 
+     // Password alone must NEVER grant staff a full browser session.
+--- a/src/app/api/auth/google/route.ts
++++ b/src/app/api/auth/google/route.ts
+@@ -169,6 +169,7 @@
+           firstName: payload.given_name?.trim() || null,
+           surname: payload.family_name?.trim() || null,
+           role: 'USER',
++          membershipStatus: 'pending',
+           emailVerified: true,
+           googleSub,
+         },
+@@ -182,6 +183,16 @@
+             'Google authentication is available only for parishioner accounts.',
+         },
+         { status: 403 }
++      )
++    }
++
++    // Google verifies email identity, not church membership.
++    if (user.membershipStatus !== 'approved') {
++      return NextResponse.json(
++        { message: user.membershipStatus === 'rejected'
++            ? 'Your parish membership registration was not approved. Contact the parish office.'
++            : 'Your Google email is verified. Parish membership approval is still pending.' },
++        { status: 403, headers: { 'Cache-Control': 'no-store' } }
+       )
+     }
+ 
+--- a/src/app/api/auth/register/route.ts
++++ b/src/app/api/auth/register/route.ts
+@@ -132,6 +132,7 @@
+         email,
+         password: hashedPassword,
+         role: 'USER',
++        membershipStatus: 'pending',
+         emailVerified: false,
+       },
+     })
+@@ -151,7 +152,7 @@
+     return NextResponse.json(
+       {
+         message: mail.sent
+-          ? 'Account created. Check your inbox and spam folder for your verification email.'
++          ? 'Account created. Verify your email, then wait for parish administrator approval before signing in.'
+           : 'Account created but the email could not be delivered. Please use Resend Verification later or contact the parish office.',
+         verificationRequired: true,
+         phoneLineStatus: 'not_checked',
+--- a/src/app/api/auth/verify-email/route.ts
++++ b/src/app/api/auth/verify-email/route.ts
+@@ -23,7 +23,7 @@
+       prisma.emailVerificationToken.deleteMany({ where: { userId: record.userId } }),
+     ])
+ 
+-    return NextResponse.json({ message: 'Email verified successfully. You can now sign in.' })
++    return NextResponse.json({ message: 'Email verified successfully. Your account is awaiting parish administrator approval before you can sign in.' })
+   } catch (error) {
+     console.error('VERIFY EMAIL ERROR:', error)
+     return NextResponse.json({ message: 'Unable to verify email.' }, { status: 500 })
+--- a/src/app/admin/AdminPanel.tsx
++++ b/src/app/admin/AdminPanel.tsx
+@@ -133,6 +133,10 @@
+               )}
+             </button>
+           ))}
++          <a href="/admin/member-approvals"
++            className="mt-3 block rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-[12px] font-semibold text-[#14264b] hover:bg-amber-100">
++            Parish Membership Approvals
++          </a>
+         </nav>
+ 
+         <div className="px-3 pb-4">
+--- a/src/app/api/admin/membership/route.ts
++++ b/src/app/api/admin/membership/route.ts
+@@ -0,0 +1,60 @@
++import { NextRequest, NextResponse } from 'next/server'
++import { getCurrentUser } from '@/lib/auth'
++import { prisma } from '@/lib/prisma'
++
++const cache = { 'Cache-Control': 'no-store' }
++
++async function authorized() {
++  const user = await getCurrentUser()
++  return user?.role === 'ADMIN' ? user : null
++}
++
++// Main Admin only; deliberately no public mutation route.
++export async function GET() {
++  const actor = await authorized()
++  if (!actor) return NextResponse.json({ message: 'Forbidden' }, { status: 403, headers: cache })
++  const users = await prisma.user.findMany({
++    where: { role: 'USER', membershipStatus: 'pending' },
++    select: { id: true, firstName: true, middleName: true, surname: true,
++      email: true, emailVerified: true, createdAt: true },
++    orderBy: { createdAt: 'asc' },
++    take: 100,
++  })
++  return NextResponse.json({ users }, { headers: cache })
++}
++
++export async function POST(req: NextRequest) {
++  const actor = await authorized()
++  if (!actor) return NextResponse.json({ message: 'Forbidden' }, { status: 403, headers: cache })
++
++  // Explicit same-origin check in addition to SameSite cookies.
++  if (req.headers.get('origin') !== new URL(req.url).origin) {
++    return NextResponse.json({ message: 'Invalid request origin' }, { status: 403 })
++  }
++
++  const body = await req.json().catch(() => null)
++  const id = Number(body?.userId)
++  const decision = body?.decision
++  const reason = typeof body?.reason === 'string' ? body.reason.trim() : ''
++  if (!Number.isSafeInteger(id) || id <= 0 || !['approved', 'rejected'].includes(decision)) {
++    return NextResponse.json({ message: 'Invalid member or decision' }, { status: 400 })
++  }
++  if (decision === 'rejected' && (reason.length < 5 || reason.length > 500)) {
++    return NextResponse.json({ message: 'A brief rejection reason (5–500 characters) is required' }, { status: 400 })
++  }
++
++  const update = await prisma.user.updateMany({
++    where: { id, role: 'USER', membershipStatus: 'pending', emailVerified: true },
++    data: {
++      membershipStatus: decision,
++      membershipReviewedAt: new Date(),
++      membershipReviewedById: actor.id,
++      membershipReviewReason: decision === 'rejected' ? reason : null,
++    },
++  })
++  if (update.count !== 1) {
++    return NextResponse.json({ message: 'Member must exist, have a verified email, and still be pending' }, { status: 409 })
++  }
++  console.info('Parish membership reviewed', { memberId: id, actorId: actor.id, decision })
++  return NextResponse.json({ success: true }, { headers: cache })
++}
+--- a/src/app/admin/member-approvals/page.tsx
++++ b/src/app/admin/member-approvals/page.tsx
+@@ -0,0 +1,80 @@
++'use client'
++
++import { useEffect, useState } from 'react'
++
++type Member = {
++  id: number
++  firstName: string | null
++  middleName: string | null
++  surname: string | null
++  email: string
++  emailVerified: boolean
++  createdAt: string
++}
++
++export default function MemberApprovalsPage() {
++  const [users, setUsers] = useState<Member[]>([])
++  const [busy, setBusy] = useState<number | null>(null)
++  const [rejectionReason, setRejectionReason] = useState('')
++  const [message, setMessage] = useState('')
++
++  async function load() {
++    const res = await fetch('/api/admin/membership', { cache: 'no-store' })
++    if (!res.ok) { setMessage('Unable to load membership requests'); return }
++    const data = await res.json()
++    setUsers(data.users || [])
++  }
++  useEffect(() => { void load() }, [])
++
++  async function decide(member: Member, decision: 'approved' | 'rejected') {
++    const reason = decision === 'rejected' ? rejectionReason.trim() : ''
++    if (decision === 'rejected' && (reason.length < 5 || reason.length > 500)) {
++      setMessage('Enter a reason between 5 and 500 characters before rejecting.'); return
++    }
++    setBusy(member.id)
++    setMessage('')
++    try {
++      const res = await fetch('/api/admin/membership', {
++        method: 'POST',
++        headers: { 'Content-Type': 'application/json' },
++        body: JSON.stringify({ userId: member.id, decision, reason }),
++      })
++      const data = await res.json()
++      if (!res.ok) throw new Error(data.message || 'Review failed')
++      setMessage(`Member ${member.id}: ${decision}`)
++      setRejectionReason('')
++      await load()
++    } catch (error) {
++      setMessage(error instanceof Error ? error.message : 'Review failed')
++    } finally { setBusy(null) }
++  }
++
++  return <main className="min-h-screen bg-slate-50 p-6 text-slate-900">
++    <div className="mx-auto max-w-5xl">
++      <a href="/admin" className="text-blue-800 underline">Back to Main Admin</a>
++      <h1 className="mt-4 mb-2 text-2xl font-bold">Parish membership approvals</h1>
++      <p className="mb-4">Only accounts with a verified email can be approved or rejected.</p>
++      {message && <p role="status" className="mb-4 rounded bg-amber-50 p-3">{message}</p>}
++      <label className="mb-4 block">Rejection reason (required only when rejecting):
++        <input className="mt-1 block w-full rounded border p-2" maxLength={500} value={rejectionReason} onChange={e => setRejectionReason(e.target.value)} placeholder="Enter a clear reason" />
++      </label>
++      <div className="overflow-x-auto rounded border bg-white">
++        <table className="w-full text-left text-sm">
++          <thead><tr className="border-b bg-slate-100"><th className="p-3">Member</th>
++            <th className="p-3">Email</th><th className="p-3">Email verified</th>
++            <th className="p-3">Action</th></tr></thead>
++          <tbody>{users.map(u => <tr className="border-b" key={u.id}>
++            <td className="p-3">{[u.firstName, u.middleName, u.surname].filter(Boolean).join(' ') || 'Unspecified'}</td>
++            <td className="p-3">{u.email}</td><td className="p-3">{u.emailVerified ? 'Yes' : 'No'}</td>
++            <td className="p-3 flex gap-2">
++              <button disabled={!u.emailVerified || busy !== null} onClick={() => void decide(u, 'approved')}
++                className="rounded bg-emerald-800 px-3 py-2 text-white disabled:opacity-40">Approve</button>
++              <button disabled={!u.emailVerified || busy !== null} onClick={() => void decide(u, 'rejected')}
++                className="rounded bg-rose-800 px-3 py-2 text-white disabled:opacity-40">Reject</button>
++            </td></tr>)}</tbody>
++        </table>
++      </div>
++      {!users.length && <p className="mt-4">No pending parishioners.</p>}
++    </div>
++  </main>
++}

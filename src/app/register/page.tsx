@@ -19,6 +19,7 @@ export default function RegisterPage() {
   const [registeredEmail, setRegisteredEmail] = useState('')
   const [resending, setResending] = useState(false)
 
+  const [privacyConsent, setPrivacyConsent] = useState(false)
   const [form, setForm] = useState({
     firstName: '',
     middleName: '',
@@ -63,7 +64,7 @@ export default function RegisterPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, privacyConsent }),
       })
 
       const data = await response.json().catch(() => ({}))
@@ -234,9 +235,17 @@ export default function RegisterPage() {
             />
           </Field>
 
+          <div className="md:col-span-2 text-sm text-slate-700">
+            <label>
+              <input type="checkbox" className="mr-2" checked={privacyConsent} required
+                onChange={event => setPrivacyConsent(event.target.checked)} />
+              I consent to the use of my details for parish account registration and membership review.
+            </label>
+            {' '}<Link href="/privacy" target="_blank" rel="noopener noreferrer" className="text-blue-700 underline">Read the Privacy Notice</Link>
+          </div>
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !privacyConsent}
             className="md:col-span-2 bg-navy text-white py-3.5 rounded-xl font-display text-[12px] uppercase tracking-wider hover:bg-navy-mid transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading
@@ -245,10 +254,6 @@ export default function RegisterPage() {
           </button>
         </form>
 
-        <p className="text-center text-xs text-slate-600 mt-4">
-          We use your details to create and secure your parish account.
-          {' '}Read our <Link href="/privacy" className="text-blue-700 underline">Privacy Notice</Link>.
-        </p>
 
         <div className="flex items-center gap-3 my-7">
           <div className="h-px bg-slate-200 flex-1" />
@@ -259,7 +264,8 @@ export default function RegisterPage() {
         </div>
 
         <div>
-          <GoogleAuthButton intent="register" />
+          {privacyConsent ? <GoogleAuthButton intent="register" privacyConsent={privacyConsent} /> :
+            <p className="text-center text-sm">Accept the Privacy Notice above to register with Google.</p>}
         </div>
 
         {verificationMessage && (

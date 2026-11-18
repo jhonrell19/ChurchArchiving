@@ -23,7 +23,7 @@ export async function POST(req: Request) {
       prisma.emailVerificationToken.deleteMany({ where: { userId: record.userId } }),
     ])
 
-    return NextResponse.json({ message: 'Email verified successfully. You can now sign in.' })
+    return NextResponse.json({ message: 'Email verified successfully. Your account is awaiting parish administrator approval before you can sign in.' })
   } catch (error) {
     console.error('VERIFY EMAIL ERROR:', error)
     return NextResponse.json({ message: 'Unable to verify email.' }, { status: 500 })

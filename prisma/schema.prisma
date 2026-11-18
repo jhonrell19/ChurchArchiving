@@ -6,13 +6,16 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
+  schemas = ["parish_auth"]
 }
 
 enum Role {
   USER
   ADMIN
   BURIAL_ADMIN
+
+  @@schema("parish_auth")
 }
 
 model User {
@@ -31,6 +34,12 @@ model User {
 
   role Role @default(USER)
 
+  // Church administrator must approve each parishioner after email verification.
+  membershipStatus String @default("pending")
+  membershipReviewedAt DateTime?
+  membershipReviewedById Int?
+  membershipReviewReason String?
+
   emailVerified Boolean @default(false)
 
   // Google is the only external sign-in provider.
@@ -45,6 +54,8 @@ model User {
   staffMfa                StaffMfa?
   staffMfaChallenges      StaffMfaChallenge[]
   phoneVerification       PhoneVerification?
+
+  @@schema("parish_auth")
 }
 
 model Session {
@@ -58,6 +69,8 @@ model Session {
 
   @@index([userId])
   @@index([expiresAt])
+
+  @@schema("parish_auth")
 }
 
 model EmailVerificationToken {
@@ -71,6 +84,8 @@ model EmailVerificationToken {
 
   @@index([userId])
   @@index([expiresAt])
+
+  @@schema("parish_auth")
 }
 
 model PasswordResetToken {
@@ -84,9 +99,10 @@ model PasswordResetToken {
 
   @@index([userId])
   @@index([expiresAt])
+
+  @@schema("parish_auth")
 }
 
-// Additive security tables: apply scripts/migrate_account_security.py after backing up dev.db.
 model StaffMfa {
   id                Int      @id @default(autoincrement())
   userId            Int      @unique
@@ -96,6 +112,8 @@ model StaffMfa {
   confirmedAt       DateTime @default(now())
   createdAt         DateTime @default(now())
   user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@schema("parish_auth")
 }
 
 model StaffMfaChallenge {
@@ -110,6 +128,8 @@ model StaffMfaChallenge {
 
   @@index([userId])
   @@index([expiresAt])
+
+  @@schema("parish_auth")
 }
 
 model PhoneVerification {
@@ -126,4 +146,6 @@ model PhoneVerification {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@schema("parish_auth")
 }

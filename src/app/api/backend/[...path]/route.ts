@@ -192,6 +192,10 @@ async function forward(request: NextRequest, context: { params: Promise<{ path: 
     .join(' ')
     .trim()
 
+  // Request a plain upstream representation; Node fetch may transparently
+  // decompress compressed responses before we forward the body.
+  headers.set('accept-encoding', 'identity')
+
   headers.set('x-internal-key', internalKey)
   headers.set('x-user-id', String(user.id))
   headers.set('x-user-role', user.role)
@@ -248,7 +252,8 @@ async function forward(request: NextRequest, context: { params: Promise<{ path: 
     for (const key of [
       'content-type',
       'content-disposition',
-      'content-length',
+      // Do not copy upstream Content-Length: fetch() may decompress the body,
+      // making the original length stale and truncating JSON in the browser.
       'content-range',
       'accept-ranges',
       'cache-control',

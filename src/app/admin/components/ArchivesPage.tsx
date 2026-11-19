@@ -33,6 +33,7 @@ export default function ArchivesPage() {
   const [search, setSearch] = useState('')
   const [documents, setDocuments] = useState<ArchiveDocument[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [recordData, setRecordData] = useState<TemplateRecordData>({})
 
@@ -117,20 +118,32 @@ export default function ArchivesPage() {
   }
 
   const loadDocuments = async () => {
+    setLoading(true)
+    setLoadError('')
     try {
-      setLoading(true)
-
-      const res = await fetch('/api/backend/api/archive/documents?scope=main')
-
+      const res = await fetch('/api/backend/api/archive/documents?scope=main', { cache: 'no-store' })
       if (!res.ok) {
-        throw new Error('Failed to load archive documents')
+        const unavailable = [502, 503, 504].includes(res.status)
+        throw new Error(unavailable
+          ? `The parish backend could not be reached (HTTP ${res.status}). Check the Flask service in Render.`
+          : `Archive request failed (HTTP ${res.status}).`)
       }
 
-      const data = await res.json()
-      setDocuments(data.documents || [])
+      const responseText = await res.text()
+      let data: { documents?: ArchiveDocument[] }
+      try {
+        data = JSON.parse(responseText)
+      } catch {
+        throw new Error('Archive response contained invalid or incomplete JSON. Check Render proxy and Flask logs.')
+      }
+      if (!Array.isArray(data.documents)) {
+        throw new Error('The backend returned an unexpected archive response.')
+      }
+      setDocuments(data.documents)
     } catch (err) {
       console.warn('Archive load error:', err)
-      alert('Cannot load archive records. The parish backend service is unavailable.')
+      setDocuments([])
+      setLoadError(err instanceof Error ? err.message : 'Could not load archive records.')
     } finally {
       setLoading(false)
     }
@@ -381,6 +394,15 @@ const records = documents.filter(doc =>
       <p className="font-body text-[#6b8caa] text-[14px] mb-5">
         Store scanned church records with metadata, categorization, and searchable archive retrieval.
       </p>
+
+      {loadError && (
+        <div role="alert" className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900">
+          <span className="font-body text-sm">{loadError}</span>
+          <button type="button" onClick={() => void loadDocuments()} className="rounded-lg bg-navy px-4 py-2 text-sm font-semibold text-white">
+            Retry
+          </button>
+        </div>
+      )}
 
       {showForm && (
         <form
@@ -642,6 +664,12 @@ const records = documents.filter(doc =>
               <tr>
                 <td colSpan={8} className="font-body text-[#9ab0c4] text-[13px] text-center py-10">
                   Loading archive records...
+                </td>
+              </tr>
+            ) : loadError ? (
+              <tr>
+                <td colSpan={7} className="font-body text-amber-700 text-[13px] text-center py-10">
+                  Archive records are unavailable. Use Retry above.
                 </td>
               </tr>
             ) : records.length === 0 ? (

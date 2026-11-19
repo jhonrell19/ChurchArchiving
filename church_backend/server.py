@@ -4396,7 +4396,7 @@ def api_transcribe_mass_ai(mass_id):
 
 
     except Exception as e:
-
+        app.logger.exception("AI transcription failed for mass_id=%s", mass_id)
         return {"error": "The parish service encountered an internal error. Check backend logs."}, 500
 
 

@@ -17,6 +17,7 @@ export default function Navbar() {
   const [mounted, setMounted] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const [open, setOpen] = useState(false)
+  const [accountLink, setAccountLink] = useState({ href: '/login', label: 'Login' })
   const pathname = usePathname()
 
   useEffect(() => {
@@ -31,6 +32,33 @@ export default function Navbar() {
 
   useEffect(() => {
     queueMicrotask(() => setOpen(false))
+  }, [pathname])
+
+  // Keep public navigation consistent with the server-validated login session.
+  useEffect(() => {
+    let active = true
+    const updateAccountLink = async () => {
+      try {
+        const response = await fetch('/api/auth/me', { cache: 'no-store', credentials: 'same-origin' })
+        if (!response.ok) {
+          if (active) setAccountLink({ href: '/login', label: 'Login' })
+          return
+        }
+        const payload: { user?: { role?: string } } = await response.json()
+        const href = payload.user?.role === 'ADMIN' ? '/admin'
+          : payload.user?.role === 'BURIAL_ADMIN' ? '/burial-admin'
+          : payload.user?.role === 'USER' ? '/dashboard' : '/login'
+        if (active) setAccountLink({ href, label: href === '/login' ? 'Login' : 'Dashboard' })
+      } catch {
+        if (active) setAccountLink({ href: '/login', label: 'Login' })
+      }
+    }
+    void updateAccountLink()
+    window.addEventListener('pageshow', updateAccountLink)
+    return () => {
+      active = false
+      window.removeEventListener('pageshow', updateAccountLink)
+    }
   }, [pathname])
 
   if (!mounted) return null
@@ -100,10 +128,10 @@ export default function Navbar() {
 
           <li>
             <Link
-              href="/login"
+              href={accountLink.href}
               className="font-display text-lg font-bold tracking-wide text-white px-6 py-2 rounded-md border border-gold/60 bg-gold/10 hover:bg-gold/20 transition-all duration-200 ml-2"
             >
-              Login
+              {accountLink.label}
             </Link>
           </li>
         </ul>
@@ -138,10 +166,10 @@ export default function Navbar() {
           ))}
 
           <Link
-            href="/login"
+            href={accountLink.href}
             className="font-display text-base font-bold tracking-wide text-white px-4 py-3 rounded-md"
           >
-            Login
+            {accountLink.label}
           </Link>
         </div>
       )}

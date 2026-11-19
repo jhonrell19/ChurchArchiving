@@ -32,6 +32,25 @@ type MassRecord = {
   category: string
 }
 
+
+/** Read one backend response without assuming success means valid JSON. */
+async function readDashboardJson<T>(url: string, label: string): Promise<T> {
+  const response = await fetch(url, { cache: 'no-store' })
+  if (!response.ok) {
+    const unavailable = [502, 503, 504].includes(response.status)
+    throw new Error(
+      `${label}: ${unavailable ? 'parish backend is unreachable' : 'request failed'} (HTTP ${response.status}).`
+    )
+  }
+
+  const body = await response.text()
+  try {
+    return JSON.parse(body) as T
+  } catch {
+    throw new Error(`${label}: the server returned incomplete or invalid JSON. Check Render logs.`)
+  }
+}
+
 const getDisplayType = (type: string) =>
   type.charAt(0).toUpperCase() + type.slice(1)
 
@@ -45,32 +64,27 @@ export default function DashboardHome({ setPage }: { setPage: (p: AdminPage) => 
   const [error, setError] = useState('')
 
   const loadDashboardData = async () => {
+    setLoading(true)
+    setError('')
     try {
-      setLoading(true)
-      setError('')
-
-      const [statsRes, requestsRes, massesRes] = await Promise.all([
-        fetch('/api/backend/api/archive/stats'),
-        fetch('/api/backend/api/requests'),
-        fetch('/api/backend/api/masses'),
+      const [statsResult, requestsResult, massesResult] = await Promise.allSettled([
+        readDashboardJson<ArchiveStats>('/api/backend/api/archive/stats', 'Archive statistics'),
+        readDashboardJson<{ requests: CertificateRequest[] }>('/api/backend/api/requests', 'Certificate requests'),
+        readDashboardJson<{ masses: MassRecord[] }>('/api/backend/api/masses', 'Mass recordings'),
       ])
 
-      const statsData = statsRes.ok ? await statsRes.json() : null
-      const requestsData = requestsRes.ok ? await requestsRes.json() : { requests: [] }
-      const massesData = massesRes.ok ? await massesRes.json() : { masses: [] }
+      setStats(statsResult.status === 'fulfilled' ? statsResult.value : null)
+      setRequests(requestsResult.status === 'fulfilled' && Array.isArray(requestsResult.value.requests)
+        ? requestsResult.value.requests : [])
+      setMasses(massesResult.status === 'fulfilled' && Array.isArray(massesResult.value.masses)
+        ? massesResult.value.masses : [])
 
-      if (!statsRes.ok || !requestsRes.ok || !massesRes.ok) {
-        setError('Some dashboard information could not be loaded. You can retry without leaving the page.')
-      }
-
-      setStats(statsData)
-      setRequests(requestsData.requests || [])
-      setMasses(massesData.masses || [])
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load admin dashboard')
-      setStats(null)
-      setRequests([])
-      setMasses([])
+      const errors = [statsResult, requestsResult, massesResult]
+        .filter(result => result.status === 'rejected')
+        .map(result => result.status === 'rejected'
+          ? (result.reason instanceof Error ? result.reason.message : 'Dashboard request failed.')
+          : '')
+      if (errors.length > 0) setError(errors.join(' '))
     } finally {
       setLoading(false)
     }
@@ -83,25 +97,25 @@ export default function DashboardHome({ setPage }: { setPage: (p: AdminPage) => 
   const realStats = [
     {
       label: 'Total Records',
-      value: stats?.totalRecords ?? 0,
+      value: stats?.totalRecords ?? '—',
       icon: 'ti-archive',
       color: 'text-blue-600 bg-blue-50 border-blue-200',
     },
     {
       label: 'Baptismal Records',
-      value: stats?.baptismal ?? 0,
+      value: stats?.baptismal ?? '—',
       icon: 'ti-droplet',
       color: 'text-blue-600 bg-blue-50 border-blue-200',
     },
     {
       label: 'Marriage Records',
-      value: stats?.marriage ?? 0,
+      value: stats?.marriage ?? '—',
       icon: 'ti-rings',
       color: 'text-green-600 bg-green-50 border-green-200',
     },
     {
       label: 'Confirmation Records',
-      value: stats?.confirmation ?? 0,
+      value: stats?.confirmation ?? '—',
       icon: 'ti-shield-check',
       color: 'text-purple-600 bg-purple-50 border-purple-200',
     },
@@ -116,17 +130,17 @@ export default function DashboardHome({ setPage }: { setPage: (p: AdminPage) => 
   const archiveCards = [
   {
     type: 'Baptismal',
-    count: stats?.baptismal ?? 0,
+    count: stats?.baptismal ?? '—',
     icon: 'ti-droplet',
   },
   {
     type: 'Confirmation',
-    count: stats?.confirmation ?? 0,
+    count: stats?.confirmation ?? '—',
     icon: 'ti-shield-check',
   },
   {
     type: 'Marriage',
-    count: stats?.marriage ?? 0,
+    count: stats?.marriage ?? '—',
     icon: 'ti-rings',
   },
 ]

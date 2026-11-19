@@ -4,7 +4,7 @@ import ParishLogo from '../components/ParishLogo'
 
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRefreshOnHistoryRestore } from '@/hooks/useRefreshOnHistoryRestore'
 
 import RequestsPage from '../admin/components/RequestsPage'
 import RecycleBinPage from '../admin/components/RecycleBinPage'
@@ -37,14 +37,19 @@ const NAV: { id: BurialPage; label: string; icon: string }[] = [
 ]
 
 export default function BurialAdminPage() {
+  useRefreshOnHistoryRestore()
   const [page, setPage] = useState<BurialPage>('dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const router = useRouter()
 
   const logout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' })
-    router.replace('/login')
-    router.refresh()
+    try {
+      const response = await fetch('/api/auth/logout', { method: 'POST' })
+      if (!response.ok) throw new Error('Could not sign out')
+      // Full navigation removes the old authenticated React/router state.
+      window.location.replace('/login')
+    } catch {
+      alert('Logout failed. Please try again.')
+    }
   }
 
   const currentLabel = NAV.find(item => item.id === page)?.label || 'Burial Admin'

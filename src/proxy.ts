@@ -32,10 +32,15 @@ export function proxy(request: NextRequest) {
 
 
   const isProtected = protectedPrefixes.some(prefix =>
-    pathname.startsWith(prefix)
+    pathname === prefix || pathname.startsWith(`${prefix}/`)
   )
 
   if (!isProtected) {
+    if (pathname === '/login' || pathname === '/staff-mfa') {
+      const response = NextResponse.next()
+      response.headers.set('Cache-Control', 'private, no-store, max-age=0, must-revalidate')
+      return response
+    }
     return NextResponse.next()
   }
 
@@ -46,14 +51,20 @@ export function proxy(request: NextRequest) {
   if (!sessionToken) {
     const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('next', pathname)
-    return NextResponse.redirect(loginUrl)
+    const response = NextResponse.redirect(loginUrl)
+    response.headers.set('Cache-Control', 'private, no-store, max-age=0, must-revalidate')
+    return response
   }
 
-  return NextResponse.next()
+  const response = NextResponse.next()
+  response.headers.set('Cache-Control', 'private, no-store, max-age=0, must-revalidate')
+  return response
 }
 
 export const config = {
   matcher: [
+    '/login',
+    '/staff-mfa',
     '/dashboard/:path*',
     '/admin/:path*',
     '/burial-admin/:path*',

@@ -4,7 +4,7 @@ import ParishLogo from '../components/ParishLogo'
 
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRefreshOnHistoryRestore } from '@/hooks/useRefreshOnHistoryRestore'
 import { ADMIN_NAV } from './data/navigation'
 import type { AdminPage } from './types.ts'
 import DashboardHome from './components/DashboardHome'
@@ -38,7 +38,7 @@ const MAIN_NAV: {
 ]
 
 export default function AdminPanel() {
-  const router = useRouter()
+  useRefreshOnHistoryRestore()
   const [page, setPage] = useState<ExtendedAdminPage>('dashboard')
   const [sidebarOpen, setSidebar] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
@@ -71,9 +71,14 @@ export default function AdminPanel() {
   }, [])
 
   const logout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' })
-    router.replace('/login')
-    router.refresh()
+    try {
+      const response = await fetch('/api/auth/logout', { method: 'POST' })
+      if (!response.ok) throw new Error('Could not sign out')
+      // Full navigation removes the old authenticated React/router state.
+      window.location.replace('/login')
+    } catch {
+      alert('Logout failed. Please try again.')
+    }
   }
 
   const currentPageLabel =

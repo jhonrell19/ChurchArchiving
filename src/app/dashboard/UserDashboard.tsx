@@ -4,7 +4,7 @@ import ParishLogo from '../components/ParishLogo'
 
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRefreshOnHistoryRestore } from '@/hooks/useRefreshOnHistoryRestore'
 import type { Page } from './types'
 import { USER_NAV } from './data/navigation'
 import HomePage from './components/HomePage'
@@ -15,14 +15,19 @@ import AnnouncementsPage from './components/AnnouncementsPage'
 import ProfilePage from './components/ProfilePage'
 
 export default function UserDashboard() {
-  const router = useRouter()
+  useRefreshOnHistoryRestore()
   const [page, setPage] = useState<Page>('home')
   const [sidebarOpen, setSidebar] = useState(false)
 
   const logout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' })
-    router.replace('/login')
-    router.refresh()
+    try {
+      const response = await fetch('/api/auth/logout', { method: 'POST' })
+      if (!response.ok) throw new Error('Could not sign out')
+      // Full navigation removes the old authenticated React/router state.
+      window.location.replace('/login')
+    } catch {
+      alert('Logout failed. Please try again.')
+    }
   }
 
   return (

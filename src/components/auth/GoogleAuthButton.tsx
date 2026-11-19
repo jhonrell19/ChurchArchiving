@@ -1,7 +1,6 @@
 'use client'
 
 import Script from 'next/script'
-import { useRouter } from 'next/navigation'
 import {
   useCallback,
   useEffect,
@@ -12,12 +11,11 @@ import {
 type GoogleAuthIntent = 'login' | 'register'
 
 type Props = {
-  privacyConsent?: boolean
   intent: GoogleAuthIntent
+  privacyConsent?: boolean
 }
 
-export default function GoogleAuthButton({ intent, privacyConsent }: Props) {
-  const router = useRouter()
+export default function GoogleAuthButton({ intent, privacyConsent = false }: Props) {
   const buttonRef = useRef<HTMLDivElement | null>(null)
 
   const [googleReady, setGoogleReady] = useState(false)
@@ -45,7 +43,7 @@ export default function GoogleAuthButton({ intent, privacyConsent }: Props) {
           body: JSON.stringify({
             credential: googleResponse.credential,
             intent,
-            privacyConsent,
+            ...(intent === 'register' ? { privacyConsent } : {}),
           }),
         })
 
@@ -67,13 +65,11 @@ export default function GoogleAuthButton({ intent, privacyConsent }: Props) {
         }
 
         if (data.needsProfileCompletion) {
-          router.replace('/complete-profile')
-          router.refresh()
+          window.location.replace('/complete-profile')
           return
         }
 
-        router.replace('/dashboard')
-        router.refresh()
+        window.location.replace('/dashboard')
       } catch (error) {
         console.error('GOOGLE AUTH ERROR:', error)
         alert('Unable to continue with Google right now.')
@@ -81,7 +77,7 @@ export default function GoogleAuthButton({ intent, privacyConsent }: Props) {
         setLoading(false)
       }
     },
-    [intent, privacyConsent, router]
+    [intent, privacyConsent]
   )
 
   useEffect(() => {

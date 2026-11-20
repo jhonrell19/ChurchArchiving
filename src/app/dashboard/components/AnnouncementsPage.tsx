@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import ParishCalendar from '../../components/ParishCalendar'
 import { BADGE_COLOR } from '../data/ui'
 
 type Announcement = {
@@ -10,6 +11,8 @@ type Announcement = {
   date: string
   body: string
   imagePath?: string
+  starts?: string
+  ends?: string
   createdAt: string
 }
 
@@ -51,6 +54,7 @@ export default function AnnouncementsPage() {
         Latest updates and announcements from the parish.
       </p>
 
+      {!loading && <ParishCalendar notices={announcements} />}
       {loading ? (
         <div className="bg-white border border-gold/20 rounded-xl p-12 text-center">
           <p className="font-body text-[#9ab0c4] text-[14px]">
@@ -89,7 +93,7 @@ export default function AnnouncementsPage() {
               </div>
 
               <p className="font-body text-[12px] text-[#9ab0c4] mb-3">
-                {a.date || a.createdAt?.slice(0, 10) || 'No date'}
+                {a.date || a.createdAt?.slice(0, 10) || 'No date'}{a.ends && ' · Notice ends ' + a.ends}
               </p>
 
               <p className="font-body text-[14px] text-[#4a6a8a] leading-relaxed">

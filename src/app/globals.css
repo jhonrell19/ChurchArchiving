@@ -4,15 +4,15 @@
 
 
 @theme {
-  --color-navy:       #17365d;
-  --color-navy-mid:   #28527a;
-  --color-navy-lite:  #5f82a6;
-  --color-ink:        #24364b;
-  --color-gold:       #d4af37;
-  --color-gold-lt:    #e8c84a;
-  --color-cream:      #fffaf0;
+  --color-navy:       #244d3f;
+  --color-navy-mid:   #294c40;
+  --color-navy-lite:  #486454;
+  --color-ink:        #213d31;
+  --color-gold:       #357057;
+  --color-gold-lt:    #d4e6d8;
+  --color-cream:      #f6f7f2;
   --color-txt-lt:     #fffdf8;
-  --color-txt-md:     #66788c;
+  --color-txt-md:     #455b50;
 
   --font-display: Arial, Helvetica, sans-serif;
   --font-body:    Arial, Helvetica, sans-serif;
@@ -32,8 +32,8 @@
 @layer utilities {
   .bg-grid-gold {
     background-image:
-      linear-gradient(rgba(212,175,55,0.04) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(212,175,55,0.04) 1px, transparent 1px);
+      linear-gradient(rgba(56,107,82,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(56,107,82,0.04) 1px, transparent 1px);
     background-size: 60px 60px;
   }
   .gold-divider {
@@ -46,13 +46,13 @@
     display: block;
     width: 56px;
     height: 1px;
-    background: rgba(212,175,55,0.4);
+    background: rgba(56,107,82,0.4);
   }
   .gold-divider .diamond {
     display: block;
     width: 8px;
     height: 8px;
-    background: #d4af37;
+    background: #357057;
     transform: rotate(45deg);
     flex-shrink: 0;
   }
@@ -80,168 +80,13 @@
 
 ::-webkit-scrollbar       { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(212,175,55,0.2); border-radius: 4px; }
+::-webkit-scrollbar-thumb { background: rgba(56,107,82,0.2); border-radius: 4px; }
 
 .font-body {
   font-weight: 500;
 }
 
-/* Improve pale blue/gray text on white and cream backgrounds */
-.text-\[\#9ab0c4\] {
-  color: #5f7387 !important;
-}
-
-.text-\[\#7890a6\] {
-  color: #526a80 !important;
-}
-
-.text-\[\#6b8caa\] {
-  color: #486277 !important;
-}
-
-/* Make faded gold text easier to read on dark/navy areas */
-.text-gold\/30 {
-  color: rgb(212 175 55 / 0.68) !important;
-}
-
-.text-gold\/40 {
-  color: rgb(212 175 55 / 0.78) !important;
-}
-
-.text-gold\/50 {
-  color: rgb(212 175 55 / 0.88) !important;
-}
-
-/* Inputs and search bars */
-input::placeholder,
-textarea::placeholder {
-  color: #71869a;
-  opacity: 1;
-}
-
-/* Small interface labels need slightly more weight */
-.font-display.text-\[9px\],
-.font-display.text-\[10px\],
-.font-display.text-\[11px\] {
-  font-weight: 600;
-}
-
-/* SMART PARISH — SITE-WIDE READABILITY UPDATE (October 2026) */
-/* Applies to public pages, login/registration, parishioner, Main Admin and
-   Burial Admin. Background colors and dark-theme gold/white lettering stay. */
-
-:root {
-  --parish-text-main: #111111;
-  --parish-text-secondary: #334155;
-  --parish-text-muted: #475569;
-}
-
-/* Default foreground only — does not change the navy/gold theme colors used
-   in backgrounds, borders, logos or buttons. */
-body {
-  color: var(--parish-text-main);
-}
-
-/* Main headings, record titles, data labels and text links on pale cards. */
-.text-navy-mid,
-.text-navy-lite,
-.text-ink {
-  color: var(--parish-text-main);
-}
-
-/* text-navy is also used on gold-filled buttons, where black is readable. */
-.text-navy {
-  color: var(--parish-text-main);
-}
-
-/* Make faint Tailwind secondary text legible on light page backgrounds. */
-.text-slate-300,
-.text-slate-400,
-.text-slate-500,
-.text-gray-400,
-.text-gray-500,
-.text-zinc-400,
-.text-zinc-500,
-.text-neutral-400,
-.text-neutral-500,
-.text-stone-400,
-.text-stone-500 {
-  color: var(--parish-text-muted);
-}
-
-.text-slate-600,
-.text-gray-600,
-.text-zinc-600,
-.text-neutral-600,
-.text-stone-600,
-.text-txt-md {
-  color: var(--parish-text-secondary);
-}
-
-/* Existing archive and dashboard screens use custom pale blue-grays.
-   These override earlier fallback colors in globals.css. */
-.text-\[\#9ab0c4\],
-.text-\[\#7890a6\],
-.text-\[\#6b8caa\],
-.text-\[\#4a6a8a\],
-.text-\[\#3a5a7a\] {
-  color: var(--parish-text-muted) !important;
-}
-
-/* Pale placeholder text was particularly hard to see in forms. */
-input::placeholder,
-textarea::placeholder {
-  color: #475569 !important;
-  opacity: 1;
-}
-
-/* Normal form values, keeping disabled/checked/colored control styling. */
-input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
-textarea,
-select {
-  color: var(--parish-text-main);
-}
-
-select option {
-  color: var(--parish-text-main);
-}
-
-/* Two public pages use inline colors rather than Tailwind classes.
-   Restrict those adjustments to known dark-blue headings and pale paragraphs;
-   hero, navy banner, and gold/white text are deliberately not changed. */
-:is(h1, h2, h3, h4, h5, h6)[style*="#0c2a5e"],
-:is(h1, h2, h3, h4, h5, h6)[style*="rgb(12, 42, 94)"],
-:is(h1, h2, h3, h4, h5, h6)[style*="rgb(12,42,94)"] {
-  color: var(--parish-text-main) !important;
-}
-
-p[style*="#4a6a8a"],
-p[style*="#3a5a7a"],
-p[style*="rgb(74, 106, 138)"],
-p[style*="rgb(58, 90, 122)"],
-span[style*="rgba(12, 42, 94, 0.45)"],
-span[style*="rgba(12,42,94,0.45)"] {
-  color: var(--parish-text-secondary) !important;
-}
-
-/* Keep light foreground on dark call-to-action buttons and banners, where
-   a primary-black override would otherwise reduce legibility. */
-:is(.bg-navy, .bg-navy-mid, .bg-black, .bg-slate-800, .bg-slate-900).text-navy-mid,
-:is(.bg-navy, .bg-navy-mid, .bg-black, .bg-slate-800, .bg-slate-900).text-ink {
-  color: #fffdf8;
-}
-
-
-/* October 21 checking: consistent local Arial typography. */
-html, body, button, input, textarea, select { font-family: Arial, Helvetica, sans-serif !important; }
-.font-display, .font-body { font-family: Arial, Helvetica, sans-serif !important; letter-spacing: normal; }
-/* Raise tiny data/navigation labels while respecting existing large headings. */
-.text-\[9px\], .text-\[10px\], .text-\[11px\], .text-\[12px\] { font-size: 13px; line-height: 1.5; }
-main h1, main h2, [class*="dashboard"] h2, [class*="admin"] h2 { font-size: clamp(25px, 2.2vw, 28px); line-height: 1.25; }
-input::placeholder, textarea::placeholder { color: #475569; }
-
-:focus-visible { outline: 3px solid #3578ac; outline-offset: 3px; }
-.parish-workspace { max-width: 68rem; margin: auto; padding: clamp(1.25rem,4vw,3.5rem); color: #17365d; }
+.parish-workspace { max-width: 68rem; margin: auto; padding: clamp(1.25rem,4vw,3.5rem); color: #244d3f; }
 .parish-workspace h1 { font: 600 clamp(2rem,5vw,3.5rem)/1.15 Georgia,serif; margin: 1.4rem 0 .7rem; }
 .parish-workspace h2 { font-size: 1.25rem; font-weight: 700; margin: 1.5rem 0 .5rem; }
 .parish-workspace p { margin: .7rem 0; }
@@ -249,24 +94,98 @@ input::placeholder, textarea::placeholder { color: #475569; }
 .parish-filters,.parish-metrics { display: flex; flex-wrap: wrap; align-items: end; gap: 1rem; padding: 1.2rem; margin: 1.3rem 0; border: 1px solid #d7dce0; background: white; border-radius: .75rem; }
 .parish-filters label { display: grid; gap: .3rem; font-size: .9rem; flex: 1 1 8rem; }
 .parish-filters input,.parish-filters select { min-width: 0; padding: .5rem; border: 1px solid #84909c; border-radius: .35rem; }
-.parish-workspace button,.parish-pager button { background: #17365d; color: white; padding: .55rem 1rem; border-radius: .4rem; }
+.parish-workspace button,.parish-pager button { background: #244d3f; color: white; padding: .55rem 1rem; border-radius: .4rem; }
 .parish-workspace button:disabled,.parish-pager button:disabled { opacity: .5; }
 .parish-pager { display:flex; justify-content:end; align-items:center; gap:.8rem; margin: .75rem 0; }
-.parish-metrics { border-top: 3px solid #b89b4d; align-items: start; gap: 3rem; }
+.parish-metrics { border-top: 3px solid #53836c; align-items: start; gap: 3rem; }
 .parish-metrics strong { display:block; font-size:1.7rem; }
 .parish-workspace table { width:100%; text-align:left; }
 .parish-workspace td,.parish-workspace th { padding:.65rem; border-bottom:1px solid #ced5db; }
-.parish-report-link { display:block; padding:.75rem 1rem; font-weight:600; color:#17365d; border-left:3px solid #b89b4d; }
+.parish-report-link { display:block; padding:.75rem 1rem; font-weight:600; color:#244d3f; border-left:3px solid #53836c; }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior:auto; } .reveal {opacity:1;transform:none} .animate-fade-up,.animate-fade-down,.animate-pulse-cross {animation:none} }
 
-.parish-shell > aside { background:#142d48; border-color:#243d57; }
-.parish-shell > aside > nav { overflow-y:auto; min-height:0; }
-.parish-shell > aside nav button { color:#edf3f7; }
-.parish-shell > aside nav button:hover { background:#254663; color:#fff; }
-.parish-shell > aside nav button.bg-amber-50 { background:#fff2d1; color:#172e46; border-color:#dab769; }
-.parish-shell > aside nav button span.flex-1 { font-size:.82rem; line-height:1.35; }
-.parish-shell > aside nav .parish-report-link { color:#fff3d7; margin-top:.35rem; }
-.parish-shell > aside > div:last-child button { background:#fff; color:#9b2626; }
-.parish-shell header { border-bottom:2px solid #c3a362; }
-.parish-shell header h1,.parish-shell header h2 { font-size:clamp(1.1rem,2.1vw,1.45rem); }
-.parish-shell main { min-width:0; }
+
+@theme {
+  --color-amber-50:#edf4ee; --color-amber-100:#dbeade; --color-amber-200:#bbd4c1; --color-amber-300:#98bba3; --color-amber-600:#41674e; --color-amber-700:#365940; --color-amber-800:#2f5039; --color-amber-900:#244532;
+  --color-blue-50:#eff3ee; --color-blue-100:#e0eae0; --color-blue-200:#c2d4c5; --color-blue-600:#3d6552; --color-blue-700:#375a48; --color-blue-800:#2e5040; --color-blue-900:#284638;
+}
+:root { --paper:#f6f7f2; --forest:#24543e; --ink:#20382c; --line:#cad6ca; --muted:#485e51; }
+body { color:var(--ink); font: 1.0625rem/1.55 system-ui, sans-serif; }
+.font-display,.font-body { font-family:inherit; letter-spacing:normal; }
+:focus-visible { outline:3px solid #894565; outline-offset:3px; }
+button:not(:disabled),select { cursor:pointer; }
+button,input:not([type=checkbox],[type=radio],[type=hidden]),select { min-height:44px; }
+input::placeholder,textarea::placeholder {color:#56685c;opacity:1}
+[class*='text-[9px]'],[class*='text-[10px]'],[class*='text-[11px]'],[class*='text-[12px]'],[class*='text-[13px]'],[class*='text-[14px]'],.text-xs,.text-sm {font-size:1rem;line-height:1.45}
+:is(.text-\[\#9ab0c4\],.text-\[\#7890a6\],.text-\[\#6b8caa\],.text-\[\#4a6a8a\],.text-\[\#3a5a7a\]) {color:var(--muted)}
+[class*="text-gold/"] {color:#3c654e}
+:is(.bg-navy,.bg-ink,.bg-navy-mid,.from-navy,.from-navy-mid) :is(.text-gold,[class*="text-gold/"],.text-txt-md),
+:is(.bg-navy,.bg-ink,.bg-navy-mid).text-gold {color:#f3faf3}
+.bg-gold.text-navy,.bg-gold.text-ink {color:white}
+.text-slate-400,.text-gray-400 {color:#56655c}
+.parish-workspace {padding-top:6rem}
+.public-nav { position:fixed;top:0;inset-inline:0;z-index:50;background:white;color:var(--ink);border-bottom:1px solid var(--line) }
+.nav-inner,.parish-home {max-width:76rem;margin:auto;padding-inline:clamp(1rem,4vw,3rem)}
+.nav-inner {min-height:72px;display:flex;align-items:center;justify-content:space-between;gap:1rem}
+.brand {display:flex;align-items:center;gap:.7rem;font-weight:700;line-height:1.22}
+.brand small {display:block;font-size:.9rem;font-weight:500;color:var(--muted);margin-top:.2rem}
+.desktop-links,.mobile-links {display:flex;gap:.35rem;align-items:center}
+.public-nav a:not(.brand),.menu-switch {padding:.6rem .85rem;border-radius:.5rem;font-weight:600}
+.public-nav a[aria-current=page] {background:#ecf3ed}
+.desktop-links a:last-child,.menu-switch {border:1px solid var(--line)}
+.menu-switch,.mobile-links {display:none}
+.parish-home {padding-top:clamp(6rem,9vw,8rem);padding-bottom:3rem}
+.welcome {display:grid;grid-template-columns:1fr 1fr;background:#e8efe6;border-radius:1.35rem;overflow:hidden}
+.welcome-copy {padding:clamp(1.5rem,4vw,4.5rem);align-self:center}
+.place {font-size:1rem;font-weight:650;color:#42614d}
+.welcome h1,.calendar-section h2,.day-card h3 {font-family:Georgia,'Times New Roman',serif;letter-spacing:-.035em;font-weight:500}
+.welcome h1 {font-size:clamp(3rem,6.6vw,5.6rem);line-height:1.02;margin:.8rem 0 1.2rem}
+.welcome-copy>p:not(.place) {font-size:1.2rem;max-width:32ch}
+.welcome-actions {display:flex;flex-wrap:wrap;gap:.75rem;margin-top:1.5rem}
+.welcome-actions a {font-weight:700;border:1px solid var(--forest);border-radius:.55rem;padding:.7rem 1.5rem;background:white}
+.welcome-actions a:first-child {background:var(--forest);color:white}
+.welcome-photo {position:relative;min-height:15rem}
+.welcome-photo img {object-fit:cover}
+.calendar-section {margin:2.4rem 0}
+.calendar-section h2 {font-size:clamp(2rem,4vw,3.2rem);line-height:1.15}
+.calendar-section>p {margin:.45rem 0 1.2rem;color:var(--muted)}
+.calendar-layout {display:grid;grid-template-columns:1.1fr 1fr;gap:1rem;align-items:start}
+.month-card,.day-card {background:white;border:1px solid var(--line);border-radius:1rem;padding:clamp(.65rem,2.5vw,2rem);min-width:0}
+.month-nav,.calendar-key {display:flex;align-items:center;justify-content:space-between;gap:.4rem}
+.month-nav h3 {font-size:1.3rem;font-weight:700}
+.month-nav button {border:1px solid var(--line);border-radius:.5rem;width:44px;font-size:1.65rem}
+.month-grid {display:grid;grid-template-columns:repeat(7,minmax(0,1fr));margin:1rem 0 .65rem;text-align:center}
+.weekday {font-weight:650;font-size:.9rem;color:var(--muted);padding:.3rem 0}
+.month-grid button {position:relative;border-radius:.5rem;min-height:48px;padding-bottom:5px;font-size:1.05rem}
+.month-grid button span {position:absolute;bottom:3px;left:0;right:0;font-size:.5rem}
+.month-grid button[aria-current=date] {box-shadow:inset 0 0 0 2px #64856b}
+.month-grid button[aria-pressed=true] {background:var(--forest);color:white}
+.calendar-key,.service-row,.day-card article {border-top:1px solid var(--line);padding-top:.75rem;margin-top:.75rem}
+.calendar-key {font-size:.95rem}
+.calendar-key button,.day-card button {color:var(--forest);font-weight:650;text-decoration:underline}
+.day-card h3 {font-size:1.8rem;margin:.15rem 0 .8rem}
+.day-card {border-top:4px solid #608569;overflow-wrap:anywhere}
+.day-card article h4 {font-weight:700;font-size:1.15rem}
+.site-footer {background:#e9efe8;color:var(--ink)}
+.parish-shell {background:var(--paper)}
+.parish-shell > aside {background:white;border-color:var(--line);max-height:100dvh}
+.parish-shell > aside nav {overflow-y:auto;min-height:0}
+.parish-shell > aside nav :is(button,a) {min-height:46px;font-size:1rem}
+.parish-shell > aside nav button.bg-amber-50 {box-shadow:inset 4px 0 var(--forest)}
+.parish-shell header {border-bottom:1px solid var(--line)}
+.parish-shell main {min-width:0}
+.parish-shell h2 {font-size:clamp(1.4rem,2vw,1.8rem)}
+.parish-shell .calendar-section h2 {font-size:2rem}
+@media(max-width:760px){
+ .desktop-links {display:none}.menu-switch {display:inline-block}.mobile-links {display:grid;padding:.4rem 1rem .8rem;justify-items:stretch}
+ .welcome,.calendar-layout {grid-template-columns:1fr}.welcome-photo {min-height:clamp(10rem,40vw,17rem)}
+ .brand {font-size:1rem}.calendar-key {flex-wrap:wrap}.parish-workspace {overflow-x:auto}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+.portal-start {margin-bottom:1.5rem;background:#e5eee3;border-radius:1rem;padding:clamp(1rem,3vw,2rem)}
+.portal-start h2 {font:500 clamp(2rem,3vw,3rem)/1.15 Georgia,serif;margin-bottom:1rem}
+.portal-actions {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,13rem),1fr));gap:.65rem}
+.portal-actions button {border:1px solid #a4baa8;border-radius:.6rem;background:white;color:var(--forest);padding:.85rem 1rem;font-weight:650;display:flex;align-items:center;justify-content:space-between;gap:.6rem;text-align:left}
+.portal-actions button:first-child {background:var(--forest);color:white}
+@media(max-width:1023px){.parish-shell aside.-translate-x-full {visibility:hidden}}
+@media(min-width:1024px){.parish-shell>aside {position:sticky;top:0;align-self:flex-start;height:100dvh;flex-shrink:0}}

@@ -117,6 +117,14 @@ export default function HomePage({ setPage }: { setPage: (p: Page) => void }) {
 
   return (
     <div>
+      <section className="portal-start">
+        <h2>My parish</h2>
+        <div className="portal-actions">
+          <button onClick={()=>setPage('requests')}>Request a certificate <span aria-hidden="true">→</span></button>
+          <button onClick={()=>setPage('announcements')}>Calendar and notices <span aria-hidden="true">→</span></button>
+          <button onClick={()=>setPage('archives')}>Watch a Mass <span aria-hidden="true">→</span></button>
+        </div>
+      </section>
       {playing && <MassMediaPlayer title={playing.title} filepath={playing.filepath} onClose={() => setPlaying(null)} />}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {stats.map(({ label, value, icon }) => (

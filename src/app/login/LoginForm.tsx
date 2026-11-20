@@ -139,7 +139,7 @@ export default function LoginForm() {
     'w-full bg-white border border-slate-200 rounded-xl px-4 py-3 font-body text-[15px] text-navy-mid outline-none placeholder:text-slate-400 focus:border-gold focus:ring-2 focus:ring-gold/10 transition-all'
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#fffaf0] via-white to-[#eaf4ff] flex items-center justify-center px-6 py-24 relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-[#edf2e9] via-white to-[#f6f7f2] flex items-center justify-center px-6 py-24 relative overflow-hidden">
       <div className="absolute inset-0 bg-grid-gold opacity-60 pointer-events-none" />
 
       <div className="relative z-10 w-full max-w-md bg-white border border-amber-100 rounded-3xl px-8 md:px-10 py-10 shadow-xl shadow-slate-200/60">
@@ -171,12 +171,12 @@ export default function LoginForm() {
           className="flex flex-col gap-5"
         >
           <div>
-            <label className="block text-navy-mid mb-2 text-sm font-semibold">
+            <label htmlFor="login-email" className="block text-navy-mid mb-2 text-sm font-semibold">
               Email Address
             </label>
             <input
               type="email"
-              name="email"
+              id="login-email" name="email"
               value={form.email}
               onChange={change}
               placeholder="your@email.com"
@@ -188,7 +188,7 @@ export default function LoginForm() {
 
           <div>
             <div className="flex justify-between mb-2 gap-3">
-              <label className="text-navy-mid text-sm font-semibold">
+              <label htmlFor="login-password" className="text-navy-mid text-sm font-semibold">
                 Password
               </label>
               <Link
@@ -201,7 +201,7 @@ export default function LoginForm() {
 
             <input
               type="password"
-              name="password"
+              id="login-password" name="password"
               value={form.password}
               onChange={change}
               placeholder="••••••••"

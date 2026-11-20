@@ -3,7 +3,7 @@
 import ParishLogo from './ParishLogo'
 
 
-import { useState, useEffect } from 'react'
+
 import Link from 'next/link'
 
 const LINKS = [
@@ -15,19 +15,8 @@ const LINKS = [
 ]
 
 export default function Footer() {
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    queueMicrotask(() => setMounted(true))
-  }, [])
-
-  // Guard against server vs client rendering mismatches entirely
-  if (!mounted) {
-    return null
-  }
-
   return (
-    <footer className="bg-ink border-t border-gold/20 pt-12 pb-7 px-7">
+    <footer className="site-footer border-t border-gold/20 pt-12 pb-7 px-7">
       <div className="max-w-5xl mx-auto flex flex-col items-center gap-5">
 
         <div className="flex items-center gap-4">

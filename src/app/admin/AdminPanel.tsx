@@ -161,9 +161,9 @@ export default function AdminPanel({managePolicy=false}:{managePolicy?:boolean})
             <button
               className="lg:hidden p-1"
               onClick={() => setSidebar(true)}
-              aria-label="Open sidebar"
+              aria-label="Open navigation" aria-expanded={sidebarOpen}
             >
-              <i className="ti ti-menu-2 text-navy-mid text-[20px]" />
+              <i className="ti ti-menu-2 text-navy-mid text-[20px]" /><span className="ml-1">Menu</span>
             </button>
             <h1 className="font-display text-navy-mid text-[15px] font-semibold tracking-wide">
               {currentPageLabel}

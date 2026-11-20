@@ -9,6 +9,8 @@ type Announcement = {
   category: string
   date: string
   body: string
+  starts?: string
+  ends?: string
   createdAt: string
 }
 
@@ -140,11 +142,11 @@ export default function AnnouncementsPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div className="md:col-span-2">
-            <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1.5">
+            <label htmlFor="notice-title" className="block font-display text-[11px] tracking-wider text-navy-mid mb-1.5">
               Title *
             </label>
             <input
-              name="title"
+              id="notice-title" name="title"
               type="text"
               placeholder="Announcement title…"
               value={form.title}
@@ -154,15 +156,16 @@ export default function AnnouncementsPage() {
           </div>
 
           <div>
-            <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1.5">
+            <label htmlFor="notice-category" className="block font-display text-[11px] tracking-wider text-navy-mid mb-1.5">
               Category
             </label>
             <select
-              name="category"
+              id="notice-category" name="category"
               value={form.category}
               onChange={handleChange}
               className={`${selectCls} w-full`}
             >
+              {process.env.NEXT_PUBLIC_PARISH_ANNOUNCEMENT_SLIDES === 'enabled' && <option value="Public calendar notice">Public calendar notice (visible on homepage)</option>}
               <option value="Event">Event</option>
               <option value="Schedule">Schedule</option>
               <option value="Ministry">Ministry</option>
@@ -171,11 +174,11 @@ export default function AnnouncementsPage() {
           </div>
 
           <div>
-            <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1.5">
+            <label htmlFor="notice-date" className="block font-display text-[11px] tracking-wider text-navy-mid mb-1.5">
               Date
             </label>
             <input
-              name="date"
+              id="notice-date" name="date"
               type="date"
               value={form.date}
               onChange={handleChange}
@@ -184,11 +187,11 @@ export default function AnnouncementsPage() {
           </div>
 
           <div className="md:col-span-2">
-            <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1.5">
+            <label htmlFor="notice-body" className="block font-display text-[11px] tracking-wider text-navy-mid mb-1.5">
               Body *
             </label>
             <textarea
-              name="body"
+              id="notice-body" name="body"
               rows={4}
               placeholder="Announcement body…"
               value={form.body}
@@ -199,8 +202,8 @@ export default function AnnouncementsPage() {
         </div>
 
         {process.env.NEXT_PUBLIC_PARISH_ANNOUNCEMENT_SLIDES==='enabled' && <div className="parish-filters">
-          <label>Publish from<input type="date" name="starts" value={form.starts} onChange={handleChange}/></label>
-          <label>Publish through<input type="date" name="ends" value={form.ends} onChange={handleChange}/></label>
+          <label>Publish from<input type="date" required={form.category === "Public calendar notice"} name="starts" value={form.starts} onChange={handleChange}/></label>
+          <label>Publish through<input type="date" min={form.starts} required={form.category === "Public calendar notice"} name="ends" value={form.ends} onChange={handleChange}/></label>
           <label>Priority<input type="number" min="-1000" max="1000" name="priority" value={form.priority} onChange={handleChange}/></label>
           <label>Parish image<select name="image" value={form.image} onChange={handleChange}><option value="">Text only</option>{['slide1.jpg','slide2.jpg','slide3.png','slide4.jpg'].map((img,i)=><option key={img} value={'/slides/'+img}>Parish photo {i+1}</option>)}</select></label></div>}
         <button className="font-display text-[11px] tracking-wider bg-navy text-gold px-5 py-2.5 rounded-lg">
@@ -239,7 +242,7 @@ export default function AnnouncementsPage() {
                   </div>
 
                   <p className="font-body text-[#9ab0c4] text-[11px] mb-2">
-                    {a.date || a.createdAt?.slice(0, 10) || 'No date'}
+                    {a.date || a.createdAt?.slice(0, 10) || 'No event date'}{a.starts && ' · Publish from ' + a.starts}{a.ends && ' through ' + a.ends}
                   </p>
 
                   <p className="font-body text-[#4a6a8a] text-[13px] leading-relaxed">
@@ -248,6 +251,7 @@ export default function AnnouncementsPage() {
                 </div>
 
                 <button
+                  aria-label={'Delete announcement: '+a.title}
                   onClick={() => deleteAnnouncement(a.id)}
                   className="p-1.5 rounded-lg border border-red-200 text-red-600"
                 >

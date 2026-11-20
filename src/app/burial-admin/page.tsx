@@ -124,7 +124,7 @@ export default function BurialAdminPage() {
             onClick={() => setSidebarOpen(true)}
             aria-label="Open navigation"
           >
-            <i className="ti ti-menu-2 text-navy-mid text-[20px]" />
+            <i className="ti ti-menu-2 text-navy-mid text-[20px]" /><span className="ml-1">Menu</span>
           </button>
           <div>
             <h2 className="font-display text-navy-mid text-[15px] font-semibold tracking-wide">

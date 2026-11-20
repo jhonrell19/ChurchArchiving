@@ -4232,6 +4232,13 @@ def api_transcribe_mass_ai(mass_id):
     if denied:
 
         return denied
+    # Emergency safety switch: never run resource-heavy Whisper inside the web API.
+    # A separate worker is required before this can be enabled safely.
+    if os.environ.get("SMART_PARISH_ALLOW_INPROCESS_AI", "NO").upper() != "YES":
+        return {
+            "error": "Cloud AI transcription is temporarily paused to protect parish services. Use the Full Transcript and Summary editor to save locally generated text."
+        }, 503
+
 
     try:
 

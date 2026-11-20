@@ -273,6 +273,10 @@ export default function MassesPage() {
         Manage uploaded masses and assign transcription status.
       </p>
 
+      <p role="status" className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+        Cloud AI transcription is temporarily paused to keep the website responsive.
+        Generate a transcript on your computer, then open the Mass record and save its Full Transcript and Summary here.
+      </p>
       {showForm && (
         <form
           onSubmit={handleCreateMass}
@@ -513,10 +517,10 @@ export default function MassesPage() {
                       {m.filepath && (
                         <button
                           onClick={() => runAITranscription(m.id)}
-                          disabled={transcribingId === m.id}
+                          disabled={true}
                           className="font-display text-[10px] tracking-wider text-gold border border-gold/30 px-2.5 py-1 rounded-lg bg-gold/5 disabled:opacity-50"
                         >
-                          {transcribingId === m.id ? 'Transcribing...' : 'AI Transcribe'}
+                          {'AI Transcribe (paused)'}
                         </button>
                       )}
 

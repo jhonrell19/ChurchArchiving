@@ -64,8 +64,12 @@ class RegistrationSafetyTests(unittest.TestCase):
         self.assertIn('fixed_charge = cemetery_fixed_charge(payment_type, years)', route)
         self.assertIn('amount != fixed_charge[0]', route)
         self.assertIn('certificate_pricing()',route)
-        self.assertIn("PARISH_FEES['sacramentalServices']", route)
-        self.assertIn("PARISH_FEES['cemetery']", route)
+        pricing = next(node for node in ast.parse(route).body
+                       if isinstance(node, ast.FunctionDef) and node.name == 'certificate_pricing')
+        catalog_fields = {ast.unparse(node.slice) for node in ast.walk(pricing)
+                          if isinstance(node, ast.Subscript) and ast.unparse(node.value) == 'PARISH_FEES'}
+        for field in ('sacramentalServices', 'cemetery'):
+            self.assertIn(repr(field), catalog_fields)
 
 
 if __name__ == '__main__':

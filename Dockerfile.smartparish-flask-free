@@ -13,7 +13,7 @@ RUN chmod 0755 /usr/local/sbin/init-parish-disk \
 WORKDIR /app
 COPY church_backend/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt 'gunicorn>=23,<26' \
-    && python -c "from faster_whisper import WhisperModel; import fitz, PIL, pytesseract, psycopg" \
+    && python -c "import fitz, PIL, pytesseract, psycopg" \
     && ffmpeg -version >/dev/null && tesseract --version >/dev/null
 COPY church_backend/*.py /app/church_backend/
 COPY church_backend/templates/certificates/ /app/church_backend/templates/certificates/

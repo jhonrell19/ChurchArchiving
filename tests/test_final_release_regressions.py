@@ -17,10 +17,12 @@ class StaticRegressionTests(unittest.TestCase):
     def test_no_automatic_archive_status_rewrite_on_startup(self):
         src=(ROOT/'church_backend/server.py').read_text(encoding='utf8')
         tree=ast.parse(src)
-        migration=next(n for n in ast.walk(tree) if isinstance(n,ast.FunctionDef) and n.name=='ensure_runtime_schema')
-        body=ast.get_source_segment(src,migration)
-        self.assertNotIn('UPDATE certificate_request',body)
-        self.assertNotIn('UPDATE document',body)
+        startup = next(node for node in tree.body if isinstance(node, ast.With)
+                       and ast.unparse(node.items[0].context_expr) == 'app.app_context()')
+        statements = [node.value.upper() for node in ast.walk(startup)
+                      if isinstance(node, ast.Constant) and isinstance(node.value, str)]
+        for statement in statements:
+            self.assertNotRegex(statement, r'\bUPDATE\s+(?:PARISH_PRIVATE\.)?(?:CERTIFICATE_REQUEST|DOCUMENT)\b')
 
     def test_primary_template_review_and_user_history_permissions_present(self):
         code=(ROOT/'church_backend/server.py').read_text(encoding='utf8')

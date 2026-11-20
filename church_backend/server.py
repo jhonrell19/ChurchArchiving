@@ -37,8 +37,6 @@ from document_templates import generate_official_draft, TemplateNotConfiguredErr
 from ocr_fields import parse_official_form_fields
 from tesseract_runtime import find_tesseract_executable
 
-from faster_whisper import WhisperModel
-
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 
 from reportlab.lib.styles import getSampleStyleSheet
@@ -47,9 +45,6 @@ from werkzeug.utils import secure_filename
 
 from io import BytesIO
 from types import SimpleNamespace
-
-import subprocess
-import threading
 
 import os
 import posixpath
@@ -104,33 +99,6 @@ os.makedirs(MASS_UPLOAD_FOLDER, exist_ok=True)
 
 os.makedirs(TRANSCRIPTION_FOLDER, exist_ok=True)
 os.makedirs(CEMETERY_UPLOAD_FOLDER, exist_ok=True)
-
-
-
-_whisper_model = None
-_whisper_model_lock = threading.Lock()
-
-
-def get_whisper_model():
-    """Load Faster-Whisper only when AI transcription is actually requested.
-
-    Keeping model initialization out of module startup allows the Flask API to
-    start even when the AI model needs extra time to initialize or download.
-    """
-    global _whisper_model
-
-    if _whisper_model is None:
-        with _whisper_model_lock:
-            if _whisper_model is None:
-                app.logger.info("Loading Faster-Whisper base model...")
-                _whisper_model = WhisperModel(
-                    "base",
-                    device="cpu",
-                    compute_type="int8",
-                )
-                app.logger.info("Faster-Whisper model loaded.")
-
-    return _whisper_model
 
 
 
@@ -1799,9 +1767,10 @@ def api_health():
         return {
             "status": "ok",
             "database": "ok",
-            "whisperLoaded": _whisper_model is not None,
+            "whisperLoaded": False,
         }, 200
-    except Exception as error:
+    except Exception:
+        app.logger.exception("Archive database health check failed")
         return {"status": "error", "error": "The parish service encountered an internal error. Check backend logs."}, 500
 
 
@@ -4224,190 +4193,13 @@ def api_user_dashboard_summary():
 
 
 @app.route("/api/masses/<int:mass_id>/transcribe-ai", methods=["POST"])
-
 def api_transcribe_mass_ai(mass_id):
-
     denied = require_roles("ADMIN")
-
     if denied:
-
         return denied
-    # Emergency safety switch: never run resource-heavy Whisper inside the web API.
-    # A separate worker is required before this can be enabled safely.
-    if os.environ.get("SMART_PARISH_ALLOW_INPROCESS_AI", "NO").upper() != "YES":
-        return {
-            "error": "Cloud AI transcription is temporarily paused to protect parish services. Use the Full Transcript and Summary editor to save locally generated text."
-        }, 503
-
-
-    try:
-
-        mass = MassRecord.query.get(mass_id)
-
-
-
-        if not mass or not mass.active:
-
-            return {"error": "Mass record not found"}, 404
-
-
-
-        if not mass.filepath:
-
-            return {"error": "This mass has no uploaded audio/video file"}, 400
-
-
-
-        original_path = backend_storage_path(mass.filepath)
-
-
-
-        if not os.path.exists(original_path):
-
-            return {"error": f"Uploaded file not found: {original_path}"}, 404
-
-
-
-        mass.status = "In Progress"
-
-        db.session.commit()
-
-
-
-        wav_path = original_path + ".wav"
-
-
-
-        subprocess.run(
-
-            [
-
-                "ffmpeg",
-
-                "-y",
-
-                "-i", original_path,
-
-                "-ar", "16000",
-
-                "-ac", "1",
-
-                wav_path,
-
-            ],
-
-            check=True
-
-        )
-
-
-
-        whisper_model = get_whisper_model()
-
-        segments, info = whisper_model.transcribe(
-
-            wav_path,
-
-            language="en",
-
-            beam_size=1
-
-        )
-
-
-
-        raw_text = " ".join([seg.text for seg in segments])
-
-        formatted = format_text(raw_text)
-
-        highlight = highlight_best(formatted)
-
-
-
-        safe_title = mass.title.replace(" ", "_").replace("/", "_")
-
-        pdf_filename = f"mass_{mass.id}_{safe_title}_transcript.pdf"
-
-        pdf_path = os.path.join(TRANSCRIPTION_FOLDER, pdf_filename)
-
-
-
-        create_pdf(formatted, highlight, pdf_path)
-
-
-
-        mass.transcript_text = formatted
-
-        mass.summary_text = highlight
-
-        mass.transcript_filename = pdf_filename
-
-        mass.transcript_filepath = f"uploads/transcriptions/{pdf_filename}"
-
-        mass.status = "Transcribed"
-
-
-
-        db.session.commit()
-
-
-
-        log = AuditLog(
-
-            user="AI Transcription",
-
-            action=f"AI transcribed mass #{mass.id}: {mass.title}",
-
-            document_id=None
-
-        )
-
-
-
-        db.session.add(log)
-
-        db.session.commit()
-
-
-
-        return {
-
-            "message": "AI transcription completed successfully",
-
-            "mass": {
-
-                "id": mass.id,
-
-                "title": mass.title,
-
-                "status": mass.status,
-
-                "transcriptText": mass.transcript_text,
-
-                "summaryText": mass.summary_text,
-
-                "transcriptFilename": mass.transcript_filename,
-
-                "transcriptFilepath": mass.transcript_filepath
-
-            }
-
-        }
-
-
-
-    except subprocess.CalledProcessError as e:
-
-        return {"error": "FFmpeg conversion failed. Check if FFmpeg is installed and the file is valid."}, 500
-
-
-
-    except Exception as e:
-        app.logger.exception("AI transcription failed for mass_id=%s", mass_id)
-        return {"error": "The parish service encountered an internal error. Check backend logs."}, 500
-
-
-
+    return {
+        "error": "Cloud AI transcription is temporarily paused to protect parish services. Use the Full Transcript and Summary editor to save locally generated text."
+    }, 503
 
 
 @app.route("/api/archive/deleted-documents")

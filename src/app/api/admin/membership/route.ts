@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
+import { evidenceEnabled } from '@/lib/membershipEvidence'
+
 const cache = { 'Cache-Control': 'no-store' }
 
 async function authorized() {
@@ -10,17 +12,24 @@ async function authorized() {
 }
 
 // Main Admin only; deliberately no public mutation route.
-export async function GET() {
+export async function GET(req: NextRequest) {
   const actor = await authorized()
   if (!actor) return NextResponse.json({ message: 'Forbidden' }, { status: 403, headers: cache })
+  const page = Number(req.nextUrl.searchParams.get("page") || 1)
+  if (!Number.isSafeInteger(page) || page < 1 || page > 100000) return NextResponse.json({message:"Invalid page"},{status:400})
   const users = await prisma.user.findMany({
     where: { role: 'USER', membershipStatus: 'pending' },
     select: { id: true, firstName: true, middleName: true, surname: true,
       email: true, emailVerified: true, createdAt: true },
-    orderBy: { createdAt: 'asc' },
-    take: 100,
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    skip: (page-1)*20, take: 21,
   })
-  return NextResponse.json({ users }, { headers: cache })
+  const listed = users.slice(0,20)
+  const enabled = evidenceEnabled()
+  const evidence = enabled && listed.length ? await prisma.$queryRaw<{user_id:number,record_hint:string}[]>`
+    SELECT user_id,record_hint FROM parish_auth.membership_evidence WHERE user_id = ANY(${listed.map(u => u.id)}::integer[])` : []
+  return NextResponse.json({ hasNext: users.length>20, evidenceEnabled:enabled,
+    users: listed.map(u => ({...u, evidenceHint:evidence.find(e=>e.user_id===u.id)?.record_hint || null})) }, { headers: cache })
 }
 
 export async function POST(req: NextRequest) {
@@ -46,7 +55,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ message: 'A review reason (5–500 characters) is required' }, { status: 400 })
   }
 
-  const update = await prisma.user.updateMany({
+  const enabled = evidenceEnabled()
+  const certificate = typeof body?.certificateNumber === 'string' ? body.certificateNumber.trim() : ''
+  if (enabled && decision === 'approved' && (!certificate || certificate.length>100 || body?.checked !== true)) {
+    return NextResponse.json({ message:'Review the ID and provide its matching baptismal certificate number.' },{status:400})
+  }
+  const update = await prisma.$transaction(async tx => {
+    const applicant = await tx.$queryRaw<{id:number}[]>`SELECT id FROM parish_auth."User" WHERE id=${id}
+      AND role='USER' AND "emailVerified" AND "membershipStatus"='pending' FOR UPDATE`
+    if (!applicant.length) return {count:0}
+    if (enabled) {
+      let matchedId: number | null = null
+      if (decision === 'approved') {
+        const matches = await tx.$queryRaw<{id:number}[]>`SELECT id FROM parish_private.document
+          WHERE active AND sacrament_type='baptismal' AND certificate_number=${certificate} LIMIT 2 FOR SHARE`
+        if (matches.length !== 1) return {count:0}
+        matchedId = matches[0].id
+      }
+      const evidenceRows = await tx.$executeRaw`UPDATE parish_auth.membership_evidence SET
+        matched_document_id=${matchedId}, reviewed_by=${actor.id}, reviewed_at=now(),
+        decision=${decision}, review_reason=${reason} WHERE user_id=${id} AND decision IS NULL`
+      if (decision === 'approved' && !evidenceRows) return {count:0}
+    }
+    const update = await tx.user.updateMany({
     where: { id, role: 'USER', membershipStatus: 'pending', emailVerified: true },
     data: {
       membershipStatus: decision,
@@ -55,8 +86,10 @@ export async function POST(req: NextRequest) {
       membershipReviewReason: reason,
     },
   })
+    return update
+  })
   if (update.count !== 1) {
-    return NextResponse.json({ message: 'Member must exist, have a verified email, and still be pending' }, { status: 409 })
+    return NextResponse.json({ message: 'Check pending status, ID evidence and the exact baptismal certificate number.' }, { status: 409 })
   }
   console.info('Parish membership reviewed', { memberId: id, actorId: actor.id, decision })
   return NextResponse.json({ success: true }, { headers: cache })

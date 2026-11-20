@@ -43,6 +43,15 @@ function isAllowed(role: Role, method: string, path: string) {
     return true
   }
 
+  if (path === 'api/appointments') return m === 'GET' || m === 'POST'
+  if (path === 'api/claims') return m === 'GET' || (m === 'POST' && role === 'USER')
+  if (/^api\/claims\/\d+\/proof$/.test(path)) return m === 'GET' && role !== 'USER'
+  if (/^api\/claims\/\d+\/review$/.test(path)) return m === 'POST' && role !== 'USER'
+
+  if (path === 'api/reports/members' || path === 'api/reports/schedules') return role === 'ADMIN' && (m === 'GET' || m === 'POST')
+  if (/^api\/reports\/schedules\/\d+\/latest$/.test(path)) return role === 'ADMIN' && m === 'GET'
+  if (path === 'api/reports/certificates') return m === 'GET' && (role === 'ADMIN' || role === 'BURIAL_ADMIN')
+
   if (path === 'api/health') {
     return m === 'GET'
   }

@@ -1,3 +1,5 @@
+import {registerWithPolicy,PolicyChanged} from '@/lib/portalConfig'
+import { evidenceEnabled, pendingEvidenceResponse } from '@/lib/membershipEvidence'
 import { randomBytes } from 'node:crypto'
 
 import bcrypt from 'bcryptjs'
@@ -13,7 +15,7 @@ import {
 import { prisma } from '@/lib/prisma'
 import { normalizeEmail } from '@/lib/validation'
 
-const googleClientId = process.env.GOOGLE_CLIENT_ID
+const googleClientId = process.env.GOOGLE_CLIENT_ID || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
 
 type GoogleAuthIntent = 'login' | 'register'
 
@@ -166,8 +168,8 @@ export async function POST(request: Request) {
         12
       )
 
-      user = await prisma.user.create({
-        data: {
+      user = await registerWithPolicy(
+        {
           email,
           password: passwordHash,
           firstName: payload.given_name?.trim() || null,
@@ -176,8 +178,7 @@ export async function POST(request: Request) {
           membershipStatus: 'pending',
           emailVerified: true,
           googleSub,
-        },
-      })
+        }, body?.policyVersion)
     }
 
     if (user.role !== 'USER') {
@@ -192,6 +193,7 @@ export async function POST(request: Request) {
 
     // Google verifies email identity, not church membership.
     if (user.membershipStatus !== 'approved') {
+      if (evidenceEnabled() && user.emailVerified && user.membershipStatus === 'pending') return pendingEvidenceResponse(user.id)
       return NextResponse.json(
         { message: user.membershipStatus === 'rejected'
             ? 'Your parish membership registration was not approved. Contact the parish office.'
@@ -248,6 +250,7 @@ export async function POST(request: Request) {
 
     return response
   } catch (error) {
+    if(error instanceof PolicyChanged) return NextResponse.json({message:'The privacy notice changed. Refresh, read the notice, and consent again.'},{status:409})
     console.error('GOOGLE AUTH ERROR:', error)
 
     return NextResponse.json(

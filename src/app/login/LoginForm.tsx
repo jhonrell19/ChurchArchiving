@@ -52,6 +52,7 @@ export default function LoginForm() {
 
       const data = await response.json().catch(() => ({}))
 
+      if (data.evidenceRequired) { window.location.assign('/verification'); return }
       if (!response.ok) {
         if (data.verificationRequired) {
           setVerificationEmail(

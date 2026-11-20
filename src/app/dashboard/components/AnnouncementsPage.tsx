@@ -9,6 +9,7 @@ type Announcement = {
   category: string
   date: string
   body: string
+  imagePath?: string
   createdAt: string
 }
 
@@ -72,6 +73,7 @@ export default function AnnouncementsPage() {
         <div className="space-y-4">
           {announcements.map(a => (
             <div key={a.id} className="bg-white border border-gold/20 rounded-xl p-6">
+              {a.imagePath && <img src={a.imagePath} alt="" className="mb-4 h-44 w-full object-cover rounded-lg"/>}
               <div className="flex items-start justify-between gap-4 mb-2">
                 <p className="font-display text-navy-mid text-[14px] font-semibold leading-snug">
                   {a.title}

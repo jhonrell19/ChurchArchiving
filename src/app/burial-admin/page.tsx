@@ -55,7 +55,7 @@ export default function BurialAdminPage() {
   const currentLabel = NAV.find(item => item.id === page)?.label || 'Burial Admin'
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] flex">
+    <div className="parish-shell min-h-screen bg-[#f8fafc] flex">
       <aside
         className={`fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-slate-200 flex flex-col transform transition-transform duration-300 shadow-sm ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
@@ -92,6 +92,9 @@ export default function BurialAdminPage() {
               {item.label}
             </button>
           ))}
+          <a className="parish-report-link" href="/office-reports">Certificate reports</a>
+          {process.env.NEXT_PUBLIC_PARISH_RELATIVE_CLAIMS === 'enabled' && <a className="parish-report-link" href="/claims">Relationship claims</a>}
+          {process.env.NEXT_PUBLIC_PARISH_APPOINTMENTS === 'enabled' && <a className="parish-report-link" href="/appointments">Office appointments</a>}
         </nav>
 
         <div className="px-3 pb-4">

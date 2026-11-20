@@ -551,6 +551,18 @@ export default function MassesPage() {
 
                     {expanded === m.id && (
                       <div className="mt-4 bg-gold/5 border border-gold/10 rounded-xl p-4">
+                        <label className="mb-4 block font-semibold">Import local transcription draft
+                          <input type="file" accept=".json,application/json" className="block" onChange={async event=>{
+                            const file=event.target.files?.[0]; event.target.value=''
+                            if (!file) return
+                            try {
+                              if (file.size>2500000) throw Error()
+                              const draft=JSON.parse(await file.text())
+                              if (typeof draft.transcriptText!=='string' || !draft.transcriptText.trim() || draft.transcriptText.length>500000 || typeof draft.summaryText!=='string' || draft.summaryText.length>50000) throw Error()
+                              setTranscriptionForm(prev=>({...prev,[m.id]:{transcriptText:draft.transcriptText, summaryText:draft.summaryText}}))
+                            } catch { alert('Choose a valid local transcript JSON draft.') }
+                          }}/>
+                        </label>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
                             <label className="block font-display text-[10px] tracking-widest uppercase text-[#9ab0c4] mb-1">

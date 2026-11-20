@@ -1,3 +1,4 @@
+import { evidenceEnabled, pendingEvidenceResponse } from '@/lib/membershipEvidence'
 import bcrypt from 'bcryptjs'
 import { NextResponse } from 'next/server'
 
@@ -67,6 +68,7 @@ export async function POST(req: Request) {
     }
 
     if (user.role === 'USER' && user.membershipStatus !== 'approved') {
+      if (evidenceEnabled() && user.emailVerified && user.membershipStatus === 'pending') return pendingEvidenceResponse(user.id)
       return NextResponse.json(
         { message: user.membershipStatus === 'rejected'
             ? 'Your parish membership registration was not approved. Contact the parish office.'

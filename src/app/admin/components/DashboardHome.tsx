@@ -69,7 +69,7 @@ export default function DashboardHome({ setPage }: { setPage: (p: AdminPage) => 
     try {
       const [statsResult, requestsResult, massesResult] = await Promise.allSettled([
         readDashboardJson<ArchiveStats>('/api/backend/api/archive/stats', 'Archive statistics'),
-        readDashboardJson<{ requests: CertificateRequest[] }>('/api/backend/api/requests', 'Certificate requests'),
+        readDashboardJson<{ requests: CertificateRequest[] }>('/api/backend/api/requests?page=1', 'Certificate requests'),
         readDashboardJson<{ masses: MassRecord[] }>('/api/backend/api/masses', 'Mass recordings'),
       ])
 

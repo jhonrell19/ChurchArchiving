@@ -54,7 +54,7 @@ class RegistrationSafetyTests(unittest.TestCase):
     def test_registration_requires_mail_delivery_configuration(self):
         route=(ROOT/'src/app/api/auth/register/route.ts').read_text()
         self.assertIn('isTransactionalEmailConfigured()', route)
-        self.assertLess(route.index('if (!isTransactionalEmailConfigured())'), route.index('await prisma.user.create'))
+        self.assertLess(route.index('if (!isTransactionalEmailConfigured())'), route.index('await registerWithPolicy('))
         self.assertIn('verificationRequired: true', route)
         self.assertIn('emailVerified: false', route)
 

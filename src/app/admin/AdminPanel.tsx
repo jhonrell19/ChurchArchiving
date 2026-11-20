@@ -18,12 +18,6 @@ import RecycleBinPage from './components/RecycleBinPage'
 
 type ExtendedAdminPage = AdminPage | 'recycle'
 
-type CertificateRequest = {
-  id: number
-  status: string
-  isUrgent: boolean
-}
-
 const MAIN_NAV: {
   id: ExtendedAdminPage
   label: string
@@ -37,7 +31,7 @@ const MAIN_NAV: {
   },
 ]
 
-export default function AdminPanel() {
+export default function AdminPanel({managePolicy=false}:{managePolicy?:boolean}) {
   useRefreshOnHistoryRestore()
   const [page, setPage] = useState<ExtendedAdminPage>('dashboard')
   const [sidebarOpen, setSidebar] = useState(false)
@@ -46,18 +40,12 @@ export default function AdminPanel() {
 
   const loadRequestCounts = async () => {
     try {
-      const res = await fetch('/api/backend/api/requests', { cache: 'no-store' })
+      const res = await fetch('/api/backend/api/requests?summary=counts', { cache: 'no-store' })
       if (!res.ok) throw new Error('Failed to load request counts')
 
       const data = await res.json()
-      const requests: CertificateRequest[] = Array.isArray(data.requests) ? data.requests : []
-
-      setPendingCount(
-        requests.filter(r => r.status === 'Pending' && !r.isUrgent).length
-      )
-      setUrgentCount(
-        requests.filter(r => r.status !== 'Released' && r.status !== 'Rejected' && r.isUrgent).length
-      )
+      setPendingCount(data.pending)
+      setUrgentCount(data.urgent)
     } catch {
       setPendingCount(0)
       setUrgentCount(0)
@@ -93,7 +81,7 @@ export default function AdminPanel() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] flex">
+    <div className="parish-shell min-h-screen bg-[#f8fafc] flex">
       <aside
         className={`fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-slate-200 flex flex-col transform transition-transform duration-300 shadow-sm ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
@@ -142,6 +130,10 @@ export default function AdminPanel() {
             className="mt-3 block rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-[12px] font-semibold text-[#14264b] hover:bg-amber-100">
             Parish Membership Approvals
           </a>
+          <a className="parish-report-link" href="/office-reports">Certificate reports</a>
+          {process.env.NEXT_PUBLIC_PARISH_RELATIVE_CLAIMS === 'enabled' && <a className="parish-report-link" href="/claims">Relationship claims</a>}
+          {managePolicy && <a className="parish-report-link" href="/admin/portal-settings">Policies and request purposes</a>}
+          {process.env.NEXT_PUBLIC_PARISH_APPOINTMENTS === 'enabled' && <a className="parish-report-link" href="/appointments">Office appointments</a>}
         </nav>
 
         <div className="px-3 pb-4">

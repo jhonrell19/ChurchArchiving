@@ -1,13 +1,7 @@
-import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 import parishFees from '../../../config/parish_fees.json'
 
-const SCHEDULE = [
-  { day: 'Sunday',    time: '8:00 AM',  tag: 'Morning Mass'  },
-  { day: 'Sunday',    time: '10:00 AM', tag: 'High Mass'     },
-  { day: 'Wednesday', time: '6:00 PM',  tag: 'Bible Study'   },
-  { day: 'Friday',    time: '7:00 PM',  tag: 'Prayer Service'},
-]
+import { SCHEDULE } from '../components/serviceSchedule'
 
 const SACRAMENTS = [
   { title: 'Baptism',            desc: 'The sacrament of initiation into the Christian faith. Contact the parish office to schedule and learn about preparation requirements.' },
@@ -28,7 +22,6 @@ const MINISTRIES = [
 export default function ServicesPage() {
   return (
     <>
-      <Navbar />
 
       {/* Hero */}
       <section className="relative bg-navy pt-32 pb-20 px-7 text-center overflow-hidden border-b border-gold/15">

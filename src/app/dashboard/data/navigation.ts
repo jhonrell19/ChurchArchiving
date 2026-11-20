@@ -5,6 +5,6 @@ export const USER_NAV: { id: Page; label: string; icon: string }[] = [
   { id: 'archives', label: 'Mass Archives', icon: 'ti-video' },
   { id: 'transcriptions', label: 'Transcribed Mass', icon: 'ti-file-text' },
   { id: 'requests', label: 'My Requests', icon: 'ti-file-plus' },
-  { id: 'announcements', label: 'Announcements', icon: 'ti-bell' },
+  { id: 'announcements', label: 'Calendar and notices', icon: 'ti-bell' },
   { id: 'profile', label: 'My Profile', icon: 'ti-user' },
 ]

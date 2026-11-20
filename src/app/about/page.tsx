@@ -1,4 +1,3 @@
-import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 
 const TIMELINE = [
@@ -25,14 +24,14 @@ const STORY = [
 
 // ── Reusable style tokens ──
 const S = {
-  label:    { fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '11px', letterSpacing: '3px', textTransform: 'uppercase' as const, display: 'block', marginBottom: '12px' },
+  label:    { fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '16px', letterSpacing: '3px', textTransform: 'uppercase' as const, display: 'block', marginBottom: '12px' },
   h2:       { fontFamily: 'Arial, Helvetica, sans-serif', fontSize: 'clamp(18px,2.5vw,26px)', fontWeight: 600, marginBottom: '16px' },
-  body:     { fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '15px', lineHeight: 1.75 },
-  gold:     { color: '#d4af37' },
-  navy:     { color: '#0c2a5e' },
-  muted:    { color: '#8aaccf' },
-  dimLabel: { color: 'rgba(12,42,94,0.45)' },
-  dimGold:  { color: 'rgba(212,175,55,0.45)' },
+  body:     { fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '18px', lineHeight: 1.75 },
+  gold:     { color: '#295f4e' },
+  navy:     { color: '#203e34' },
+  muted:    { color: '#3c554b' },
+  dimLabel: { color: '#375749' },
+  dimGold:  { color: '#375749' },
 }
 
 function SectionLabel({ text, dark = false }: { text: string; dark?: boolean }) {
@@ -52,16 +51,15 @@ function SectionHeader({ label, title, dark = false }: { label: string; title: s
 export default function AboutPage() {
   return (
     <>
-      <Navbar />
 
       {/* HERO */}
-      <section style={{ background: '#071630', padding: '128px 28px 80px', textAlign: 'center', position: 'relative', overflow: 'hidden', borderBottom: '1px solid rgba(212,175,55,0.15)' }}>
+      <section style={{ background: '#e7efe9', padding: '128px 28px 80px', textAlign: 'center', position: 'relative', overflow: 'hidden', borderBottom: '1px solid rgba(51,100,78,0.15)' }}>
         <div className="absolute inset-0 bg-grid-gold pointer-events-none" />
         <div style={{ position: 'relative', zIndex: 10, maxWidth: '560px', margin: '0 auto' }}>
           <SectionLabel text="Who We Are" dark />
-          <div style={{ fontSize: '36px', color: '#d4af37', marginBottom: '16px' }} className="animate-pulse-cross">✝</div>
-          <h1 style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: 'clamp(22px,4vw,36px)', fontWeight: 600, color: '#d4af37', marginBottom: '16px' }}>About Our Church</h1>
-          <p style={{ ...S.body, fontStyle: 'italic', color: '#e8d9b0', marginBottom: '24px' }}>A heritage of faith, independence, and service to the Filipino people since 1902.</p>
+          <div style={{ fontSize: '36px', color: '#295f4e', marginBottom: '16px' }} className="animate-pulse-cross">✝</div>
+          <h1 style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: 'clamp(22px,4vw,36px)', fontWeight: 600, color: '#295f4e', marginBottom: '16px' }}>About Our Church</h1>
+          <p style={{ ...S.body, fontStyle: 'italic', color: '#334e44', marginBottom: '24px' }}>A heritage of faith, independence, and service to the Filipino people since 1902.</p>
           <div className="gold-divider"><span /><span className="diamond" /><span /></div>
         </div>
       </section>
@@ -72,23 +70,23 @@ export default function AboutPage() {
           <div>
             <SectionLabel text="Our Story" />
             <h2 style={{ ...S.h2, ...S.navy, lineHeight: 1.35 }}>Did you know this parish was two years older than the Iglesia Filipina Independiente?</h2>
-            {STORY.map((p, i) => <p key={i} style={{ ...S.body, color: '#3a5a7a', marginBottom: '14px' }}>{p}</p>)}
+            {STORY.map((p, i) => <p key={i} style={{ ...S.body, color: '#3c554b', marginBottom: '17px' }}>{p}</p>)}
           </div>
-          <img src="/images/CPhoto.jpg" alt="Church" style={{ width: '100%', height: '300px', objectFit: 'cover', borderRadius: '12px', border: '1px solid rgba(212,175,55,0.25)' }} />
+          <img src="/images/CPhoto.jpg" alt="Church" style={{ width: '100%', height: '300px', objectFit: 'cover', borderRadius: '12px', border: '1px solid rgba(51,100,78,0.25)' }} />
         </div>
       </section>
 
       {/* TIMELINE */}
-      <section style={{ background: '#071630', padding: '80px 28px', borderTop: '1px solid rgba(212,175,55,0.15)', borderBottom: '1px solid rgba(212,175,55,0.15)' }}>
+      <section style={{ background: '#e7efe9', padding: '80px 28px', borderTop: '1px solid rgba(51,100,78,0.15)', borderBottom: '1px solid rgba(51,100,78,0.15)' }}>
         <div style={{ maxWidth: '640px', margin: '0 auto' }}>
           <SectionHeader label="History" title="Our Timeline" dark />
           <div style={{ position: 'relative', paddingLeft: '36px' }}>
-            <div style={{ position: 'absolute', left: '10px', top: 0, bottom: 0, width: '1px', background: 'rgba(212,175,55,0.2)' }} />
+            <div style={{ position: 'absolute', left: '10px', top: 0, bottom: 0, width: '1px', background: 'rgba(51,100,78,0.2)' }} />
             {TIMELINE.map(({ year, title, desc }, i) => (
               <div key={i} style={{ position: 'relative', marginBottom: '36px' }}>
-                <div style={{ position: 'absolute', left: '-26px', top: '4px', width: '12px', height: '12px', borderRadius: '50%', background: '#d4af37', border: '2px solid #071630', boxShadow: '0 0 0 3px rgba(212,175,55,0.2)' }} />
+                <div style={{ position: 'absolute', left: '-26px', top: '4px', width: '12px', height: '12px', borderRadius: '50%', background: '#295f4e', border: '2px solid #e7efe9', boxShadow: '0 0 0 3px rgba(51,100,78,0.2)' }} />
                 <div style={{ ...S.label, ...S.gold, marginBottom: '4px' }}>{year}</div>
-                <div style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '14px', color: 'rgba(212,175,55,0.9)', marginBottom: '8px' }}>{title}</div>
+                <div style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '17px', color: 'rgba(51,100,78,0.9)', marginBottom: '8px' }}>{title}</div>
                 <p style={{ ...S.body, ...S.muted }}>{desc}</p>
               </div>
             ))}
@@ -102,10 +100,10 @@ export default function AboutPage() {
           <SectionHeader label="What We Stand For" title="Our Core Values" />
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px,1fr))', gap: '24px' }}>
             {VALUES.map(({ title, desc }) => (
-              <div key={title} style={{ background: '#fff', border: '1px solid rgba(212,175,55,0.28)', borderRadius: '12px', padding: '32px 24px', textAlign: 'center' }}>
-                <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.28)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 18px', fontSize: '22px' }}>✝</div>
-                <h3 style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '15px', fontWeight: 600, color: '#0c2a5e', marginBottom: '12px' }}>{title}</h3>
-                <p style={{ ...S.body, color: '#4a6a8a' }}>{desc}</p>
+              <div key={title} style={{ background: '#fff', border: '1px solid rgba(51,100,78,0.28)', borderRadius: '12px', padding: '32px 24px', textAlign: 'center' }}>
+                <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(51,100,78,0.1)', border: '1px solid rgba(51,100,78,0.28)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 18px', fontSize: '22px' }}>✝</div>
+                <h3 style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '18px', fontWeight: 600, color: '#203e34', marginBottom: '12px' }}>{title}</h3>
+                <p style={{ ...S.body, color: '#3c554b' }}>{desc}</p>
               </div>
             ))}
           </div>

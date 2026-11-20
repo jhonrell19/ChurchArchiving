@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 import Link from 'next/link'
 
@@ -26,7 +25,6 @@ export default function ContactPage() {
 
   return (
     <>
-      <Navbar />
 
       {/* Hero */}
       <section className="relative bg-navy pt-32 pb-20 px-7 text-center overflow-hidden border-b border-gold/15">

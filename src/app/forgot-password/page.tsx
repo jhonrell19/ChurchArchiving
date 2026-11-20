@@ -31,7 +31,7 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#fffaf0] via-white to-[#eaf4ff] flex items-center justify-center px-6 py-20">
+    <div className="min-h-screen bg-gradient-to-br from-[#edf2e9] via-white to-[#f6f7f2] flex items-center justify-center px-6 py-20">
       <div className="w-full max-w-md bg-white border border-amber-100 rounded-3xl p-10 shadow-xl shadow-slate-200/60">
         <div className="text-center mb-7">
           <div className="mb-3 flex justify-center"><ParishLogo height={88} /></div>

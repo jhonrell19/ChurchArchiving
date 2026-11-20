@@ -41,7 +41,7 @@ function VerifyEmailContent() {
   }, [token])
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#fffaf0] via-white to-[#eaf4ff] flex items-center justify-center px-6 py-20">
+    <div className="min-h-screen bg-gradient-to-br from-[#edf2e9] via-white to-[#f6f7f2] flex items-center justify-center px-6 py-20">
       <div className="w-full max-w-md bg-white border border-amber-100 rounded-3xl p-10 text-center shadow-xl shadow-slate-200/60">
         <div className="mb-4 flex justify-center"><ParishLogo height={88} /></div>
         <h1 className="font-display text-navy-mid text-xl font-semibold mb-3">
@@ -81,7 +81,7 @@ function VerifyEmailContent() {
 
 function VerifyEmailFallback() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#fffaf0] via-white to-[#eaf4ff] flex items-center justify-center px-6 py-20">
+    <div className="min-h-screen bg-gradient-to-br from-[#edf2e9] via-white to-[#f6f7f2] flex items-center justify-center px-6 py-20">
       <div className="w-full max-w-md bg-white border border-amber-100 rounded-3xl p-10 text-center shadow-xl shadow-slate-200/60">
         <div className="mb-4 flex justify-center"><ParishLogo height={88} /></div>
         <h1 className="font-display text-navy-mid text-xl font-semibold mb-3">

@@ -461,6 +461,9 @@ def protect_backend_boundary():
 
 
 
+    if request.path == "/api/public/calendar" and request.method == "GET" and g.user_role == "PUBLIC_CALENDAR":
+        return None
+
     if request.path == "/api/paymongo/confirm-internal" and g.user_role == "PAYMONGO_WEBHOOK":
         return None
 
@@ -3910,6 +3913,22 @@ def published_announcements():
     return query.order_by(func.coalesce(slide.c.priority,0).desc(),Announcement.id.desc())
 
 
+@app.get("/api/public/calendar")
+def public_calendar():
+    if os.getenv("PARISH_ANNOUNCEMENT_SLIDES") != "enabled":
+        return {"notices": []}
+    rows = db.session.execute(text("""
+        SELECT a.id, a.title, a.body, a.announcement_date AS date,
+               s.starts_at AS starts, s.ends_at AS ends
+        FROM announcement a JOIN announcement_slide s ON s.announcement_id = a.id
+        WHERE a.active AND a.category = 'Public calendar notice'
+          AND (now() AT TIME ZONE 'Asia/Manila')::date BETWEEN s.starts_at AND s.ends_at
+        ORDER BY s.priority DESC, s.ends_at, a.id DESC LIMIT 100
+    """)).mappings()
+    return {"notices": [{**row, "starts": row["starts"].isoformat(),
+                         "ends": row["ends"].isoformat()} for row in rows]}
+
+
 @app.route("/api/announcements", methods=["GET"])
 
 def api_get_announcements():
@@ -3928,8 +3947,8 @@ def api_get_announcements():
 
         slides = {}
         if os.getenv("PARISH_ANNOUNCEMENT_SLIDES") == "enabled" and announcements:
-            slides = dict(db.session.execute(text("SELECT announcement_id,image_path FROM announcement_slide WHERE announcement_id=ANY(:ids)"),
-                                             {"ids":[a.id for a in announcements]}).all())
+            slides = {row.announcement_id: row for row in db.session.execute(text("SELECT announcement_id,image_path,starts_at,ends_at FROM announcement_slide WHERE announcement_id=ANY(:ids)"),
+                                             {"ids":[a.id for a in announcements]}).all()}
 
         return {
 
@@ -3941,7 +3960,9 @@ def api_get_announcements():
 
                     "title": a.title,
 
-                    "imagePath": slides.get(a.id),
+                    "imagePath": slides[a.id].image_path if a.id in slides else None,
+                    "starts": str(slides[a.id].starts_at) if a.id in slides and slides[a.id].starts_at else None,
+                    "ends": str(slides[a.id].ends_at) if a.id in slides and slides[a.id].ends_at else None,
                     "category": a.category,
 
                     "date": a.announcement_date,
@@ -3999,6 +4020,12 @@ def api_create_announcement():
             return {"error": "Title and body are required"}, 400
 
 
+
+        if category == "Public calendar notice" and (
+            os.getenv("PARISH_ANNOUNCEMENT_SLIDES") != "enabled" or
+            not data.get("starts") or not data.get("ends")
+        ):
+            return {"error": "Public notices need a publication start and end date."}, 400
 
         new_announcement = Announcement(
 

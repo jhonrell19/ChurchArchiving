@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { otpSmsConfigured, sendOtpSms } from '@/lib/smsProvider'
 
 const OTP_TTL_MS = 5 * 60 * 1000
 const SEND_COOLDOWN_MS = 60 * 1000
@@ -13,11 +14,7 @@ const PHONE_E164_RE = /^\+639\d{9}$/
 const noStore = { 'Cache-Control': 'no-store' }
 const json = (obj: object, status = 200) => NextResponse.json(obj, { status, headers: noStore })
 
-function configured() {
-  return process.env.TEXTBEE_OTP_ENABLED === 'true' &&
-    Boolean(process.env.TEXTBEE_API_KEY?.trim()) &&
-    Boolean(process.env.PHONE_OTP_PEPPER && process.env.PHONE_OTP_PEPPER.length >= 32)
-}
+function configured() { return otpSmsConfigured() }
 function otpHash(userId: number, phone: string, code: string) {
   const pepper = process.env.PHONE_OTP_PEPPER
   if (!pepper || pepper.length < 32) throw new Error('PHONE_OTP_PEPPER is not configured')
@@ -87,24 +84,11 @@ export async function POST(req: Request) {
     if (reservation === 'cooldown') return json({ message: 'Please wait at least a minute before requesting another code.' }, 429)
     if (reservation === 'limit') return json({ message: 'Daily SMS verification limit reached. Try again tomorrow.' }, 429)
     try {
-      const body: { recipients: string[]; message: string; deviceId?: string } = { recipients: [user.phoneNumber], message }
-      if (process.env.TEXTBEE_DEVICE_ID?.trim()) body.deviceId = process.env.TEXTBEE_DEVICE_ID.trim()
-      const response = await fetch('https://api.textbee.dev/api/v1/gateway/send-sms', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.TEXTBEE_API_KEY! },
-        body: JSON.stringify(body), cache: 'no-store', signal: AbortSignal.timeout(15000),
-      })
-      const result = await response.json().catch(() => ({}))
-      if (!response.ok || result?.data?.success === false) {
-        // Do not leave an unusable code active after provider rejection.
-        await prisma.phoneVerification.updateMany({ where: { userId: user.id, otpHash: secretHash }, data: { otpHash: null, expiresAt: null } })
-        console.error('TEXTBEE SEND FAILED (HTTP status):', response.status)
-        return json({ message: 'SMS gateway did not accept the message. Check the gateway phone, SIM and quota.' }, 502)
-      }
-      return json({ message: 'If your gateway is online, an SMS code has been queued. Enter the code when it arrives.', sent: true })
+      await sendOtpSms(user.phoneNumber, message)
+      return json({ message: 'The SMS provider accepted your code. Enter it when it arrives.', sent: true })
     } catch {
       await prisma.phoneVerification.updateMany({ where: { userId: user.id, otpHash: secretHash }, data: { otpHash: null, expiresAt: null } })
-      return json({ message: 'SMS gateway is unreachable. Please try later.' }, 502)
+      return json({ message: 'SMS could not be sent. Check the configured provider, sender and quota.' }, 502)
     }
   }
 

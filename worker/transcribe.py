@@ -20,13 +20,16 @@ def main():
     parser.add_argument('recording', type=Path)
     parser.add_argument('output', type=Path)
     parser.add_argument('--language', choices=['auto','tl','en'], default='auto')
+    parser.add_argument('--model', choices=['base','small','medium'], default='base',
+                        help='Larger models may improve recognition but require more RAM and time.')
+    parser.add_argument('--beam-size', type=int, choices=range(1, 9), metavar='{1..8}', default=3)
     args = parser.parse_args()
     if not args.recording.is_file() or args.output.exists():
         parser.error("Select an existing recording and a new output filename.")
     from faster_whisper import WhisperModel
-    model = WhisperModel("base", device="cpu", compute_type="int8")
+    model = WhisperModel(args.model, device="cpu", compute_type="int8")
     segments, _ = model.transcribe(str(args.recording), language=None if args.language=='auto' else args.language,
-                                   vad_filter=True, beam_size=3)
+                                   vad_filter=True, beam_size=args.beam_size)
     result = draft(segments)
     with args.output.open('x', encoding='utf-8') as target:
         json.dump(result,target,ensure_ascii=False)

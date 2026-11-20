@@ -2,6 +2,8 @@
 import hashlib
 import os
 from pathlib import Path
+import re
+from urllib.parse import urlsplit
 import tempfile
 from functools import lru_cache
 from sqlalchemy import text
@@ -13,21 +15,42 @@ def enabled():
     return os.getenv('PARISH_PRIVATE_UPLOADS') == 'enabled'
 
 
+def storage_provider():
+    provider = os.getenv('PARISH_STORAGE_PROVIDER', 'supabase').strip().lower()
+    if provider not in ('supabase', 'oci'):
+        raise RuntimeError('Unsupported private storage provider.')
+    return provider
+
+
 @lru_cache(maxsize=1)
 def client():
     import boto3
     from botocore.config import Config
     endpoint = os.environ['PARISH_S3_ENDPOINT']
-    if not endpoint.startswith('https://'):
-        raise RuntimeError('Private storage needs an HTTPS endpoint.')
+    parsed = urlsplit(endpoint)
+    if parsed.scheme != 'https' or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path not in ('', '/'):
+        raise RuntimeError('Private storage needs an HTTPS endpoint without credentials or a path.')
+    if storage_provider() == 'oci':
+        # OCI S3 compatibility uses the Object Storage namespace and region.
+        match = re.fullmatch(r'[a-zA-Z0-9-]+\.compat\.objectstorage\.([a-z0-9-]+)\.oraclecloud\.com', parsed.netloc)
+        if not match or match.group(1) != os.environ['PARISH_S3_REGION']:
+            raise RuntimeError('OCI S3 endpoint must match the configured region.')
     return boto3.client('s3', endpoint_url=endpoint, region_name=os.environ['PARISH_S3_REGION'],
                         aws_access_key_id=os.environ['PARISH_S3_ACCESS_KEY'],
                         aws_secret_access_key=os.environ['PARISH_S3_SECRET_KEY'],
-                        config=Config(connect_timeout=4, read_timeout=30, retries={'max_attempts': 1}))
+                        config=Config(connect_timeout=4, read_timeout=30, retries={'max_attempts': 1},
+                                      s3={'addressing_style': 'path'}))
 
 
 def private_bucket():
     bucket = os.environ['PARISH_S3_BUCKET']
+    if storage_provider() == 'oci':
+        # S3 HeadBucket proves access, NOT that the bucket is private.
+        # Operator must verify OCI bucket visibility in the OCI console first.
+        if os.getenv('PARISH_OCI_BUCKET_PRIVATE_CONFIRMED') != 'YES':
+            raise RuntimeError('Verify OCI bucket public access is disabled before enabling uploads.')
+        client().head_bucket(Bucket=bucket)
+        return bucket
     private = db.session.execute(text('SELECT NOT public FROM storage.buckets WHERE id=:bucket'),
                                  {'bucket': bucket}).scalar_one_or_none()
     if private is not True:

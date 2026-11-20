@@ -5,7 +5,7 @@ import ParishLogo from '../components/ParishLogo'
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect,useState } from 'react'
 import type { ReactNode } from 'react'
 
 import GoogleAuthButton from '@/components/auth/GoogleAuthButton'
@@ -19,6 +19,8 @@ export default function RegisterPage() {
   const [registeredEmail, setRegisteredEmail] = useState('')
   const [resending, setResending] = useState(false)
 
+  const [policyVersion,setPolicyVersion] = useState<string>()
+  useEffect(()=>{fetch("/api/portal-config").then(r=>r.json()).then(d=>setPolicyVersion(d.policy?.id)).catch(()=>{})},[])
   const [privacyConsent, setPrivacyConsent] = useState(false)
   const [form, setForm] = useState({
     firstName: '',
@@ -64,7 +66,7 @@ export default function RegisterPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ ...form, privacyConsent }),
+        body: JSON.stringify({ ...form, privacyConsent, policyVersion }),
       })
 
       const data = await response.json().catch(() => ({}))
@@ -264,7 +266,7 @@ export default function RegisterPage() {
         </div>
 
         <div>
-          {privacyConsent ? <GoogleAuthButton intent="register" privacyConsent={privacyConsent} /> :
+          {privacyConsent ? <GoogleAuthButton intent="register" privacyConsent={privacyConsent} policyVersion={policyVersion} /> :
             <p className="text-center text-sm">Accept the Privacy Notice above to register with Google.</p>}
         </div>
 

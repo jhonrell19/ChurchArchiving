@@ -1,6 +1,10 @@
 import Link from 'next/link'
 
-export default function PrivacyPage() {
+import {readPolicy} from '@/lib/portalConfig'
+export const dynamic='force-dynamic'
+export default async function PrivacyPage() {
+  const policy=await readPolicy()
+  if(policy) return <main className="parish-workspace"><h1>Parish privacy notice</h1><p>Version {policy.id}</p><p className="whitespace-pre-wrap">{policy.body}</p><Link href="/register">Return to registration</Link></main>
   return (
     <main className="min-h-screen bg-[#fffaf0] py-14 px-5">
       <article className="mx-auto max-w-3xl rounded-2xl border border-amber-100 bg-white p-8 shadow-sm space-y-5 text-slate-700">

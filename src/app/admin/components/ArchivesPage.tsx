@@ -117,11 +117,16 @@ export default function ArchivesPage() {
     }
   }
 
+  const [page,setPage] = useState(1)
+  const [pages,setPages] = useState(1)
+  const [counts,setCounts] = useState<Record<string,number>>({})
+  const fetchVersion = useRef(0)
   const loadDocuments = async () => {
+    const version = ++fetchVersion.current
     setLoading(true)
     setLoadError('')
     try {
-      const res = await fetch('/api/backend/api/archive/documents?scope=main', { cache: 'no-store' })
+      const res = await fetch(`/api/backend/api/archive/documents?page=${page}&category=${activeTab}&q=${encodeURIComponent(search)}`, { cache: 'no-store' })
       if (!res.ok) {
         const unavailable = [502, 503, 504].includes(res.status)
         throw new Error(unavailable
@@ -130,7 +135,7 @@ export default function ArchivesPage() {
       }
 
       const responseText = await res.text()
-      let data: { documents?: ArchiveDocument[] }
+      let data: { documents?: ArchiveDocument[], page:number, pages:number, counts:Record<string,number> }
       try {
         data = JSON.parse(responseText)
       } catch {
@@ -139,19 +144,23 @@ export default function ArchivesPage() {
       if (!Array.isArray(data.documents)) {
         throw new Error('The backend returned an unexpected archive response.')
       }
+      if (version !== fetchVersion.current) return
+      setCounts(data.counts); setPages(data.pages); setPage(data.page)
       setDocuments(data.documents)
     } catch (err) {
+      if (version !== fetchVersion.current) return
       console.warn('Archive load error:', err)
       setDocuments([])
       setLoadError(err instanceof Error ? err.message : 'Could not load archive records.')
     } finally {
-      setLoading(false)
+      if (version === fetchVersion.current) setLoading(false)
     }
   }
 
   useEffect(() => {
-    queueMicrotask(() => void loadDocuments())
-  }, [])
+    const timer = setTimeout(() => void loadDocuments(), 180)
+    return () => { clearTimeout(timer); fetchVersion.current++ }
+  }, [page, activeTab, search])
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -352,17 +361,8 @@ const makeFilledTemplatePrimary = async (record: ArchiveDocument) => {
   }
 }
 
-const records = documents.filter(doc =>
-  doc.sacramentType === activeTab &&
-  (
-    doc.personName?.toLowerCase().includes(search.toLowerCase()) ||
-    doc.certificateNumber?.toLowerCase().includes(search.toLowerCase()) ||
-    doc.filename?.toLowerCase().includes(search.toLowerCase())
-  )
-)
-
-  const countByType = (type: string) =>
-    documents.filter(doc => doc.sacramentType === type).length
+const records = documents
+  const countByType = (type:string) => counts[type] || 0
 
   const activeLabel =
     ARCHIVE_TYPES.find(type => type.value === activeTab)?.label || 'Archive'
@@ -610,7 +610,7 @@ const records = documents.filter(doc =>
             key={type.value}
             onClick={() => {
               discardTemplatePreview()
-              setActiveTab(type.value)
+              setPage(1); setActiveTab(type.value)
               setForm(prev => ({
                 ...prev,
                 sacrament_type: type.value,
@@ -639,11 +639,12 @@ const records = documents.filter(doc =>
           type="text"
           placeholder="Search by name, certificate number, or filename..."
           value={search}
-          onChange={e => setSearch(e.target.value)}
+          aria-label="Search archive" maxLength={160} onChange={e => { setPage(1); setSearch(e.target.value) }}
           className={`pl-9 pr-4 py-2.5 ${inputCls}`}
         />
       </div>
 
+      <nav className="parish-pager" aria-label="Archive pages"><button disabled={loading || page<=1} onClick={()=>setPage(page-1)}>Previous</button><span>Page {page} of {pages}</span><button disabled={loading || page>=pages} onClick={()=>setPage(page+1)}>Next</button></nav>
       <div className="bg-white border border-gold/20 rounded-xl overflow-hidden">
         <table className="w-full">
           <thead>

@@ -13,9 +13,10 @@ type GoogleAuthIntent = 'login' | 'register'
 type Props = {
   intent: GoogleAuthIntent
   privacyConsent?: boolean
+  policyVersion?: string
 }
 
-export default function GoogleAuthButton({ intent, privacyConsent = false }: Props) {
+export default function GoogleAuthButton({ intent, privacyConsent = false, policyVersion }: Props) {
   const buttonRef = useRef<HTMLDivElement | null>(null)
 
   const [googleReady, setGoogleReady] = useState(false)
@@ -43,13 +44,14 @@ export default function GoogleAuthButton({ intent, privacyConsent = false }: Pro
           body: JSON.stringify({
             credential: googleResponse.credential,
             intent,
-            ...(intent === 'register' ? { privacyConsent } : {}),
+            ...(intent === 'register' ? { privacyConsent, policyVersion } : {}),
           }),
         })
 
         const data = await response.json().catch(() => ({}))
 
-        if (!response.ok) {
+        if (data.evidenceRequired) { window.location.assign('/verification'); return }
+      if (!response.ok) {
           alert(
             data.message ||
               'Google authentication could not be completed.'
@@ -77,7 +79,7 @@ export default function GoogleAuthButton({ intent, privacyConsent = false }: Pro
         setLoading(false)
       }
     },
-    [intent, privacyConsent]
+    [intent, privacyConsent, policyVersion]
   )
 
   useEffect(() => {

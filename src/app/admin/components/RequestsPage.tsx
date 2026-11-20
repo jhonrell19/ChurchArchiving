@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { CERT_ICONS, STATUS_STYLE } from '../data/ui'
 
 type ReqStatus = 'All' | 'Pending' | 'Approved' | 'Rejected' | 'Ready' | 'Released'
@@ -113,11 +113,18 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
   const [searchResults, setSearchResults] = useState<Record<number, ArchiveDocument[]>>({})
   const [releaseFiles, setReleaseFiles] = useState<Record<number, File | null>>({})
 
+  const [page, setPage] = useState(1)
+  const [pages, setPages] = useState(1)
+  const [counts, setCounts] = useState<Record<string, number>>({})
+  const [loadError, setLoadError] = useState(false)
+  const serial = useRef(0)
   const loadRequests = async () => {
+    const revision = ++serial.current
+    setLoadError(false)
     try {
       setLoading(true)
       const priority = urgentOnly ? 'urgent' : 'regular'
-      const res = await fetch(`/api/backend/api/requests?priority=${priority}`, {
+      const res = await fetch(`/api/backend/api/requests?priority=${priority}&page=${page}&status=${encodeURIComponent(filter)}`, {
         cache: 'no-store',
       })
       const data = await res.json().catch(() => ({}))
@@ -126,18 +133,25 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
         throw new Error(data.error || data.message || 'Failed to load requests')
       }
 
+      if (revision !== serial.current) return
+      setPage(data.page)
+      setPages(data.pages)
+      setCounts(data.counts)
       setRequests(Array.isArray(data.requests) ? data.requests : [])
     } catch (err) {
+      if (revision !== serial.current) return
+      setLoadError(true)
       console.warn('Load requests error:', err)
       setRequests([])
     } finally {
-      setLoading(false)
+      if (revision === serial.current) setLoading(false)
     }
   }
 
   useEffect(() => {
     queueMicrotask(() => void loadRequests())
-  }, [urgentOnly])
+    return () => { serial.current++ }
+  }, [urgentOnly, page, filter])
 
   const toggleExpanded = (item: CertificateRequest) => {
     const opening = expanded !== item.id
@@ -384,7 +398,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
           <button
             key={status}
             type="button"
-            onClick={() => setFilter(status)}
+            onClick={() => { setPage(1); setFilter(status) }}
             className={`font-display text-[11px] tracking-wider px-4 py-1.5 rounded-full border transition-all ${
               filter === status
                 ? 'bg-navy text-white border-navy'
@@ -394,13 +408,19 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
             {status}
             <span className="ml-1.5 text-[10px] opacity-70">
               {status === 'All'
-                ? requests.length
-                : requests.filter(r => r.status === status).length}
+                ? Object.values(counts).reduce((a, b) => a + b, 0)
+                : counts[status] || 0}
             </span>
           </button>
         ))}
       </div>
 
+      <nav className="parish-pager" aria-label="Request pages">
+        <button disabled={loading || page <= 1} onClick={() => setPage(page - 1)}>Previous</button>
+        <span>Page {page} of {pages}</span>
+        <button disabled={loading || page >= pages} onClick={() => setPage(page + 1)}>Next</button>
+      </nav>
+      {loadError && <p role="alert">Could not load requests. <button onClick={loadRequests}>Try again</button></p>}
       <div className="space-y-3">
         {loading ? (
           <EmptyCard icon="ti-loader-2 animate-spin" title="Loading requests..." />

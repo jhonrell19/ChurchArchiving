@@ -257,12 +257,18 @@ export default function RequestsPage() {
     isUrgent: false,
   })
 
+  const [catalog,setCatalog] = useState<Record<string,string[]>>({})
+  useEffect(()=>{ fetch("/api/portal-config").then(r=>r.ok?r.json():null).then(d=>{if(d?.purposes)setCatalog(d.purposes)}).catch(()=>{}) },[])
+  const purposes = catalog[toBackendType(activeType)] || PURPOSE_OPTIONS[activeType]
+  const [claimId,setClaimId] = useState('')
+  const [historyPage,setHistoryPage] = useState(1)
+  const [historyPages,setHistoryPages] = useState(1)
   const loadRequests = async () => {
     try {
       setRequestsLoading(true)
       setRequestsError('')
 
-      const res = await fetch('/api/backend/api/requests', {
+      const res = await fetch('/api/backend/api/requests?page='+historyPage, {
         cache: 'no-store',
       })
 
@@ -272,6 +278,7 @@ export default function RequestsPage() {
         throw new Error(data.error || 'Failed to load requests')
       }
 
+      setHistoryPage(data.page); setHistoryPages(data.pages)
       setRequests(Array.isArray(data.requests) ? data.requests : [])
     } catch (err) {
       setRequestsError(err instanceof Error ? err.message : 'Failed to load requests')
@@ -280,6 +287,8 @@ export default function RequestsPage() {
       setRequestsLoading(false)
     }
   }
+
+  useEffect(() => { void loadRequests() }, [historyPage])
 
   const performRequestAction = async (id: number, action: 'cancel' | 'hide') => {
     const prompt = action === 'cancel'
@@ -338,7 +347,6 @@ export default function RequestsPage() {
   useEffect(() => {
     queueMicrotask(() => {
       void loadProfile()
-      void loadRequests()
     })
   }, [])
 
@@ -399,7 +407,7 @@ export default function RequestsPage() {
 }
 
 if (
-  !PURPOSE_OPTIONS[activeType].includes(formData.purpose)
+  !purposes.includes(formData.purpose)
 ) {
   alert('Please select a valid purpose for this document.')
   return
@@ -423,6 +431,7 @@ if (
         body: JSON.stringify({
           sacramentType: toBackendType(activeType),
           personName: formData.personName.trim(),
+          claimId: claimId ? Number(claimId) : undefined,
           purpose: formData.notes.trim()
             ? `${formData.purpose.trim()} | Notes: ${formData.notes.trim()}`
             : formData.purpose.trim(),
@@ -719,7 +728,9 @@ if (
               </div>
 
               <div>
-  <label
+  {process.env.NEXT_PUBLIC_PARISH_RELATIVE_CLAIMS === 'enabled' && activeType !== 'Land Agreement' && <label className="block mb-3">Approved claim number for a relative
+  <input type="number" min="1" className={inputCls} value={claimId} onChange={e=>setClaimId(e.target.value)}/><a className="underline" href="/claims">Manage relationship claims</a></label>}
+<label
     htmlFor="request-purpose"
     className="block font-display text-[11px] tracking-wider text-navy-mid mb-1.5"
   >
@@ -735,7 +746,7 @@ if (
   >
     <option value="">Select Purpose</option>
 
-    {PURPOSE_OPTIONS[activeType].map((purpose) => (
+    {purposes.map((purpose) => (
       <option key={purpose} value={purpose}>
         {purpose}
       </option>
@@ -836,6 +847,7 @@ if (
         </div>
       ) : (
         <div>
+          <nav className="parish-pager" aria-label="Request history pages"><button disabled={requestsLoading || historyPage<=1} onClick={()=>setHistoryPage(historyPage-1)}>Previous</button><span>Page {historyPage} of {historyPages}</span><button disabled={requestsLoading || historyPage>=historyPages} onClick={()=>setHistoryPage(historyPage+1)}>Next</button></nav>
           {requestsLoading ? (
             <div className="bg-white border border-gold/20 rounded-xl p-12 text-center">
               <i className="ti ti-loader-2 animate-spin text-gold text-3xl mb-3 inline-block" />

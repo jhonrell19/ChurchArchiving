@@ -35,6 +35,7 @@ from models import (
 )
 from document_templates import generate_official_draft, TemplateNotConfiguredError, TemplateDataError
 from ocr_fields import parse_official_form_fields
+import private_uploads
 from tesseract_runtime import find_tesseract_executable
 
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
@@ -129,6 +130,15 @@ MAIN_ADMIN_TYPES = ["baptismal", "confirmation", "marriage"]
 
 BURIAL_ADMIN_TYPES = ["burial", "land_agreement", "ownership"]
 
+
+
+from relationship_claims import claims, enabled as relative_claims_enabled
+from appointments import appointments
+from office_reports import reports
+app.config["PARISH_REPORT_SCOPE"] = {"ADMIN": MAIN_ADMIN_TYPES, "BURIAL_ADMIN": BURIAL_ADMIN_TYPES}
+app.register_blueprint(reports)
+app.register_blueprint(claims)
+app.register_blueprint(appointments)
 
 
 PREFIX_MAP = {
@@ -529,6 +539,10 @@ def backend_storage_path(filepath):
     if os.path.commonpath([target, os.path.realpath(base)]) != os.path.realpath(base):
         raise ValueError('Invalid storage path')
     return target
+
+
+def readable_upload(filepath):
+    return private_uploads.readable(normalize_path(filepath), backend_storage_path(filepath))
 
 
 def _payment_is_test_only(cert_request):
@@ -1438,10 +1452,10 @@ def view_file(filepath):
 
         return {"error": "Forbidden"}, 403
 
-    physical = backend_storage_path(filepath)
+    physical = readable_upload(filepath)
     if not os.path.isfile(physical):
         return {'error': 'File missing'}, 404
-    return send_from_directory(os.path.dirname(physical), os.path.basename(physical), as_attachment=False)
+    return send_from_directory(os.path.dirname(physical), os.path.basename(physical), as_attachment=False, download_name=posixpath.basename(filepath))
 
 
 
@@ -1542,10 +1556,11 @@ def _promote_archive_primary(document):
     scan_path, scan_filename = _archive_original_scan(document)
     if not scan_path or not scan_path.startswith(f'uploads/{document.sacrament_type}/'):
         raise TemplateDataError('Original source scan could not be identified. No archive data was changed.')
-    if not os.path.isfile(backend_storage_path(scan_path)):
+    if not os.path.isfile(readable_upload(scan_path)):
         raise TemplateDataError('Original source scan is missing. No archive data was changed.')
 
     filled_path = _save_archive_filled_pdf(document)
+    private_uploads.preserve(filled_path, backend_storage_path(filled_path))
     if not os.path.isfile(backend_storage_path(filled_path)):
         raise TemplateDataError('Generated PDF was not saved. No archive data was changed.')
     metadata = _archive_metadata(document)
@@ -1582,9 +1597,9 @@ def api_archive_original_scan(document_id):
     scan_path, scan_name = _archive_original_scan(document)
     if not scan_path or not scan_path.startswith(f'uploads/{document.sacrament_type}/'):
         return {'error': 'Original scan is unavailable.'}, 404
-    if not os.path.isfile(backend_storage_path(scan_path)):
+    if not os.path.isfile(readable_upload(scan_path)):
         return {'error': 'Original scan file is missing.'}, 404
-    response = send_file(backend_storage_path(scan_path), as_attachment=False, download_name=scan_name)
+    response = send_file(readable_upload(scan_path), as_attachment=False, download_name=scan_name)
     response.headers['Cache-Control'] = 'no-store, private'
     return response
 
@@ -1630,7 +1645,7 @@ def api_archive_filled_template(document_id):
 
     try:
         relative_path = _archive_filled_pdf_path(document)
-        target = backend_storage_path(relative_path)
+        target = readable_upload(relative_path)
         if not os.path.isfile(target):
             _save_archive_filled_pdf(document)
         response = send_file(
@@ -1960,6 +1975,7 @@ def api_upload_document():
         physical_filepath = backend_storage_path(filepath)
 
         file.save(physical_filepath)
+        private_uploads.preserve(filepath, physical_filepath)
 
         ocr_text = None
         extracted_metadata = None
@@ -2167,18 +2183,32 @@ def api_archive_documents():
 
 
 
-    documents = Document.query.filter(
-
-        Document.active == True,
-
-        Document.sacrament_type.in_(allowed_types)
-
-    ).order_by(Document.person_name.asc()).all()
-
-
-
+    query = Document.query.filter(Document.active.is_(True), Document.sacrament_type.in_(allowed_types))
+    meta = {}
+    if "page" in request.args:
+        try:
+            page = int(request.args["page"])
+            if not 1 <= page <= 100000:
+                raise ValueError()
+        except ValueError:
+            return {"error": "Invalid page"}, 400
+        category = request.args.get("category")
+        if category not in allowed_types:
+            return {"error": "Forbidden category"}, 403
+        counts = dict(query.with_entities(Document.sacrament_type, func.count(Document.id)).group_by(Document.sacrament_type).all())
+        query = query.filter_by(sacrament_type=category)
+        term = request.args.get("q", "").strip()[:160]
+        if term:
+            query = query.filter(db.or_(*(field.icontains(term, autoescape=True) for field in
+                                         (Document.person_name, Document.filename, Document.certificate_number))))
+        pages = max(1, (query.count()+19)//20)
+        page = min(page, pages)
+        documents = query.order_by(Document.person_name, Document.id).offset((page-1)*20).limit(20).all()
+        meta = {"counts": counts, "page": page, "pages": pages}
+    else:
+        documents = query.order_by(Document.person_name, Document.id).all()
     return {
-
+        **meta,
         "documents": [
 
             {
@@ -2536,6 +2566,11 @@ def api_create_request():
             record_details = f"Lot inquiry: {selected_slot.slot_code} (slot #{selected_slot.id})"
 
         
+        if os.getenv("PARISH_PORTAL_SETTINGS") == "enabled":
+            options = db.session.scalar(text("SELECT choices FROM purpose_catalog WHERE category=:category"), {"category":sacrament_type})
+            if not options or purpose.split(" | Notes:", 1)[0].strip() not in options:
+                return {"error":"Choose a currently available request purpose."}, 400
+
         # Get the current certificate prices set by Main Admin
         published_fees = get_certificate_fees()
 
@@ -2560,6 +2595,20 @@ def api_create_request():
         )
 
 
+
+        claim_id = None
+        if relative_claims_enabled() and sacrament_type != "land_agreement" and (
+            person_name.casefold() != requester_name.casefold() or data.get("claimId")
+        ):
+            raw = data.get("claimId")
+            if not isinstance(raw, int) or isinstance(raw, bool) or not 0 < raw < 2147483648:
+                return {"error": "Submit a relationship claim first, then enter its approved claim number."}, 400
+            claim_id = db.session.scalar(text("""SELECT c.id FROM relationship_claim c JOIN document d ON d.id=c.document_id
+                WHERE c.id=:id AND c.applicant_id=:uid AND c.status='approved' AND c.category=:category
+                AND lower(trim(c.owner_name))=lower(trim(:name)) AND d.active"""),
+                {"id":raw, "uid":user_id, "category":sacrament_type, "name":person_name})
+            if not claim_id:
+                return {"error":"An approved claim matching this account, owner and certificate is required."}, 403
 
         new_request = CertificateRequest(
 
@@ -2623,6 +2672,10 @@ def api_create_request():
 
 
         db.session.add(new_request)
+        if claim_id:
+            db.session.flush()
+            db.session.execute(text("INSERT INTO request_claim(request_id,claim_id) VALUES(:r,:c)"),
+                               {"r":new_request.id,"c":claim_id})
 
         db.session.commit()
 
@@ -2839,35 +2892,34 @@ def api_get_requests():
 
 
 
-        requests_list = (
+        if request.args.get("summary") == "counts":
+            counts = query.with_entities(
+                CertificateRequest.status, CertificateRequest.is_urgent, func.count(CertificateRequest.id)
+            ).group_by(CertificateRequest.status, CertificateRequest.is_urgent).all()
+            return {"pending": sum(n for status, urgent, n in counts if status == "Pending" and not urgent),
+                    "urgent": sum(n for status, urgent, n in counts if urgent and status not in {"Rejected", "Released"})}
 
-            query
-
-            .order_by(
-
-                CertificateRequest.id.desc()
-
-            )
-
-            .all()
-
-        )
-
-
-
-        return {
-
-            "requests": [
-
-                serialize_request(r)
-
-                for r in requests_list
-
-            ]
-
-        }
-
-
+        meta = {}
+        if "page" in request.args:
+            try:
+                page = int(request.args["page"])
+                if not 1 <= page <= 100000:
+                    raise ValueError()
+            except ValueError:
+                return {"error": "Invalid page number"}, 400
+            counts = dict(query.with_entities(CertificateRequest.status, func.count(CertificateRequest.id))
+                          .group_by(CertificateRequest.status).all())
+            status = request.args.get("status", "All")
+            total = sum(counts.values()) if status == "All" else counts.get(status, 0)
+            pages = max(1, (total + 19) // 20)
+            page = min(page, pages)
+            if status != "All":
+                query = query.filter_by(status=status)
+            rows = query.order_by(CertificateRequest.id.desc()).offset((page-1)*20).limit(20).all()
+            meta = {"page": page, "pages": pages, "counts": counts}
+        else:
+            rows = query.order_by(CertificateRequest.id.desc()).all()
+        return {"requests": [serialize_request(row) for row in rows], **meta}
 
     except Exception as e:
 
@@ -3091,6 +3143,12 @@ def api_select_source_record(request_id):
                 "error": "Archive record category does not match the request."
             }, 400
 
+        if relative_claims_enabled():
+            linked = db.session.scalar(text("""SELECT c.document_id FROM request_claim r JOIN relationship_claim c
+                ON c.id=r.claim_id WHERE r.request_id=:id"""), {"id":request_id})
+            if linked is not None and linked != document.id:
+                return {"error":"The selected document must match the approved relationship claim."}, 409
+
         changed_source = cert_request.matched_document_id != document.id
         cert_request.matched_document_id = document.id
 
@@ -3188,16 +3246,8 @@ def api_upload_release_document(request_id):
         relative_path = f"{relative_folder}/{stored_filename}"
         physical_path = backend_storage_path(relative_path)
 
-        old_release = normalize_path(cert_request.generated_file or "")
-        if old_release.startswith("uploads/releases/"):
-            old_physical = backend_storage_path(old_release)
-            if os.path.isfile(old_physical):
-                try:
-                    os.remove(old_physical)
-                except OSError:
-                    pass
-
         file.save(physical_path)
+        private_uploads.preserve(relative_path, physical_path)
 
         cert_request.generated_file = relative_path
         cert_request.status = "Ready"
@@ -3265,6 +3315,7 @@ def api_generate_release_document(request_id):
                     pass
 
         generate_official_draft(cert_request, source, physical_path)
+        private_uploads.preserve(relative_path, physical_path)
         cert_request.draft_file = relative_path
         cert_request.remarks = (
             "Official-form draft prepared from the verified archive record. "
@@ -3313,7 +3364,7 @@ def api_download_request_document(request_id):
         return {"error": "No release document is attached to this request."}, 404
 
     normalized = normalize_path(cert_request.generated_file)
-    physical_path = backend_storage_path(normalized)
+    physical_path = readable_upload(normalized)
     if not os.path.isfile(physical_path):
         return {"error": "Release document file is missing."}, 404
 
@@ -3321,7 +3372,7 @@ def api_download_request_document(request_id):
         os.path.dirname(physical_path),
         os.path.basename(physical_path),
         as_attachment=True,
-        download_name=os.path.basename(physical_path),
+        download_name=posixpath.basename(normalized),
     )
 
 
@@ -3333,10 +3384,10 @@ def download_file(filepath):
 
         return {"error": "Forbidden"}, 403
 
-    physical = backend_storage_path(filepath)
+    physical = readable_upload(filepath)
     if not os.path.isfile(physical):
         return {'error': 'File missing'}, 404
-    return send_from_directory(os.path.dirname(physical), os.path.basename(physical), as_attachment=True)
+    return send_from_directory(os.path.dirname(physical), os.path.basename(physical), as_attachment=True, download_name=posixpath.basename(filepath))
 
 
 
@@ -3477,6 +3528,7 @@ def api_create_mass():
             filepath = f"{relative_folder}/{filename}"
 
             file.save(backend_storage_path(filepath))
+            private_uploads.preserve(filepath, backend_storage_path(filepath))
 
 
 
@@ -3654,7 +3706,9 @@ def api_update_mass_transcription(mass_id):
 
 
 
-        data = request.get_json()
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return {"error":"Transcript and summary must be text."}, 400
 
 
 
@@ -3664,6 +3718,10 @@ def api_update_mass_transcription(mass_id):
 
 
 
+        if not isinstance(transcript_text, str) or not transcript_text.strip() or len(transcript_text) > 500000:
+            return {"error": "Enter a transcript of up to 500,000 characters."}, 400
+        if not isinstance(summary_text, str) or len(summary_text) > 50000:
+            return {"error":"Enter a summary of up to 50,000 characters."}, 400
         mass.transcript_text = transcript_text
 
         mass.summary_text = summary_text
@@ -3672,13 +3730,13 @@ def api_update_mass_transcription(mass_id):
 
 
 
-        db.session.commit()
+
 
 
 
         log = AuditLog(
 
-            user="Admin",
+            user=g.user_email or "Admin",
 
             action=f"Added transcription and summary for mass #{mass.id}",
 
@@ -3716,7 +3774,9 @@ def api_update_mass_transcription(mass_id):
 
 
 
-    except Exception as e:
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("Mass transcript save failed")
 
         return {"error": "The parish service encountered an internal error. Check backend logs."}, 500
 
@@ -3836,6 +3896,20 @@ def api_get_transcriptions():
 
 
 
+def published_announcements():
+    query = Announcement.query.filter_by(active=True)
+    if os.getenv("PARISH_ANNOUNCEMENT_SLIDES") != "enabled":
+        return query.order_by(Announcement.id.desc())
+    from sqlalchemy import table, column
+    slide = table("announcement_slide", column("announcement_id"), column("priority"), column("starts_at"), column("ends_at"))
+    today = text("(now() AT TIME ZONE 'Asia/Manila')::date")
+    query = query.outerjoin(slide, Announcement.id == slide.c.announcement_id)
+    if g.user_role != "ADMIN":
+        query = query.filter(db.or_(slide.c.starts_at.is_(None),slide.c.starts_at<=today),
+                             db.or_(slide.c.ends_at.is_(None),slide.c.ends_at>=today))
+    return query.order_by(func.coalesce(slide.c.priority,0).desc(),Announcement.id.desc())
+
+
 @app.route("/api/announcements", methods=["GET"])
 
 def api_get_announcements():
@@ -3848,13 +3922,14 @@ def api_get_announcements():
 
     try:
 
-        announcements = Announcement.query.filter_by(active=True).order_by(
-
-            Announcement.id.desc()
-
-        ).all()
+        announcements = published_announcements().all()
 
 
+
+        slides = {}
+        if os.getenv("PARISH_ANNOUNCEMENT_SLIDES") == "enabled" and announcements:
+            slides = dict(db.session.execute(text("SELECT announcement_id,image_path FROM announcement_slide WHERE announcement_id=ANY(:ids)"),
+                                             {"ids":[a.id for a in announcements]}).all())
 
         return {
 
@@ -3866,6 +3941,7 @@ def api_get_announcements():
 
                     "title": a.title,
 
+                    "imagePath": slides.get(a.id),
                     "category": a.category,
 
                     "date": a.announcement_date,
@@ -3940,6 +4016,22 @@ def api_create_announcement():
 
         db.session.add(new_announcement)
 
+        if os.getenv("PARISH_ANNOUNCEMENT_SLIDES") == "enabled":
+            from datetime import date
+            try:
+                rank = int(data.get("priority") or 0)
+                start = date.fromisoformat(data["starts"]) if data.get("starts") else None
+                end = date.fromisoformat(data["ends"]) if data.get("ends") else None
+                image = data.get("image") or None
+                if not -1000 <= rank <= 1000 or (start and end and start > end) or image not in (
+                    None,"/slides/slide1.jpg","/slides/slide2.jpg","/slides/slide3.png","/slides/slide4.jpg"):
+                    raise ValueError()
+            except (TypeError,ValueError):
+                db.session.rollback()
+                return {"error":"Check slide dates, priority and image."},400
+            db.session.flush()
+            db.session.execute(text("""INSERT INTO announcement_slide(announcement_id,image_path,priority,starts_at,ends_at)
+                VALUES(:id,:image,:rank,:start,:end)"""),{"id":new_announcement.id,"image":image,"rank":rank,"start":start,"end":end})
         db.session.commit()
 
 
@@ -4092,11 +4184,7 @@ def api_user_dashboard_summary():
 
 
 
-        announcements = Announcement.query.filter_by(active=True).order_by(
-
-            Announcement.id.desc()
-
-        ).limit(3).all()
+        announcements = published_announcements().limit(3).all()
 
 
 
@@ -4608,6 +4696,7 @@ def _save_cemetery_upload(file, subfolder, prefix):
     stored_name = f"{prefix}_{timestamp}{extension}"
     relative_path = f"{relative_folder}/{stored_name}"
     file.save(backend_storage_path(relative_path))
+    private_uploads.preserve(relative_path, backend_storage_path(relative_path))
     return relative_path
 
 
@@ -4800,7 +4889,7 @@ def api_cemetery_reservations():
     slot_id = _safe_int(data.get("slotId"), 0)
     if not buyer_name:
         return {"error": "Buyer name is required."}, 400
-    slot = db.session.get(CemeterySlot, slot_id)
+    slot = db.session.get(CemeterySlot, slot_id, with_for_update=True)
     if not slot or not slot.active:
         return {"error": "Select a valid cemetery slot."}, 400
     if slot.status != "AVAILABLE":
@@ -4970,7 +5059,7 @@ def api_cemetery_burials():
     slot_id = _safe_int(form.get("slot_id"), 0)
     if not deceased_name:
         return {"error": "Deceased name is required."}, 400
-    slot = db.session.get(CemeterySlot, slot_id)
+    slot = db.session.get(CemeterySlot, slot_id, with_for_update=True)
     if not slot or not slot.active:
         return {"error": "Select a valid cemetery slot."}, 400
 
@@ -5035,10 +5124,10 @@ def api_cemetery_file(filepath):
     normalized = normalize_path(filepath)
     if not normalized.startswith("uploads/cemetery/"):
         return {"error": "Forbidden"}, 403
-    physical = backend_storage_path(normalized)
+    physical = readable_upload(normalized)
     if not os.path.isfile(physical):
         return {"error": "File not found."}, 404
-    return send_from_directory(os.path.dirname(physical), os.path.basename(physical), as_attachment=False)
+    return send_from_directory(os.path.dirname(physical), os.path.basename(physical), as_attachment=False, download_name=posixpath.basename(filepath))
 
 
 
@@ -5050,6 +5139,9 @@ def certificate_pricing():
         denied = require_roles("ADMIN")
         if denied:
             return denied
+
+        if os.getenv("PARISH_SUPER_ADMIN_ID") and str(g.user_id) != os.environ["PARISH_SUPER_ADMIN_ID"]:
+            return {"error":"Super Admin access is required to edit fees."},403
 
         payload = request.get_json(silent=True)
         if not isinstance(payload, dict):

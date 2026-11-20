@@ -20,7 +20,7 @@ export default function AnnouncementsPage() {
     title: '',
     category: 'Event',
     date: '',
-    body: '',
+    body: '', starts:'', ends:'', image:'', priority:'0',
   })
 
   const loadAnnouncements = async () => {
@@ -86,7 +86,7 @@ export default function AnnouncementsPage() {
         title: '',
         category: 'Event',
         date: '',
-        body: '',
+        body: '', starts:'', ends:'', image:'', priority:'0',
       })
 
       await loadAnnouncements()
@@ -198,6 +198,11 @@ export default function AnnouncementsPage() {
           </div>
         </div>
 
+        {process.env.NEXT_PUBLIC_PARISH_ANNOUNCEMENT_SLIDES==='enabled' && <div className="parish-filters">
+          <label>Publish from<input type="date" name="starts" value={form.starts} onChange={handleChange}/></label>
+          <label>Publish through<input type="date" name="ends" value={form.ends} onChange={handleChange}/></label>
+          <label>Priority<input type="number" min="-1000" max="1000" name="priority" value={form.priority} onChange={handleChange}/></label>
+          <label>Parish image<select name="image" value={form.image} onChange={handleChange}><option value="">Text only</option>{['slide1.jpg','slide2.jpg','slide3.png','slide4.jpg'].map((img,i)=><option key={img} value={'/slides/'+img}>Parish photo {i+1}</option>)}</select></label></div>}
         <button className="font-display text-[11px] tracking-wider bg-navy text-gold px-5 py-2.5 rounded-lg">
           Publish Announcement
         </button>

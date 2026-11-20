@@ -1,3 +1,4 @@
+import {registerWithPolicy,PolicyChanged} from '@/lib/portalConfig'
 import { Prisma } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 import { NextResponse } from 'next/server'
@@ -126,8 +127,8 @@ export async function POST(req: Request) {
 
     const hashedPassword = await bcrypt.hash(password, 12)
 
-    const user = await prisma.user.create({
-      data: {
+    const user = await registerWithPolicy(
+      {
         firstName,
         middleName: middleName || null,
         surname,
@@ -138,8 +139,7 @@ export async function POST(req: Request) {
         role: 'USER',
         membershipStatus: 'pending',
         emailVerified: false,
-      },
-    })
+      }, body?.policyVersion)
 
     const emailToken = await createEmailVerificationToken(user.id)
     const verifyUrl = `${appBaseUrl(
@@ -165,6 +165,7 @@ export async function POST(req: Request) {
       { status: 201 }
     )
   } catch (error) {
+    if(error instanceof PolicyChanged) return NextResponse.json({message:'The privacy notice changed. Refresh, read the notice, and consent again.'},{status:409})
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === 'P2002'

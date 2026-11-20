@@ -239,3 +239,34 @@ html, body, button, input, textarea, select { font-family: Arial, Helvetica, san
 .text-\[9px\], .text-\[10px\], .text-\[11px\], .text-\[12px\] { font-size: 13px; line-height: 1.5; }
 main h1, main h2, [class*="dashboard"] h2, [class*="admin"] h2 { font-size: clamp(25px, 2.2vw, 28px); line-height: 1.25; }
 input::placeholder, textarea::placeholder { color: #475569; }
+
+:focus-visible { outline: 3px solid #3578ac; outline-offset: 3px; }
+.parish-workspace { max-width: 68rem; margin: auto; padding: clamp(1.25rem,4vw,3.5rem); color: #17365d; }
+.parish-workspace h1 { font: 600 clamp(2rem,5vw,3.5rem)/1.15 Georgia,serif; margin: 1.4rem 0 .7rem; }
+.parish-workspace h2 { font-size: 1.25rem; font-weight: 700; margin: 1.5rem 0 .5rem; }
+.parish-workspace p { margin: .7rem 0; }
+.parish-workspace a { text-decoration: underline; text-underline-offset: .2em; }
+.parish-filters,.parish-metrics { display: flex; flex-wrap: wrap; align-items: end; gap: 1rem; padding: 1.2rem; margin: 1.3rem 0; border: 1px solid #d7dce0; background: white; border-radius: .75rem; }
+.parish-filters label { display: grid; gap: .3rem; font-size: .9rem; flex: 1 1 8rem; }
+.parish-filters input,.parish-filters select { min-width: 0; padding: .5rem; border: 1px solid #84909c; border-radius: .35rem; }
+.parish-workspace button,.parish-pager button { background: #17365d; color: white; padding: .55rem 1rem; border-radius: .4rem; }
+.parish-workspace button:disabled,.parish-pager button:disabled { opacity: .5; }
+.parish-pager { display:flex; justify-content:end; align-items:center; gap:.8rem; margin: .75rem 0; }
+.parish-metrics { border-top: 3px solid #b89b4d; align-items: start; gap: 3rem; }
+.parish-metrics strong { display:block; font-size:1.7rem; }
+.parish-workspace table { width:100%; text-align:left; }
+.parish-workspace td,.parish-workspace th { padding:.65rem; border-bottom:1px solid #ced5db; }
+.parish-report-link { display:block; padding:.75rem 1rem; font-weight:600; color:#17365d; border-left:3px solid #b89b4d; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior:auto; } .reveal {opacity:1;transform:none} .animate-fade-up,.animate-fade-down,.animate-pulse-cross {animation:none} }
+
+.parish-shell > aside { background:#142d48; border-color:#243d57; }
+.parish-shell > aside > nav { overflow-y:auto; min-height:0; }
+.parish-shell > aside nav button { color:#edf3f7; }
+.parish-shell > aside nav button:hover { background:#254663; color:#fff; }
+.parish-shell > aside nav button.bg-amber-50 { background:#fff2d1; color:#172e46; border-color:#dab769; }
+.parish-shell > aside nav button span.flex-1 { font-size:.82rem; line-height:1.35; }
+.parish-shell > aside nav .parish-report-link { color:#fff3d7; margin-top:.35rem; }
+.parish-shell > aside > div:last-child button { background:#fff; color:#9b2626; }
+.parish-shell header { border-bottom:2px solid #c3a362; }
+.parish-shell header h1,.parish-shell header h2 { font-size:clamp(1.1rem,2.1vw,1.45rem); }
+.parish-shell main { min-width:0; }

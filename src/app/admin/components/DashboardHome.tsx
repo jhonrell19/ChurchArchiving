@@ -56,7 +56,7 @@ const getDisplayType = (type: string) =>
 
 const getCertIconKey = (type: string) => getDisplayType(type)
 
-export default function DashboardHome({ setPage }: { setPage: (p: AdminPage) => void }) {
+export default function DashboardHome({ setPage,openArchive,manageWebsite }: { setPage: (p: AdminPage) => void; openArchive:(tab:string)=>void;manageWebsite:boolean }) {
   const [stats, setStats] = useState<ArchiveStats | null>(null)
   const [requests, setRequests] = useState<CertificateRequest[]>([])
   const [masses, setMasses] = useState<MassRecord[]>([])
@@ -96,26 +96,30 @@ export default function DashboardHome({ setPage }: { setPage: (p: AdminPage) => 
 
   const realStats = [
     {
-      label: 'Total Records',
-      value: stats?.totalRecords ?? '—',
+      label: 'Certificate requests',
+      value: 'Review',
+      open: () => setPage('requests'),
       icon: 'ti-archive',
       color: 'text-blue-600 bg-blue-50 border-blue-200',
     },
     {
       label: 'Baptismal Records',
       value: stats?.baptismal ?? '—',
+      open: () => openArchive('baptismal'),
       icon: 'ti-droplet',
       color: 'text-blue-600 bg-blue-50 border-blue-200',
     },
     {
       label: 'Marriage Records',
       value: stats?.marriage ?? '—',
+      open: () => openArchive('marriage'),
       icon: 'ti-rings',
       color: 'text-green-600 bg-green-50 border-green-200',
     },
     {
       label: 'Confirmation Records',
       value: stats?.confirmation ?? '—',
+      open: () => openArchive('confirmation'),
       icon: 'ti-shield-check',
       color: 'text-purple-600 bg-purple-50 border-purple-200',
     },
@@ -127,26 +131,13 @@ export default function DashboardHome({ setPage }: { setPage: (p: AdminPage) => 
     .filter(m => m.status !== 'Transcribed')
     .slice(0, 4)
 
-  const archiveCards = [
-  {
-    type: 'Baptismal',
-    count: stats?.baptismal ?? '—',
-    icon: 'ti-droplet',
-  },
-  {
-    type: 'Confirmation',
-    count: stats?.confirmation ?? '—',
-    icon: 'ti-shield-check',
-  },
-  {
-    type: 'Marriage',
-    count: stats?.marriage ?? '—',
-    icon: 'ti-rings',
-  },
-]
-
   return (
     <div>
+      <section className="office-mast"><h2>Parish office</h2><p>{stats ? stats.totalRecords + ' archived records' : 'Certificate archives and parish notices'}</p><div className="office-links">
+        <button onClick={()=>setPage('requests')}>Review requests →</button>
+        <button onClick={()=>setPage('announcements')}>Manage notices →</button>
+        {manageWebsite && <a href="/admin/site-content">Edit website →</a>}
+      </div></section>
       {error && (
         <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-start justify-between gap-4">
           <div>
@@ -157,8 +148,8 @@ export default function DashboardHome({ setPage }: { setPage: (p: AdminPage) => 
         </div>
       )}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {realStats.map(({ label, value, icon, color }) => (
-          <div key={label} className="bg-white border border-gold/20 rounded-xl p-5">
+        {realStats.map(({ label, value, icon, color, open }) => (
+          <button type="button" aria-label={'Open '+label} onClick={open} key={label} className="metric-link text-left bg-white border border-gold/20 rounded-xl p-5">
             <div className={`w-9 h-9 rounded-lg border flex items-center justify-center mb-3 ${color}`}>
               <i className={`ti ${icon} text-[17px]`} />
             </div>
@@ -170,7 +161,7 @@ export default function DashboardHome({ setPage }: { setPage: (p: AdminPage) => 
             <p className="font-body text-[12px] text-[#6b8caa] leading-tight">
               {label}
             </p>
-          </div>
+          </button>
         ))}
       </div>
 
@@ -293,29 +284,6 @@ export default function DashboardHome({ setPage }: { setPage: (p: AdminPage) => 
         </div>
       </div>
 
-      <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
-        {archiveCards.map(card => (
-          <button
-            key={card.type}
-            onClick={() => setPage('archives')}
-            className="bg-white border border-gold/20 rounded-xl p-4 flex items-center gap-3 text-left"
-          >
-            <div className="w-9 h-9 rounded-lg bg-gold/10 border border-gold/20 flex items-center justify-center flex-shrink-0">
-              <i className={`ti ${card.icon} text-gold text-[17px]`} />
-            </div>
-
-            <div>
-              <p className="font-display text-navy-mid text-[11px] font-semibold">
-                {card.type}
-              </p>
-
-              <p className="font-body text-[#9ab0c4] text-[11px]">
-                {card.count} records
-              </p>
-            </div>
-          </button>
-        ))}
-      </div>
     </div>
   )
 }

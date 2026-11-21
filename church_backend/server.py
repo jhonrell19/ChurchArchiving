@@ -3947,7 +3947,7 @@ def api_get_announcements():
 
         slides = {}
         if os.getenv("PARISH_ANNOUNCEMENT_SLIDES") == "enabled" and announcements:
-            slides = {row.announcement_id: row for row in db.session.execute(text("SELECT announcement_id,image_path,starts_at,ends_at FROM announcement_slide WHERE announcement_id=ANY(:ids)"),
+            slides = {row.announcement_id: row for row in db.session.execute(text("SELECT announcement_id,image_path,starts_at,ends_at,priority FROM announcement_slide WHERE announcement_id=ANY(:ids)"),
                                              {"ids":[a.id for a in announcements]}).all()}
 
         return {
@@ -3960,6 +3960,7 @@ def api_get_announcements():
 
                     "title": a.title,
 
+                    "priority": slides[a.id].priority if a.id in slides else 0,
                     "imagePath": slides[a.id].image_path if a.id in slides else None,
                     "starts": str(slides[a.id].starts_at) if a.id in slides and slides[a.id].starts_at else None,
                     "ends": str(slides[a.id].ends_at) if a.id in slides and slides[a.id].ends_at else None,
@@ -3989,126 +3990,61 @@ def api_get_announcements():
 
 
 
-@app.route("/api/announcements", methods=["POST"])
-
-def api_create_announcement():
-
+@app.post("/api/announcements")
+@app.put("/api/announcements/<int:announcement_id>")
+def api_create_announcement(announcement_id=None):
     denied = require_roles("ADMIN")
-
     if denied:
-
         return denied
-
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return {"error": "An announcement is required."}, 400
+    title, body = data.get("title"), data.get("body")
+    if not all(isinstance(v, str) and v.strip() for v in (title, body)) or len(title)>300:
+        return {"error": "Enter a title (up to 300 characters) and announcement text."}, 400
+    category = data.get("category") or "Event"
+    slides_enabled = os.getenv("PARISH_ANNOUNCEMENT_SLIDES") == "enabled"
+    if category == "Public calendar notice" and (
+        not slides_enabled or not data.get("starts") or not data.get("ends")
+    ):
+        return {"error": "Public notices need a publication start and end date."}, 400
+    if slides_enabled:
+        from datetime import date
+        try:
+            rank = int(data.get("priority") or 0)
+            start = date.fromisoformat(data["starts"]) if data.get("starts") else None
+            end = date.fromisoformat(data["ends"]) if data.get("ends") else None
+            image = data.get("image") or None
+            if not -1000 <= rank <= 1000 or (start and end and start > end) or image not in (
+                None,"/slides/slide1.jpg","/slides/slide2.jpg","/slides/slide3.png","/slides/slide4.jpg"):
+                raise ValueError()
+        except (TypeError, ValueError):
+            return {"error":"Check slide dates, priority and image."}, 400
     try:
-
-        data = request.get_json()
-
-
-
-        title = data.get("title")
-
-        category = data.get("category")
-
-        announcement_date = data.get("date")
-
-        body = data.get("body")
-
-
-
-        if not title or not body:
-
-            return {"error": "Title and body are required"}, 400
-
-
-
-        if category == "Public calendar notice" and (
-            os.getenv("PARISH_ANNOUNCEMENT_SLIDES") != "enabled" or
-            not data.get("starts") or not data.get("ends")
-        ):
-            return {"error": "Public notices need a publication start and end date."}, 400
-
-        new_announcement = Announcement(
-
-            title=title,
-
-            category=category,
-
-            announcement_date=announcement_date,
-
-            body=body
-
-        )
-
-
-
-        db.session.add(new_announcement)
-
-        if os.getenv("PARISH_ANNOUNCEMENT_SLIDES") == "enabled":
-            from datetime import date
-            try:
-                rank = int(data.get("priority") or 0)
-                start = date.fromisoformat(data["starts"]) if data.get("starts") else None
-                end = date.fromisoformat(data["ends"]) if data.get("ends") else None
-                image = data.get("image") or None
-                if not -1000 <= rank <= 1000 or (start and end and start > end) or image not in (
-                    None,"/slides/slide1.jpg","/slides/slide2.jpg","/slides/slide3.png","/slides/slide4.jpg"):
-                    raise ValueError()
-            except (TypeError,ValueError):
-                db.session.rollback()
-                return {"error":"Check slide dates, priority and image."},400
-            db.session.flush()
+        if announcement_id is None:
+            notice = Announcement()
+            db.session.add(notice)
+        else:
+            notice = Announcement.query.filter_by(id=announcement_id, active=True).with_for_update().first()
+            if notice is None:
+                return {"error": "Announcement unavailable."}, 404
+        notice.title, notice.body = title.strip(), body.strip()
+        notice.category, notice.announcement_date = category, data.get("date")
+        db.session.flush()
+        if slides_enabled:
             db.session.execute(text("""INSERT INTO announcement_slide(announcement_id,image_path,priority,starts_at,ends_at)
-                VALUES(:id,:image,:rank,:start,:end)"""),{"id":new_announcement.id,"image":image,"rank":rank,"start":start,"end":end})
+                VALUES(:id,:image,:rank,:start,:end) ON CONFLICT(announcement_id) DO UPDATE SET
+                image_path=excluded.image_path,priority=excluded.priority,starts_at=excluded.starts_at,ends_at=excluded.ends_at"""),
+                {"id":notice.id,"image":image,"rank":rank,"start":start,"end":end})
+        action = "Published" if announcement_id is None else "Updated"
+        db.session.add(AuditLog(user=g.user_email or "Admin",action=f"{action} announcement: {notice.title}"))
+        result = {"id":notice.id,"title":notice.title,"body":notice.body,"date":notice.announcement_date,"category":notice.category}
         db.session.commit()
-
-
-
-        log = AuditLog(
-
-            user="Admin",
-
-            action=f"Published announcement: {title}",
-
-            document_id=None
-
-        )
-
-
-
-        db.session.add(log)
-
-        db.session.commit()
-
-
-
-        return {
-
-            "message": "Announcement published successfully",
-
-            "announcement": {
-
-                "id": new_announcement.id,
-
-                "title": new_announcement.title,
-
-                "category": new_announcement.category,
-
-                "date": new_announcement.announcement_date,
-
-                "body": new_announcement.body
-
-            }
-
-        }, 201
-
-
-
-    except Exception as e:
-
-        return {"error": "The parish service encountered an internal error. Check backend logs."}, 500
-
-
-
+        return {"message":f"Announcement {action.lower()} successfully","announcement":result}, 201 if announcement_id is None else 200
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("Announcement save failed")
+        return {"error":"The announcement could not be saved."}, 500
 
 
 @app.route("/api/announcements/<int:announcement_id>", methods=["DELETE"])

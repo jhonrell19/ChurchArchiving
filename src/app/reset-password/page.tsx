@@ -66,7 +66,7 @@ function ResetPasswordForm() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#edf2e9] via-white to-[#f6f7f2] flex items-center justify-center px-6 py-20">
+    <div className="min-h-screen bg-gradient-to-br from-[#f3eae0] via-white to-[#faf7f0] flex items-center justify-center px-6 py-20">
       <div className="w-full max-w-md bg-white border border-amber-100 rounded-3xl p-10 shadow-xl shadow-slate-200/60">
         <div className="text-center mb-8">
           <div className="mb-3 flex justify-center"><ParishLogo height={88} /></div>
@@ -129,7 +129,7 @@ export default function ResetPasswordPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-gradient-to-br from-[#edf2e9] via-white to-[#f6f7f2] flex items-center justify-center px-6 py-20">
+        <div className="min-h-screen bg-gradient-to-br from-[#f3eae0] via-white to-[#faf7f0] flex items-center justify-center px-6 py-20">
           <div className="w-full max-w-md bg-white border border-amber-100 rounded-3xl p-10 shadow-xl shadow-slate-200/60 text-center">
             <p className="font-body text-slate-500 text-[13px]">Loading password reset...</p>
           </div>

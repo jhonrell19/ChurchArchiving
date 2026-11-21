@@ -31,9 +31,10 @@ const MAIN_NAV: {
   },
 ]
 
-export default function AdminPanel({managePolicy=false}:{managePolicy?:boolean}) {
+export default function AdminPanel({managePolicy=false,manageWebsite=false}:{managePolicy?:boolean;manageWebsite?:boolean}) {
   useRefreshOnHistoryRestore()
   const [page, setPage] = useState<ExtendedAdminPage>('dashboard')
+  const [archiveTab,setArchiveTab]=useState('baptismal')
   const [sidebarOpen, setSidebar] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
   const [urgentCount, setUrgentCount] = useState(0)
@@ -132,6 +133,7 @@ export default function AdminPanel({managePolicy=false}:{managePolicy?:boolean})
           </a>
           <a className="parish-report-link" href="/office-reports">Certificate reports</a>
           {process.env.NEXT_PUBLIC_PARISH_RELATIVE_CLAIMS === 'enabled' && <a className="parish-report-link" href="/claims">Relationship claims</a>}
+          {manageWebsite && <a className="parish-report-link" href="/admin/site-content">Website editor</a>}
           {managePolicy && <a className="parish-report-link" href="/admin/portal-settings">Policies and request purposes</a>}
           {process.env.NEXT_PUBLIC_PARISH_APPOINTMENTS === 'enabled' && <a className="parish-report-link" href="/appointments">Office appointments</a>}
         </nav>
@@ -172,8 +174,8 @@ export default function AdminPanel({managePolicy=false}:{managePolicy?:boolean})
         </header>
 
         <main className="flex-1 p-4 md:p-6 overflow-auto">
-          {page === 'dashboard' && <DashboardHome setPage={p => setPage(p)} />}
-          {page === 'archives' && <ArchivesPage />}
+          {page === 'dashboard' && <DashboardHome manageWebsite={manageWebsite} openArchive={tab=>{setArchiveTab(tab);setPage('archives')}} setPage={setPage}/>}
+          {page === 'archives' && <ArchivesPage initialTab={archiveTab}/>}
           {page === 'masses' && <MassesPage />}
           {page === 'transcriptions' && <TranscriptionsPage />}
           {page === 'requests' && <RequestsPage />}

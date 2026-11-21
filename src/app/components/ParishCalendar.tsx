@@ -7,7 +7,7 @@ import { SCHEDULE } from './serviceSchedule'
 type Notice = {id:number; title:string; body:string; date?:string; starts?:string; ends?:string}
 const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
 const manilaDate = () => new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date())
-const weekly = dayNames.map(day => SCHEDULE.filter(service => service.day.startsWith(day)).map(service => service.time+' · '+service.tag))
+
 const key = (d:Date) => d.toISOString().slice(0,10)
 const dateOf = (s:string) => new Date(s + 'T12:00:00Z')
 const label = (d:Date, options:Intl.DateTimeFormatOptions) => d.toLocaleDateString('en-PH',{...options,timeZone:'UTC'})
@@ -21,7 +21,8 @@ function noticeEnd(end:string,today:string) {
   return 'Notice ends '+full(end)
 }
 
-export default function ParishCalendar({notices:provided}:{notices?:Notice[]}) {
+export default function ParishCalendar({notices:provided,services:schedule=SCHEDULE}:{notices?:Notice[],services?:typeof SCHEDULE}) {
+  const weekly=dayNames.map(day=>schedule.filter(s=>s.day.startsWith(day)).map(s=>s.time+' · '+s.tag))
   const [today,setToday] = useState('')
   const [selected,setSelected] = useState('')
   const [remote,setRemote] = useState<Notice[]>([])
@@ -73,7 +74,7 @@ export default function ParishCalendar({notices:provided}:{notices?:Notice[]}) {
       </div>
       <div className="day-card" aria-live="polite">
         <p className="place">{label(day,{weekday:'long'})}</p><h3>{full(selected)}</h3>
-        {services.map(s=><p className="service-row" key={s}>{s}</p>)}
+        {services.map((s,i)=><p className="service-row" key={i}>{s}</p>)}
         {notices.map(n=><article key={n.id}><h4>{n.title}</h4>
           {n.date && /^\d{4}-\d{2}-\d{2}$/.test(n.date) && <p>Event date · {full(n.date)}</p>}
           <p>{n.body}</p>

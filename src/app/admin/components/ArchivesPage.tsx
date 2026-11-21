@@ -28,8 +28,8 @@ const ARCHIVE_TYPES = [
   { label: 'Marriage', value: 'marriage', icon: 'ti-rings' },
 ]
 
-export default function ArchivesPage() {
-  const [activeTab, setActiveTab] = useState('baptismal')
+export default function ArchivesPage({initialTab='baptismal'}:{initialTab?:string}) {
+  const [activeTab, setActiveTab] = useState(initialTab)
   const [search, setSearch] = useState('')
   const [documents, setDocuments] = useState<ArchiveDocument[]>([])
   const [loading, setLoading] = useState(true)

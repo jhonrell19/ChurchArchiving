@@ -39,10 +39,11 @@ const peso = (value: number) =>
     maximumFractionDigits: 0,
   }).format(value || 0)
 
-export default function BurialDashboardPage() {
+export default function BurialDashboardPage({navigate}:{navigate:(page:'slots'|'payments'|'reservations'|'burials',status?:string)=>void}) {
   const [data, setData] = useState<DashboardData | null>(null)
   const [error, setError] = useState('')
 
+  const [retry,setRetry]=useState(0)
   useEffect(() => {
     const load = async () => {
       try {
@@ -56,11 +57,12 @@ export default function BurialDashboardPage() {
         setError(err instanceof Error ? err.message : 'Failed to load cemetery dashboard.')
       }
     }
+    setError('')
     void load()
-  }, [])
+  }, [retry])
 
   if (error) {
-    return <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">{error}</div>
+    return <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">{error} <button className="underline" onClick={()=>setRetry(v=>v+1)}>Try again</button></div>
   }
 
   if (!data) {
@@ -68,27 +70,27 @@ export default function BurialDashboardPage() {
   }
 
   const cards = [
-    ['Available Slots', data.counts.availableSlots, 'ti-map-pin'],
-    ['Reserved Slots', data.counts.reservedSlots, 'ti-bookmark'],
-    ['Occupied Slots', data.counts.occupiedSlots, 'ti-cross'],
-    ['Active Reservations', data.counts.activeReservations, 'ti-file-text'],
-    ['Burial Records', data.counts.burialRecords, 'ti-certificate'],
-    ['Partial Payments', data.counts.partiallyPaid, 'ti-receipt'],
-    ['Overdue Accounts', data.counts.overdue, 'ti-alert-triangle'],
+    ['Available Slots', data.counts.availableSlots, 'ti-map-pin','slots','AVAILABLE'],
+    ['Reserved Slots', data.counts.reservedSlots, 'ti-bookmark','slots','RESERVED'],
+    ['Occupied Slots', data.counts.occupiedSlots, 'ti-cross','slots','OCCUPIED'],
+    ['Active Reservations', data.counts.activeReservations, 'ti-file-text','reservations',''],
+    ['Burial Records', data.counts.burialRecords, 'ti-certificate','burials',''],
+    ['Partial Payments', data.counts.partiallyPaid, 'ti-receipt','payments',''],
+    ['Overdue Accounts', data.counts.overdue, 'ti-alert-triangle','reservations',''],
   ] as const
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="office-mast">
         <h1 className="text-2xl font-semibold text-navy-mid">Cemetery Operations</h1>
         <p className="mt-1 text-sm text-slate-600">
           Burial records, cemetery slots, reservations, and payment balances in one place.
-        </p>
+        </p><div className="office-links"><button onClick={()=>navigate('slots')}>Manage slots →</button><button onClick={()=>navigate('reservations')}>Open reservations →</button></div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {cards.map(([label, value, icon]) => (
-          <div key={label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {cards.map(([label, value, icon, target, status]) => (
+          <button type="button" key={label} aria-label={'Open '+label} onClick={()=>navigate(target,status)} className="metric-link text-left rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</p>
@@ -96,17 +98,15 @@ export default function BurialDashboardPage() {
               </div>
               <i className={`ti ${icon} text-2xl text-gold`} />
             </div>
-          </div>
+          </button>
         ))}
-      </div>
-
-      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
+      <button type="button" onClick={()=>navigate('payments')} className="metric-link text-left rounded-2xl border border-amber-200 bg-amber-50 p-5">
         <p className="text-xs font-semibold uppercase tracking-wider text-amber-700">Outstanding cemetery balance</p>
         <p className="mt-2 text-3xl font-semibold text-navy-mid">{peso(data.counts.outstandingBalance)}</p>
         <p className="mt-1 text-sm text-slate-600">
           {data.counts.unpaid} unpaid account(s) and {data.counts.partiallyPaid} partially paid account(s).
         </p>
-      </div>
+      </button></div>
 
       <div className="grid gap-6 xl:grid-cols-2">
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

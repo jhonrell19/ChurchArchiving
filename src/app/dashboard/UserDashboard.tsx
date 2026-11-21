@@ -14,7 +14,8 @@ import RequestsPage from './components/RequestsPage'
 import AnnouncementsPage from './components/AnnouncementsPage'
 import ProfilePage from './components/ProfilePage'
 
-export default function UserDashboard() {
+import type {Service} from '@/lib/siteContent'
+export default function UserDashboard({services}:{services:Service[]}) {
   useRefreshOnHistoryRestore()
   const [page, setPage] = useState<Page>('home')
   const [sidebarOpen, setSidebar] = useState(false)
@@ -112,7 +113,7 @@ export default function UserDashboard() {
           {page === 'archives' && <ArchivesPage />}
           {page === 'transcriptions' && <TranscriptionsPage />}
           {page === 'requests' && <RequestsPage />}
-          {page === 'announcements' && <AnnouncementsPage />}
+          {page === 'announcements' && <AnnouncementsPage services={services}/>}
           {page === 'profile' && <ProfilePage />}
         </main>
       </div>

@@ -14,7 +14,7 @@ const LINKS = [
   { href: '/login',    label: 'Login'    },
 ]
 
-export default function Footer() {
+export default function Footer({address='Poblacion 2-B, Maragondon, Cavite, Philippines'}:{address?:string}) {
   return (
     <footer className="site-footer border-t border-gold/20 pt-12 pb-7 px-7">
       <div className="max-w-5xl mx-auto flex flex-col items-center gap-5">
@@ -26,7 +26,7 @@ export default function Footer() {
               Iglesia Filipina Independiente
             </p>
             <p className="font-body text-txt-md text-[13px]">
-              Poblacion 2-B, Maragondon, Cavite, Philippines
+              {address}
             </p>
           </div>
         </div>

@@ -139,7 +139,7 @@ export default function LoginForm() {
     'w-full bg-white border border-slate-200 rounded-xl px-4 py-3 font-body text-[15px] text-navy-mid outline-none placeholder:text-slate-400 focus:border-gold focus:ring-2 focus:ring-gold/10 transition-all'
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#edf2e9] via-white to-[#f6f7f2] flex items-center justify-center px-6 py-24 relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-[#f3eae0] via-white to-[#faf7f0] flex items-center justify-center px-6 py-24 relative overflow-hidden">
       <div className="absolute inset-0 bg-grid-gold opacity-60 pointer-events-none" />
 
       <div className="relative z-10 w-full max-w-md bg-white border border-amber-100 rounded-3xl px-8 md:px-10 py-10 shadow-xl shadow-slate-200/60">

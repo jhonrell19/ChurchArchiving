@@ -14,7 +14,7 @@ export function ReportChart({ title, values }: {
           <XAxis dataKey="label" tick={{ fontSize: 14 }} minTickGap={20}/>
           <YAxis width={52} allowDecimals={false} tick={{ fontSize: 14 }}/>
           <Tooltip/>
-          <Bar dataKey="value" name={title} fill="#427356" radius={[3,3,0,0]} isAnimationActive={false}/>
+          <Bar dataKey="value" name={title} fill="#985444" radius={[3,3,0,0]} isAnimationActive={false}/>
         </BarChart>
       </ResponsiveContainer>
     </div>

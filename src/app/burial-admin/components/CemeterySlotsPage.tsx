@@ -13,10 +13,10 @@ const initialForm = {
   notes: '',
 }
 
-export default function CemeterySlotsPage() {
+export default function CemeterySlotsPage({initialStatus=''}:{initialStatus?:string}) {
   const [slots, setSlots] = useState<CemeterySlot[]>([])
   const [search, setSearch] = useState('')
-  const [status, setStatus] = useState('')
+  const [status, setStatus] = useState(initialStatus)
   const [mapError, setMapError] = useState(false)
   const [mapReload, setMapReload] = useState(0)
   const [form, setForm] = useState(initialForm)

@@ -9,21 +9,29 @@ type Announcement = {
   category: string
   date: string
   body: string
+  imagePath?: string
+  priority?: number
   starts?: string
   ends?: string
   createdAt: string
 }
 
+const blankNotice={title:'',body:'',date:'',category:'Event',starts:'',ends:'',priority:'0',image:''}
+
 export default function AnnouncementsPage() {
+  const [editing,setEditing]=useState<number|null>(null)
+  const [saving,setSaving]=useState(false)
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [loading, setLoading] = useState(true)
 
-  const [form, setForm] = useState({
-    title: '',
-    category: 'Event',
-    date: '',
-    body: '', starts:'', ends:'', image:'', priority:'0',
-  })
+  const [form,setForm]=useState(blankNotice)
+  function editNotice(a:Announcement) {
+    setEditing(a.id)
+    setForm({title:a.title,body:a.body,date:a.date||'',category:a.category||'Event',
+      starts:a.starts||'',ends:a.ends||'',priority:String(a.priority??0),image:a.imagePath||''})
+    document.getElementById('notice-title')?.focus()
+  }
+  function clearDraft(){setEditing(null);setForm(blankNotice)}
 
   const loadAnnouncements = async () => {
     try {
@@ -67,8 +75,9 @@ export default function AnnouncementsPage() {
     }
 
     try {
-      const res = await fetch('/api/backend/api/announcements', {
-        method: 'POST',
+      setSaving(true)
+      const res = await fetch(editing===null?'/api/backend/api/announcements':'/api/backend/api/announcements/'+editing, {
+        method: editing===null?'POST':'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
@@ -82,20 +91,12 @@ export default function AnnouncementsPage() {
         return
       }
 
-      alert('Announcement published successfully.')
-
-      setForm({
-        title: '',
-        category: 'Event',
-        date: '',
-        body: '', starts:'', ends:'', image:'', priority:'0',
-      })
-
+      clearDraft()
       await loadAnnouncements()
     } catch (err) {
       console.warn('Publish announcement error:', err)
-      alert('Failed to publish announcement.')
-    }
+      alert('Failed to save announcement.')
+    } finally {setSaving(false)}
   }
 
   const deleteAnnouncement = async (id: number) => {
@@ -137,7 +138,7 @@ export default function AnnouncementsPage() {
         className="bg-white border border-gold/20 rounded-xl p-6 mb-6"
       >
         <p className="font-display text-navy-mid text-[13px] font-semibold mb-4">
-          New Announcement
+          {editing===null?'New announcement':'Edit announcement'}
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -206,9 +207,10 @@ export default function AnnouncementsPage() {
           <label>Publish through<input type="date" min={form.starts} required={form.category === "Public calendar notice"} name="ends" value={form.ends} onChange={handleChange}/></label>
           <label>Priority<input type="number" min="-1000" max="1000" name="priority" value={form.priority} onChange={handleChange}/></label>
           <label>Parish image<select name="image" value={form.image} onChange={handleChange}><option value="">Text only</option>{['slide1.jpg','slide2.jpg','slide3.png','slide4.jpg'].map((img,i)=><option key={img} value={'/slides/'+img}>Parish photo {i+1}</option>)}</select></label></div>}
-        <button className="font-display text-[11px] tracking-wider bg-navy text-gold px-5 py-2.5 rounded-lg">
-          Publish Announcement
+        <button disabled={saving} className="font-display text-[11px] tracking-wider bg-navy text-gold px-5 py-2.5 rounded-lg">
+          {saving?'Saving…':editing===null?'Publish announcement':'Save changes'}
         </button>
+        {editing!==null && <button type="button" disabled={saving} className="ml-3 underline" onClick={clearDraft}>Cancel editing</button>}
       </form>
 
       <div className="bg-white border border-gold/20 rounded-xl overflow-hidden">
@@ -250,13 +252,14 @@ export default function AnnouncementsPage() {
                   </p>
                 </div>
 
+                <div className="flex flex-wrap gap-2"><button type="button" disabled={saving} onClick={()=>editNotice(a)} className="underline">Edit</button>
                 <button
                   aria-label={'Delete announcement: '+a.title}
                   onClick={() => deleteAnnouncement(a.id)}
                   className="p-1.5 rounded-lg border border-red-200 text-red-600"
                 >
-                  <i className="ti ti-trash text-[14px]" />
-                </button>
+                  Delete
+                </button></div>
               </div>
             ))}
           </div>

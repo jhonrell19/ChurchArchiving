@@ -127,7 +127,7 @@ export default function CompleteProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#edf2e9] via-white to-[#f6f7f2] flex items-center justify-center px-6 py-16">
+    <div className="min-h-screen bg-gradient-to-br from-[#f3eae0] via-white to-[#faf7f0] flex items-center justify-center px-6 py-16">
       <div className="w-full max-w-2xl bg-white border border-amber-100 rounded-3xl p-8 md:p-10 shadow-xl">
         <div className="text-center mb-8">
           <div className="mx-auto mb-4 flex items-center justify-center">

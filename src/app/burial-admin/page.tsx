@@ -39,6 +39,7 @@ const NAV: { id: BurialPage; label: string; icon: string }[] = [
 export default function BurialAdminPage() {
   useRefreshOnHistoryRestore()
   const [page, setPage] = useState<BurialPage>('dashboard')
+  const [slotStatus,setSlotStatus]=useState('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const logout = async () => {
@@ -135,8 +136,8 @@ export default function BurialAdminPage() {
         </header>
 
         <main className="flex-1 p-4 md:p-6 overflow-auto">
-          {page === 'dashboard' && <BurialDashboardPage />}
-          {page === 'slots' && <CemeterySlotsPage />}
+          {page === 'dashboard' && <BurialDashboardPage navigate={(page,status)=>{setSlotStatus(status || '');setPage(page)}}/>}
+          {page === 'slots' && <CemeterySlotsPage initialStatus={slotStatus}/>}
           {page === 'reservations' && <ReservationsPage />}
           {page === 'payments' && <PaymentsPage />}
           {page === 'burials' && <BurialRecordsPage />}

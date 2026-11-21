@@ -1,25 +1,11 @@
 import Footer from '../components/Footer'
 import parishFees from '../../../config/parish_fees.json'
 
-import { SCHEDULE } from '../components/serviceSchedule'
+import {publishedContent} from '@/lib/publishedSiteContent'
+export const dynamic = 'force-dynamic'
 
-const SACRAMENTS = [
-  { title: 'Baptism',            desc: 'The sacrament of initiation into the Christian faith. Contact the parish office to schedule and learn about preparation requirements.' },
-  { title: 'Matrimony',          desc: 'A sacred covenant before God and the community. Couples are encouraged to inquire at least three months in advance.' },
-  { title: 'Confirmation',       desc: 'The strengthening of baptismal grace through the Holy Spirit. Classes and preparation schedules are announced annually.' },
-  { title: 'Holy Eucharist',     desc: 'The central act of Christian worship. Celebrated every Sunday at our scheduled masses, open to all baptized members.' },
-  { title: 'Burial & Last Rites',desc: 'In times of loss, the Church accompanies families with prayer, comfort, and the celebration of the departed\'s life.' },
-  { title: 'Special Blessings',  desc: 'House blessings, vehicle blessings, and other special rites may be arranged by contacting the parish priest directly.' },
-]
-
-const MINISTRIES = [
-  { name: 'Youth Ministry',    desc: 'Empowering the next generation through fellowship, retreats, and service.' },
-  { name: "Women's Guild",     desc: 'A community of women dedicated to prayer, charity works, and parish support.' },
-  { name: "Men's Brotherhood", desc: 'Building brotherly bonds through faith formation and community outreach.' },
-  { name: 'Choir Ministry',    desc: 'Leading the congregation in sacred song and musical worship every Sunday.' },
-]
-
-export default function ServicesPage() {
+export default async function ServicesPage() {
+  const {services,sacraments,ministries,address}=await publishedContent()
   return (
     <>
 
@@ -55,7 +41,8 @@ export default function ServicesPage() {
             <div className="gold-divider"><span /><span className="diamond" /><span /></div>
           </div>
           <div className="max-w-2xl mx-auto border border-gold/20 rounded-xl overflow-hidden">
-            {SCHEDULE.map(({ day, time, tag }, i) => (
+            {!services.length && <p className="p-5 text-white">Contact the parish office for current service times.</p>}
+            {services.map(({ day, time, tag }, i) => (
               <div
                 key={i}
                 className="flex items-center justify-between px-7 py-5
@@ -86,7 +73,7 @@ export default function ServicesPage() {
             <div className="gold-divider"><span /><span className="diamond" /><span /></div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {SACRAMENTS.map(({ title, desc }) => (
+            {sacraments.map(({ title, desc }) => (
               <div
                 key={title}
                 className="bg-white border border-gold/30 rounded-xl p-8 text-center"
@@ -134,7 +121,7 @@ export default function ServicesPage() {
             <div className="gold-divider"><span /><span className="diamond" /><span /></div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {MINISTRIES.map(({ name, desc }) => (
+            {ministries.map(({ title:name, desc }) => (
               <div
                 key={name}
                 className="border border-gold/20 rounded-xl p-6"
@@ -147,7 +134,7 @@ export default function ServicesPage() {
         </div>
       </section>
 
-      <Footer />
+      <Footer address={address}/>
     </>
   )
 }

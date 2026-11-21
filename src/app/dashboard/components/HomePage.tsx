@@ -75,29 +75,44 @@ export default function HomePage({ setPage }: { setPage: (p: Page) => void }) {
   const stats = [
     {
       label: 'Total Archived Masses',
+      open: () => setPage('archives'),
       value: data?.stats.totalArchivedMasses ?? 0,
       icon: 'ti-video',
     },
     {
       label: 'AI Transcriptions',
+      open: () => setPage('transcriptions'),
       value: data?.stats.aiTranscriptions ?? 0,
       icon: 'ti-file-text',
     },
     {
       label: 'Sermon Summaries',
+      open: () => setPage('transcriptions'),
       value: data?.stats.sermonSummaries ?? 0,
       icon: 'ti-sparkles',
     },
     {
       label: "This Month's Uploads",
+      open: () => setPage('archives'),
       value: data?.stats.thisMonthUploads ?? 0,
       icon: 'ti-calendar-month',
     },
   ]
 
+  const desk=(
+      <section className="portal-start">
+        <h2>Parishioner desk</h2>
+        <div className="portal-actions">
+          <button onClick={()=>setPage('requests')}>Request a certificate <span aria-hidden="true">→</span></button>
+          <button onClick={()=>setPage('announcements')}>Calendar and notices <span aria-hidden="true">→</span></button>
+          <button onClick={()=>setPage('archives')}>Watch a Mass <span aria-hidden="true">→</span></button>
+        </div>
+      </section>
+  )
+
   if (loading) {
     return (
-      <div>
+      <div>{desk}
         <p className="font-body text-[#9ab0c4] text-[14px]">
           Loading dashboard content...
         </p>
@@ -107,28 +122,21 @@ export default function HomePage({ setPage }: { setPage: (p: Page) => void }) {
 
   if (error) {
     return (
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
+      <div>{desk}<div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
         <p className="font-display text-amber-800 text-[13px] font-semibold">Dashboard temporarily unavailable</p>
         <p className="font-body text-amber-700 text-[12px] mt-1">{error}</p>
         <button onClick={() => void loadDashboard()} className="mt-3 font-display text-[10px] tracking-wider bg-navy text-white px-3 py-2 rounded-lg">Retry</button>
-      </div>
+      </div></div>
     )
   }
 
   return (
     <div>
-      <section className="portal-start">
-        <h2>My parish</h2>
-        <div className="portal-actions">
-          <button onClick={()=>setPage('requests')}>Request a certificate <span aria-hidden="true">→</span></button>
-          <button onClick={()=>setPage('announcements')}>Calendar and notices <span aria-hidden="true">→</span></button>
-          <button onClick={()=>setPage('archives')}>Watch a Mass <span aria-hidden="true">→</span></button>
-        </div>
-      </section>
+      {desk}
       {playing && <MassMediaPlayer title={playing.title} filepath={playing.filepath} onClose={() => setPlaying(null)} />}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {stats.map(({ label, value, icon }) => (
-          <div key={label} className="bg-white border border-gold/20 rounded-xl p-5">
+        {stats.map(({ label, value, icon, open }) => (
+          <button type="button" key={label} aria-label={'Open '+label} onClick={open} className="metric-link text-left bg-white border border-gold/20 rounded-xl p-5">
             <div className="w-9 h-9 rounded-lg bg-gold/10 border border-gold/20 flex items-center justify-center mb-3">
               <i className={`ti ${icon} text-gold text-[17px]`} />
             </div>
@@ -140,7 +148,7 @@ export default function HomePage({ setPage }: { setPage: (p: Page) => void }) {
             <p className="font-body text-[12px] text-[#6b8caa] leading-tight">
               {label}
             </p>
-          </div>
+          </button>
         ))}
       </div>
 

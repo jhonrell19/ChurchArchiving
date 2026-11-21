@@ -16,7 +16,8 @@ type Announcement = {
   createdAt: string
 }
 
-export default function AnnouncementsPage() {
+import type {Service} from '@/lib/siteContent'
+export default function AnnouncementsPage({services}:{services:Service[]}) {
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -57,7 +58,7 @@ export default function AnnouncementsPage() {
         Latest updates and announcements from the parish.
       </p>
 
-      {!loading && !failed && <ParishCalendar notices={announcements} />}
+      {!loading && !failed && <ParishCalendar notices={announcements} services={services} />}
       {loading ? (
         <div className="bg-white border border-gold/20 rounded-xl p-12 text-center">
           <p className="font-body text-[#9ab0c4] text-[14px]">

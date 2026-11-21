@@ -21,15 +21,14 @@ type MassRecord = {
   hasTranscript: boolean
 }
 
-export default function MassesPage() {
+export default function MassesPage({ initialTranscript }: { initialTranscript: number | null }) {
   const [playing, setPlaying] = useState<{ title: string; filepath: string } | null>(null)
   const [masses, setMasses] = useState<MassRecord[]>([])
   const [filterStatus, setFilter] = useState<'All' | MassStatus>('All')
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [expanded, setExpanded] = useState<number | null>(null)
-  const [transcribingId, setTranscribingId] = useState<number | null>(null)
+  const [expanded, setExpanded] = useState<number | null>(initialTranscript)
 
   const [form, setForm] = useState({
     title: '',
@@ -193,34 +192,6 @@ export default function MassesPage() {
     }
   }
 
-  const runAITranscription = async (id: number) => {
-    if (!confirm('Start AI transcription? This may take several minutes.')) return
-
-    try {
-      setTranscribingId(id)
-
-      const res = await fetch(`/api/backend/api/masses/${id}/transcribe-ai`, {
-        method: 'POST',
-      })
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        alert(data.error || 'AI transcription failed.')
-        return
-      }
-
-      alert('AI transcription completed successfully.')
-      await loadMasses()
-      setExpanded(id)
-    } catch (err) {
-      console.warn('AI transcription error:', err)
-      alert('AI transcription failed. Make sure Flask, FFmpeg, and Faster Whisper are working.')
-    } finally {
-      setTranscribingId(null)
-    }
-  }
-
   const deleteMass = async (id: number) => {
     if (!confirm('Delete this mass record?')) return
 
@@ -274,8 +245,7 @@ export default function MassesPage() {
       </p>
 
       <p role="status" className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-        Cloud AI transcription is temporarily paused to keep the website responsive.
-        Generate a transcript on your computer, then open the Mass record and save its Full Transcript and Summary here.
+        Choose Prepare transcript beside a Mass to create and review a draft on the parish computer.
       </p>
       {showForm && (
         <form
@@ -514,22 +484,9 @@ export default function MassesPage() {
                         </button>
                       )}
 
-                      {m.filepath && (
-                        <button
-                          onClick={() => runAITranscription(m.id)}
-                          disabled={true}
-                          className="font-display text-[10px] tracking-wider text-gold border border-gold/30 px-2.5 py-1 rounded-lg bg-gold/5 disabled:opacity-50"
-                        >
-                          {'AI Transcribe (paused)'}
-                        </button>
-                      )}
-
-                      <button
-                        onClick={() => setExpanded(expanded === m.id ? null : m.id)}
-                        className="p-1.5 rounded-lg border border-gold/20 text-gold"
-                        aria-label="View"
-                      >
-                        <i className={`ti ${expanded === m.id ? 'ti-chevron-up' : 'ti-eye'} text-[14px]`} />
+                      <button type="button" aria-expanded={expanded === m.id}
+                        className="parish-report-link" onClick={() => setExpanded(expanded === m.id ? null : m.id)}>
+                        {expanded === m.id ? 'Close transcript' : 'Prepare transcript'}
                       </button>
 
                       {m.filepath && (
@@ -551,7 +508,9 @@ export default function MassesPage() {
 
                     {expanded === m.id && (
                       <div className="mt-4 bg-gold/5 border border-gold/10 rounded-xl p-4">
-                        <label className="mb-4 block font-semibold">Import local transcription draft
+                        <p className="mb-3">On the parish PC, open the transcription assistant, choose your audio or video, then import the JSON draft here. Review the text before saving.</p>
+                        <a className="underline" href="/mass_transcription_assistant.py" download>Download transcription assistant for the parish PC</a>
+                        <label className="my-4 block font-semibold">Import local transcription draft
                           <input type="file" accept=".json,application/json" className="block" onChange={async event=>{
                             const file=event.target.files?.[0]; event.target.value=''
                             if (!file) return

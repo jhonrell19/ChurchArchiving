@@ -14,9 +14,32 @@ const noStore = { 'Cache-Control': 'no-store' }
 const json = (obj: object, status = 200) => NextResponse.json(obj, { status, headers: noStore })
 
 function configured() {
-  return process.env.TEXTBEE_OTP_ENABLED === 'true' &&
-    Boolean(process.env.TEXTBEE_API_KEY?.trim()) &&
-    Boolean(process.env.PHONE_OTP_PEPPER && process.env.PHONE_OTP_PEPPER.length >= 32)
+  if ((process.env.PHONE_OTP_PEPPER || '').length < 32) return false
+  if (process.env.PHONE_OTP_PROVIDER === 'twilio') {
+    return Boolean(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN &&
+      (process.env.TWILIO_MESSAGING_SERVICE_SID || process.env.TWILIO_FROM_NUMBER))
+  }
+  return (!process.env.PHONE_OTP_PROVIDER || process.env.PHONE_OTP_PROVIDER === 'textbee') &&
+    process.env.TEXTBEE_OTP_ENABLED === 'true' && Boolean(process.env.TEXTBEE_API_KEY?.trim())
+}
+async function sendCode(phone: string, message: string) {
+  if (process.env.PHONE_OTP_PROVIDER === 'twilio') {
+    const sid = process.env.TWILIO_ACCOUNT_SID!
+    const form = new URLSearchParams({ To: phone, Body: message })
+    if (process.env.TWILIO_MESSAGING_SERVICE_SID) form.set('MessagingServiceSid', process.env.TWILIO_MESSAGING_SERVICE_SID)
+    else form.set('From', process.env.TWILIO_FROM_NUMBER!)
+    return fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(sid)}/Messages.json`, {
+      method: 'POST', body: form, cache: 'no-store', signal: AbortSignal.timeout(15000),
+      headers: { Authorization: 'Basic ' + Buffer.from(`${sid}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64') },
+    })
+  }
+  const body: { recipients: string[]; message: string; deviceId?: string } = { recipients: [phone], message }
+  if (process.env.TEXTBEE_DEVICE_ID?.trim()) body.deviceId = process.env.TEXTBEE_DEVICE_ID.trim()
+  return fetch('https://api.textbee.dev/api/v1/gateway/send-sms', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.TEXTBEE_API_KEY! },
+    body: JSON.stringify(body), cache: 'no-store', signal: AbortSignal.timeout(15000),
+  })
 }
 function otpHash(userId: number, phone: string, code: string) {
   const pepper = process.env.PHONE_OTP_PEPPER
@@ -64,6 +87,7 @@ export async function POST(req: Request) {
     // Reserve each SMS in a serialized database transaction to enforce cooldown
     // and daily quotas even if the same browser submits requests concurrently.
     const reservation = await prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(71113, ${user.id}::int)::text`
       const state = await tx.phoneVerification.findUnique({ where: { userId: user.id } })
       if (state?.phoneNumber === user.phoneNumber && state.verifiedAt) return 'verified'
       if (state?.lastSentAt && now.getTime() - state.lastSentAt.getTime() < SEND_COOLDOWN_MS) return 'cooldown'
@@ -87,21 +111,15 @@ export async function POST(req: Request) {
     if (reservation === 'cooldown') return json({ message: 'Please wait at least a minute before requesting another code.' }, 429)
     if (reservation === 'limit') return json({ message: 'Daily SMS verification limit reached. Try again tomorrow.' }, 429)
     try {
-      const body: { recipients: string[]; message: string; deviceId?: string } = { recipients: [user.phoneNumber], message }
-      if (process.env.TEXTBEE_DEVICE_ID?.trim()) body.deviceId = process.env.TEXTBEE_DEVICE_ID.trim()
-      const response = await fetch('https://api.textbee.dev/api/v1/gateway/send-sms', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.TEXTBEE_API_KEY! },
-        body: JSON.stringify(body), cache: 'no-store', signal: AbortSignal.timeout(15000),
-      })
+      const response = await sendCode(user.phoneNumber, message)
       const result = await response.json().catch(() => ({}))
       if (!response.ok || result?.data?.success === false) {
         // Do not leave an unusable code active after provider rejection.
         await prisma.phoneVerification.updateMany({ where: { userId: user.id, otpHash: secretHash }, data: { otpHash: null, expiresAt: null } })
-        console.error('TEXTBEE SEND FAILED (HTTP status):', response.status)
-        return json({ message: 'SMS gateway did not accept the message. Check the gateway phone, SIM and quota.' }, 502)
+        console.error('SMS SEND FAILED (HTTP status):', response.status)
+        return json({ message: 'SMS gateway did not accept the message. Ask the parish office to check the SMS sender and balance.' }, 502)
       }
-      return json({ message: 'If your gateway is online, an SMS code has been queued. Enter the code when it arrives.', sent: true })
+      return json({ message: 'The SMS provider accepted your code for delivery. Enter the code when it arrives.', sent: true })
     } catch {
       await prisma.phoneVerification.updateMany({ where: { userId: user.id, otpHash: secretHash }, data: { otpHash: null, expiresAt: null } })
       return json({ message: 'SMS gateway is unreachable. Please try later.' }, 502)

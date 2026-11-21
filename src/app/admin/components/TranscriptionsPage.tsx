@@ -17,7 +17,7 @@ type TranscriptionRecord = {
   words: number
 }
 
-export default function TranscriptionsPage() {
+export default function TranscriptionsPage({ openMass }: { openMass: (id: number | null) => void }) {
   const [transcriptions, setTranscriptions] = useState<TranscriptionRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<number | null>(null)
@@ -54,7 +54,7 @@ export default function TranscriptionsPage() {
       </h2>
 
       <p className="font-body text-[#6b8caa] text-[14px] mb-6">
-        All completed AI-generated transcriptions and sermon summaries.
+        Reviewed transcripts and sermon summaries saved by the parish office.
       </p>
 
       <div className="space-y-4">
@@ -73,7 +73,7 @@ export default function TranscriptionsPage() {
             </p>
 
             <p className="font-body text-[#9ab0c4] text-[13px]">
-              Run AI Transcribe from Mass Recordings, or save a transcript manually.
+              <button className="underline" onClick={() => openMass(null)}>Open Mass Recordings to prepare a transcript</button>
             </p>
           </div>
         ) : (
@@ -145,7 +145,7 @@ export default function TranscriptionsPage() {
                 )}
 
                 <button
-                  onClick={() => alert('Edit this from Admin → Mass Recordings → Eye button.')}
+                  onClick={() => openMass(t.id)}
                   className="flex items-center gap-1.5 font-display text-[11px] tracking-wider text-[#6b8caa] border border-gold/15 px-3 py-1.5 rounded-lg"
                 >
                   <i className="ti ti-edit text-[13px]" />

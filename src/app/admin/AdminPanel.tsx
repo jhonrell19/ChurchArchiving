@@ -34,6 +34,7 @@ const MAIN_NAV: {
 export default function AdminPanel({managePolicy=false,manageWebsite=false}:{managePolicy?:boolean;manageWebsite?:boolean}) {
   useRefreshOnHistoryRestore()
   const [page, setPage] = useState<ExtendedAdminPage>('dashboard')
+  const [transcriptId, setTranscriptId] = useState<number | null>(null)
   const [archiveTab,setArchiveTab]=useState('baptismal')
   const [sidebarOpen, setSidebar] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
@@ -176,8 +177,8 @@ export default function AdminPanel({managePolicy=false,manageWebsite=false}:{man
         <main className="flex-1 p-4 md:p-6 overflow-auto">
           {page === 'dashboard' && <DashboardHome manageWebsite={manageWebsite} openArchive={tab=>{setArchiveTab(tab);setPage('archives')}} setPage={setPage}/>}
           {page === 'archives' && <ArchivesPage initialTab={archiveTab}/>}
-          {page === 'masses' && <MassesPage />}
-          {page === 'transcriptions' && <TranscriptionsPage />}
+          {page === 'masses' && <MassesPage initialTranscript={transcriptId} />}
+          {page === 'transcriptions' && <TranscriptionsPage openMass={id => { setTranscriptId(id); setPage('masses') }} />}
           {page === 'requests' && <RequestsPage />}
           {page === 'urgent-requests' && <RequestsPage urgentOnly />}
           {page === 'announcements' && <AnnouncementsPage />}

@@ -133,7 +133,7 @@ export default function DashboardHome({ setPage,openArchive,manageWebsite }: { s
 
   return (
     <div>
-      <section className="office-mast"><h2>Parish office</h2><p>{stats ? stats.totalRecords + ' archived records' : 'Certificate archives and parish notices'}</p><div className="office-links">
+      <section className="office-mast"><h2>Parish office</h2><p>{typeof stats?.totalRecords === 'number' ? stats.totalRecords + ' archived records' : 'Certificate archives and parish notices'}</p><div className="office-links">
         <button onClick={()=>setPage('requests')}>Review requests →</button>
         <button onClick={()=>setPage('announcements')}>Manage notices →</button>
         {manageWebsite && <a href="/admin/site-content">Edit website →</a>}

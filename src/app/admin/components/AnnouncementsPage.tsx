@@ -114,6 +114,7 @@ export default function AnnouncementsPage() {
         return
       }
 
+      if (editing === id) clearDraft()
       await loadAnnouncements()
     } catch (err) {
       console.warn('Delete announcement error:', err)

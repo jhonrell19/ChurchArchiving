@@ -217,6 +217,12 @@ async function forward(request: NextRequest, context: { params: Promise<{ path: 
   user.address || ''
 )
 
+  // Allow a free instance to wake. Restrict the deadline to interactive reads.
+  const interactiveRead = request.method === 'GET' && (path.startsWith('api/archive/documents/') || [
+    'api/health', 'api/requests', 'api/archive/documents', 'api/announcements',
+    'api/user/dashboard-summary', 'api/masses',
+  ].includes(path))
+  const deadline = interactiveRead ? AbortSignal.timeout(90_000) : undefined
   try {
     // Mass creation uses multipart/form-data. Re-encode its parts instead of
     // forwarding a raw byte buffer with an inherited boundary header: the
@@ -255,6 +261,7 @@ async function forward(request: NextRequest, context: { params: Promise<{ path: 
       body,
       cache: 'no-store',
       redirect: 'manual',
+      signal: deadline,
     })
 
     const responseHeaders = new Headers()
@@ -280,6 +287,9 @@ async function forward(request: NextRequest, context: { params: Promise<{ path: 
       headers: responseHeaders,
     })
   } catch (error) {
+    if (deadline?.aborted) {
+      return NextResponse.json({ message: 'The parish service took too long. Please try again.' }, { status: 504 })
+    }
     console.error('BACKEND PROXY FETCH ERROR:', error)
     return NextResponse.json(
       { message: 'The parish backend service is unavailable.' },

@@ -25,18 +25,21 @@ export default function ReportView({ burial, supervisor }: { burial: boolean, su
   }, [endpoint, refresh])
   const types = burial ? ['burial', 'land_agreement', 'ownership'] : ['baptismal', 'confirmation', 'marriage']
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+  const byPayment = new URLSearchParams(query).get('basis') === 'paid'
+  const chartTitle = byPayment ? 'Collections by payment month (PHP)' : 'Requests by month'
   const months = new Map<string, number>()
-  for (const row of rows) months.set(row.month, (months.get(row.month) || 0) + row.requests)
+  for (const row of rows) months.set(row.month, (months.get(row.month) || 0) + (byPayment ? row.collected : row.requests))
   return <main className="parish-workspace">
     <a href={burial ? '/burial-admin' : '/admin'}>← Back to office</a>
     <h1>Certificate activity</h1>
-    <p>Requests grouped by month of creation in Philippine time. Collections include recorded cash and verified live PayMongo payments for those requests.</p>
+    <p>Choose the request date or the recorded payment date. Payment totals include cash and verified live PayMongo payments. Entries without a payment date are excluded from the payment-date view.</p>
     <form className="parish-filters" onSubmit={e => {
       e.preventDefault()
       const params = new URLSearchParams()
       for (const [key, value] of new FormData(e.currentTarget)) if (value) params.set(key, String(value))
       setQuery(params.toString()); setRefresh(n => n + 1)
     }}>
+      <label>Group by<select name="basis"><option value="created">Request date</option><option value="paid">Payment date</option></select></label>
       <label>From<input required name="from" type="date" defaultValue={today.slice(0, 8) + '01'} /></label>
       <label>Through<input required name="to" type="date" defaultValue={today} /></label>
       <label>Certificate<select name="type"><option value="">All types</option>{types.map(t => <option key={t}>{t}</option>)}</select></label>
@@ -47,8 +50,8 @@ export default function ReportView({ burial, supervisor }: { burial: boolean, su
     {state ? <p role="status">{state}</p> : <>
       <section className="parish-metrics"><div>Requests<strong>{rows.reduce((v,r) => v+r.requests,0)}</strong></div><div>Collected<strong>{money.format(rows.reduce((v,r) => v+r.collected,0))}</strong></div></section>
       {rows.length ? <>
-        <h2>Requests by month</h2>
-        <ReportChart title="Requests by month" values={Array.from(months,([label,value])=>({label,value}))}/>
+        <h2>{chartTitle}</h2>
+        <ReportChart title={chartTitle} values={Array.from(months,([label,value])=>({label,value}))}/>
         <h2>Breakdown</h2>
         <p><a href={endpoint+'&format=pdf'}>Download PDF</a> · <a href={endpoint+'&format=xlsx'}>Download Excel</a></p>
         <div className="overflow-x-auto"><table><thead><tr>{['Month','Certificate','Status','Requests','Collected'].map(c => <th key={c}>{c}</th>)}</tr></thead>

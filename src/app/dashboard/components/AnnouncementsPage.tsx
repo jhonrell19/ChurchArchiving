@@ -20,9 +20,12 @@ export default function AnnouncementsPage() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [loading, setLoading] = useState(true)
 
+  const [failed, setFailed] = useState(false)
+
   const loadAnnouncements = async () => {
     try {
       setLoading(true)
+      setFailed(false)
 
       const res = await fetch('/api/backend/api/announcements')
 
@@ -34,7 +37,7 @@ export default function AnnouncementsPage() {
       setAnnouncements(data.announcements || [])
     } catch (err) {
       console.warn('Load announcements error:', err)
-      setAnnouncements([])
+      setFailed(true)
     } finally {
       setLoading(false)
     }
@@ -54,12 +57,17 @@ export default function AnnouncementsPage() {
         Latest updates and announcements from the parish.
       </p>
 
-      {!loading && <ParishCalendar notices={announcements} />}
+      {!loading && !failed && <ParishCalendar notices={announcements} />}
       {loading ? (
         <div className="bg-white border border-gold/20 rounded-xl p-12 text-center">
           <p className="font-body text-[#9ab0c4] text-[14px]">
             Loading announcements...
           </p>
+        </div>
+      ) : failed ? (
+        <div role="alert">
+          <p>Parish notices could not be loaded.</p>
+          <button className="underline" onClick={() => void loadAnnouncements()}>Try again</button>
         </div>
       ) : announcements.length === 0 ? (
         <div className="bg-white border border-gold/20 rounded-xl p-12 text-center">

@@ -30,13 +30,22 @@ def certificate_report():
     fmt = request.args.get("format", "json")
     if fmt not in {"json", "pdf", "xlsx"}:
         return {"error": "Unknown export format."}, 400
-    month = func.to_char(Record.created_at + timedelta(hours=8), 'YYYY-MM')
+    basis = request.args.get("basis", "created")
+    if basis not in {"created", "paid"}:
+        return {"error": "Unknown report date basis."}, 400
+    by_payment = basis == "paid"
+    timestamp = Record.paid_at if by_payment else Record.created_at
+    heading = "Payments received" if by_payment else "Requests created"
+    month = func.to_char(timestamp + timedelta(hours=8), 'YYYY-MM')
     # Revenue excludes demo/test payments and unpaid request quotes.
     collected = case(((Record.payment_status == 'Paid') &
                       (func.upper(Record.payment_method).in_(['CASH', 'PAYMONGO_LIVE'])), Record.total_fee), else_=0)
     query = db.session.query(month, Record.sacrament_type, Record.status,
                              func.count(Record.id), func.sum(collected)).filter(
-        Record.sacrament_type.in_(scope), Record.created_at >= first, Record.created_at < last)
+        Record.sacrament_type.in_(scope), timestamp >= first, timestamp < last)
+    if by_payment:
+        query = query.filter(Record.payment_status == "Paid",
+                             func.upper(Record.payment_method).in_(["CASH", "PAYMONGO_LIVE"]))
     for key, column in [('type', Record.sacrament_type), ('status', Record.status), ('method', Record.payment_method)]:
         value = request.args.get(key)
         if value:
@@ -54,7 +63,7 @@ def certificate_report():
         workbook = Workbook()
         sheet = workbook.active
         sheet.title = "Certificate activity"
-        sheet.append(["Requests created", start.isoformat(), end.isoformat()])
+        sheet.append([heading, start.isoformat(), end.isoformat()])
         sheet.append(columns)
         for row in values:
             sheet.append(row)
@@ -68,9 +77,9 @@ def certificate_report():
         from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
         from reportlab.lib.styles import getSampleStyleSheet
         table = Table([columns] + values, repeatRows=1)
-        table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#17365d")),
+        table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#24543e")),
                                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white)]))
-        SimpleDocTemplate(output).build([Paragraph(f"Certificate activity: {start} to {end}", getSampleStyleSheet()["Heading1"]), table])
+        SimpleDocTemplate(output).build([Paragraph(f"{heading}: {start} to {end}", getSampleStyleSheet()["Heading1"]), table])
         mime = "application/pdf"
     output.seek(0)
     response = send_file(output, mimetype=mime, as_attachment=True, download_name=f"certificate-activity-{start}-{end}.{fmt}")

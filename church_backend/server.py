@@ -2049,7 +2049,7 @@ def api_upload_document():
                 app.logger.exception('Filled template generation failed during upload')
                 return {'error': 'Could not generate filled template. Archive was not saved.'}, 500
 
-        db.session.commit()
+
 
         log = AuditLog(
 
@@ -5263,7 +5263,7 @@ def _paymongo_api(method, path, payload=None):
 def certificate_checkout(request_id):
     denied = require_roles("USER")
     if denied: return denied
-    cert = db.session.get(CertificateRequest, request_id)
+    cert = db.session.query(CertificateRequest).filter_by(id=request_id).with_for_update().one_or_none()
     if not cert: return {"error": "Request not found"}, 404
     if cert.requester_user_id != current_user_id(): return {"error": "Forbidden"}, 403
     if cert.status not in {"Approved", "Ready"}: return {"error": "Approval required"}, 400
@@ -5281,6 +5281,12 @@ def certificate_checkout(request_id):
             has_paid = any(isinstance(p, dict) and p.get("attributes", p).get("status") == "paid" for p in prior_payments)
             if has_paid:
                 return {"error": "Prior checkout may be paid. Await payment confirmation; do not retry."}, 409
+            if (prior_status == "active" and prior.get("livemode") is (pay_mode == "live")
+                    and cert.payment_method == "PAYMONGO_" + pay_mode.upper() + "_PENDING"
+                    and not prior_payments):
+                checkout_url = prior.get("checkout_url")
+                if isinstance(checkout_url, str) and checkout_url.startswith("https://checkout.paymongo.com/"):
+                    return {"checkoutUrl": checkout_url}
             if prior_status not in {"expired", "cancelled", "canceled"}:
                 return {"error": "Previous checkout remains active or unverified. Finish it or wait for expiry."}, 409
         except Exception:

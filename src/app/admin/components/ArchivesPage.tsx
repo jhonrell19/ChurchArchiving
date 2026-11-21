@@ -47,6 +47,7 @@ export default function ArchivesPage({initialTab='baptismal'}:{initialTab?:strin
 })
 
   const [file, setFile] = useState<File | null>(null)
+  const [saving, setSaving] = useState(false)
   const [runOcr, setRunOcr] = useState(true)
   const [ocrLoading, setOcrLoading] = useState(false)
   const [ocrText, setOcrText] = useState('')
@@ -104,6 +105,9 @@ export default function ArchivesPage({initialTab='baptismal'}:{initialTab?:strin
         throw new Error(data.error || data.message || 'Could not generate the filled template.')
       }
       const blob = await res.blob()
+      if (!blob.type.toLowerCase().startsWith('application/pdf') || await blob.slice(0, 5).text() !== '%PDF-') {
+        throw new Error('The parish service returned a page instead of the document. Refresh your session and try the preview again.')
+      }
       if (revision !== previewVersionRef.current) return
       const url = URL.createObjectURL(blob)
       previewUrlRef.current = url
@@ -176,6 +180,7 @@ export default function ArchivesPage({initialTab='baptismal'}:{initialTab?:strin
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault()
 
+    if (saving || ocrLoading) return
     if (!file) {
       alert('Please upload a scanned PDF or image.')
       return
@@ -196,6 +201,7 @@ export default function ArchivesPage({initialTab='baptismal'}:{initialTab?:strin
     formData.append('record_data', JSON.stringify(recordData))
     formData.append('review_confirmed', ocrReviewed ? 'true' : 'false')
 
+    setSaving(true)
     try {
       const res = await fetch('/api/backend/api/archive/upload', {
         method: 'POST',
@@ -231,7 +237,9 @@ export default function ArchivesPage({initialTab='baptismal'}:{initialTab?:strin
       await loadDocuments()
     } catch (err) {
       console.warn('Archive upload error:', err)
-      alert('Upload failed. The parish backend service is unavailable.')
+      alert('Could not confirm the save. Refresh the archive and check for the record before retrying.')
+    } finally {
+      setSaving(false)
     }
 
   }
@@ -307,6 +315,11 @@ const previewOcr = async (selectedFile: File) => {
 const selectScannedFile = (selected: File | null) => {
   discardTemplatePreview()
   ocrRequestCounter.current += 1
+  if (file && selected !== file) {
+    setRecordData({})
+    setForm(previous => ({ ...previous, person_name: '', parish: '', priest: '', date_of_record: '' }))
+  }
+  setOcrLoading(false)
   setFile(selected)
   setOcrText('')
   setOcrSuggestions({})
@@ -589,8 +602,8 @@ const records = documents
           </div>
 
           <div className="flex gap-3 mt-4">
-            <button className="font-display text-[11px] tracking-wider bg-navy text-gold px-4 py-2 rounded-lg">
-              Save to Archive
+            <button disabled={saving || ocrLoading} className="font-display text-[11px] tracking-wider bg-navy text-gold px-4 py-2 rounded-lg">
+              {saving ? 'Saving record…' : 'Save to Archive'}
             </button>
 
             <button

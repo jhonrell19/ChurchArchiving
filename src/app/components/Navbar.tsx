@@ -14,9 +14,14 @@ const LINKS = [
 ]
 
 export default function Navbar() {
+  const pathname = usePathname()
+  if (!['/', '/about', '/services', '/contact', '/login', '/register', '/forgot-password', '/reset-password', '/verify-email', '/privacy'].includes(pathname)) return null
+  return <PublicNavigation pathname={pathname} />
+}
+
+function PublicNavigation({ pathname }: { pathname: string }) {
   const [open, setOpen] = useState(false)
   const [accountLink, setAccountLink] = useState({ href: '/login', label: 'Log in' })
-  const pathname = usePathname()
 
   useEffect(() => {
     queueMicrotask(() => setOpen(false))
@@ -50,14 +55,6 @@ export default function Navbar() {
   }, [pathname])
 
 
-
-  if (
-    pathname.startsWith('/dashboard') ||
-    pathname.startsWith('/admin') ||
-    pathname.startsWith('/burial-admin')
-  ) {
-    return null
-  }
 
   const links = [...LINKS, accountLink]
   return <nav className="public-nav" aria-label="Parish navigation">

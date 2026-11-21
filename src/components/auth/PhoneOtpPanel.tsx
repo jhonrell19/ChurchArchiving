@@ -41,7 +41,7 @@ export default function PhoneOtpPanel({ phoneNumber }: { phoneNumber: string | n
           <input value={code} onChange={e => setCode(e.target.value.replace(/[^\d]/g,'').slice(0,6))} inputMode="numeric" autoComplete="one-time-code" placeholder="6-digit SMS code" className="border rounded-lg px-3 py-2 text-slate-900" />
           <button type="button" disabled={busy || code.length !== 6} onClick={() => void action('verify')} className="bg-blue-900 text-white rounded-lg px-4 py-2 disabled:opacity-50">Verify number</button>
         </div>}
-      </> : <p className="text-xs text-amber-800">TextBee OTP is not enabled on the server yet. Your number remains unverified.</p>}
+      </> : <p className="text-xs text-amber-800">SMS verification is unavailable. Your number remains unverified.</p>}
     </>}
     {message && <p role="status" className="text-sm text-slate-700">{message}</p>}
   </section>

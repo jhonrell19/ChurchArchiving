@@ -16,6 +16,17 @@ WHERE n.nspname IN ('parish_auth','parish_private','parish_v2') AND c.relkind IN
 GROUP BY n.nspname,c.relname,c.relrowsecurity,c.relforcerowsecurity
 ORDER BY 1,2;
 
+-- Capture the effective role and table-level access without returning parish records.
+SELECT current_database(), current_user, rolsuper, rolbypassrls
+FROM pg_roles WHERE rolname = current_user;
+
+SELECT n.nspname AS schema_name, c.relname, pg_get_userbyid(c.relowner) AS owner,
+       has_table_privilege(current_user, c.oid, 'SELECT') AS can_read,
+       has_table_privilege(current_user, c.oid, 'UPDATE') AS can_update
+FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname IN ('parish_auth','parish_private') AND c.relkind='r'
+ORDER BY 1,2;
+
 -- Counts of direct file references, including legacy backslash paths.
 -- A reference cannot prove the underlying file still exists. Original scan
 -- metadata and generated sidecars require a separate filesystem reconciliation.

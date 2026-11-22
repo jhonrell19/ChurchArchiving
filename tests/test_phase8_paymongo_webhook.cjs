@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const { createHmac } = require('node:crypto')
 const fs = require('node:fs')
 const ts = require('typescript')
-const exports = {}
+const handlers = {}
 const moduleCode = ts.transpileModule(
   fs.readFileSync('src/app/api/paymongo/webhook/route.ts', 'utf8'),
   { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }
@@ -12,7 +12,7 @@ const moduleCode = ts.transpileModule(
 new Function('require', 'exports', moduleCode)(name => {
   if (name === 'next/server') return { NextResponse: { json: (body, options) => Response.json(body, options) } }
   return require(name)
-}, exports)
+}, handlers)
 
 async function run() {
   Object.assign(process.env, {
@@ -36,13 +36,13 @@ async function run() {
     verifiedCalls++
     return Response.json({ ok: true })
   }
-  assert.equal((await exports.POST(makeRequest('0'.repeat(64)))).status, 401)
+  assert.equal((await handlers.POST(makeRequest('0'.repeat(64)))).status, 401)
   assert.equal(verifiedCalls, 0)
-  assert.equal((await exports.POST(makeRequest(signature))).status, 200)
-  assert.equal((await exports.POST(makeRequest(signature))).status, 200)
+  assert.equal((await handlers.POST(makeRequest(signature))).status, 200)
+  assert.equal((await handlers.POST(makeRequest(signature))).status, 200)
   assert.equal(verifiedCalls, 2)
   global.fetch = async () => Response.json({ error: 'Not confirmed' }, { status: 503 })
-  assert.equal((await exports.POST(makeRequest(signature))).status, 503)
+  assert.equal((await handlers.POST(makeRequest(signature))).status, 503)
   console.log('PASS raw HMAC, rejects forgery, forwards replay for idempotent ledger, rejects upstream failure')
 }
 run().catch(error => { console.error(error); process.exitCode = 1 })

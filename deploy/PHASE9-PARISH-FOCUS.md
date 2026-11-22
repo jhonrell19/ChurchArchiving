@@ -6,7 +6,7 @@ This change intentionally contains only **low-risk UI scope reductions and a rea
 
 - Main Admin: one Requests queue; no Urgent Requests or Recycle Bin navigation.
 - Archive screens: ordinary Delete buttons hidden; historical restoration/deletion endpoints are retained temporarily for accountable recovery. They must later be reserved to the appropriate supervisor/retention workflow.
-- Parishioner: removes urgent fee checkbox; new requests always send `isUrgent:false`. Existing urgent requests remain in history.
+- Parishioner: removes urgent fee checkbox; new requests always send `isUrgent:false`. The Flask request endpoint **rejects** any new `isUrgent:true` submission (400), including crafted requests. Existing urgent requests remain in history.
 - Burial Admin: document-only sidebar, with burial records, burial document requests, and burial archives. Slot/reservation/payment screens and the old cemetery KPI dashboard are not rendered. Historical data is untouched. NOTE: existing Land Agreement request logic still references cemetery slot data and must be separately redesigned, tested, and migrated before decommissioning the underlying endpoints.
 - Parishioner dashboard: a compact accessible calendar queries the existing public calendar endpoint. Calendar data requires the existing announcement slides feature and migration; the component shows an honest error/empty state when unavailable.
 

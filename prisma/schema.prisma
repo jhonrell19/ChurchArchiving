@@ -54,6 +54,8 @@ model User {
   staffMfa                StaffMfa?
   staffMfaChallenges      StaffMfaChallenge[]
   phoneVerification       PhoneVerification?
+  notificationPreference  NotificationPreference?
+  notificationEvents      NotificationEvent[]
 
   @@schema("parish_auth")
 }
@@ -147,5 +149,45 @@ model PhoneVerification {
   updatedAt       DateTime  @updatedAt
   user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@schema("parish_auth")
+}
+
+/**
+ * Opt-in service updates; phone verification alone never authorizes broadcast.
+ * Email-only service updates default on, SMS defaults OFF until the user opts in.
+ */
+model NotificationPreference {
+  userId       Int      @id
+  smsUpdates   Boolean  @default(false)
+  emailUpdates Boolean  @default(true)
+  updatedAt    DateTime @updatedAt @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@schema("parish_auth")
+}
+
+/**
+ * Provider acceptance is not handset delivery. An immutable unique eventKey
+ * prevents PayMongo webhook replays and repeated staff requests from sending
+ * duplicate notices; pending events can be flushed by authorized staff.
+ */
+model NotificationEvent {
+  id               Int      @id @default(autoincrement())
+  userId           Int
+  requestId        Int
+  office           String   @default("main") @db.VarChar(16)
+  kind             String   @db.VarChar(40)
+  eventKey         String   @unique @db.VarChar(64)
+  message          String   @db.VarChar(350)
+  emailState       String   @default("pending") @db.VarChar(20)
+  smsState         String   @default("pending") @db.VarChar(20)
+  emailAttemptedAt DateTime?
+  smsAttemptedAt   DateTime?
+  smsBatchId       String?  @db.VarChar(128)
+  createdAt        DateTime @default(now())
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([office, smsState, emailState])
   @@schema("parish_auth")
 }

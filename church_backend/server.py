@@ -1600,6 +1600,13 @@ def api_archive_original_scan(document_id):
     scan_path, scan_name = _archive_original_scan(document)
     if not scan_path or not scan_path.startswith(f'uploads/{document.sacrament_type}/'):
         return {'error': 'Original scan is unavailable.'}, 404
+    if request.args.get("signed") == "1":
+        url = private_uploads.signed_download(scan_path)
+        if not url:
+            return {"error": "The original scan is not in durable private storage."}, 503
+        result = jsonify({"signedUrl": url, "expiresInSeconds": 60})
+        result.headers["Cache-Control"] = "private, no-store"
+        return result
     if not os.path.isfile(readable_upload(scan_path)):
         return {'error': 'Original scan file is missing.'}, 404
     response = send_file(readable_upload(scan_path), as_attachment=False, download_name=scan_name)
@@ -3402,6 +3409,14 @@ def api_download_request_document(request_id):
         return {"error": "No release document is attached to this request."}, 404
 
     normalized = normalize_path(cert_request.generated_file)
+    if request.args.get("signed") == "1":
+        # The owner/payment/office check above must happen BEFORE presigning.
+        url = private_uploads.signed_download(normalized)
+        if not url:
+            return {"error": "A durable private file is not available for signed download."}, 503
+        result = jsonify({"signedUrl": url, "expiresInSeconds": 60})
+        result.headers["Cache-Control"] = "private, no-store"
+        return result
     physical_path = readable_upload(normalized)
     if not os.path.isfile(physical_path):
         return {"error": "Release document file is missing."}, 404

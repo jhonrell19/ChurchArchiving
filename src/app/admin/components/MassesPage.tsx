@@ -40,6 +40,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
   })
 
   const [file, setFile] = useState<File | null>(null)
+  const [videoUrl, setVideoUrl] = useState('')
 
   const [transcriptionForm, setTranscriptionForm] = useState<Record<number, {
     transcriptText: string
@@ -97,9 +98,12 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
       formData.append('duration', form.duration)
       formData.append('status', form.status)
 
-      if (file) {
-        formData.append('file', file)
+      if (file && videoUrl.trim()) {
+        alert('Choose a YouTube link OR a file, not both.')
+        return
       }
+      if (videoUrl.trim()) formData.append('videoUrl', videoUrl.trim())
+      if (file) formData.append('file', file)
 
       const res = await fetch('/api/backend/api/masses', {
         method: 'POST',
@@ -125,6 +129,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
       })
 
       setFile(null)
+      setVideoUrl('')
       setShowForm(false)
       await loadMasses()
     } catch (err) {
@@ -241,7 +246,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
       </div>
 
       <p className="font-body text-[#6b8caa] text-[14px] mb-6">
-        Manage uploaded masses and assign transcription status.
+        Manage Mass video links and locally reviewed transcription drafts.
       </p>
 
       <p role="status" className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
@@ -344,6 +349,18 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
               </select>
             </div>
 
+            <div className="md:col-span-3">
+              <label htmlFor="mass-video-url" className="mb-1 block text-sm font-semibold text-emerald-950">
+                YouTube Mass video link (recommended for Render Free)
+              </label>
+              <input id="mass-video-url" type="url" value={videoUrl}
+                onChange={event => setVideoUrl(event.target.value)}
+                placeholder="https://www.youtube.com/watch?v=XXXXXXXXXXX"
+                className="w-full rounded-lg border border-emerald-300 bg-white p-3 text-base text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700" />
+              <p className="mt-1 text-sm text-slate-600">
+                Store an unlisted YouTube video link. Upload the original recording separately to the parish backup drive for transcription.
+              </p>
+            </div>
             <div className="md:col-span-3">
               <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1">
                 Upload Video/Audio File

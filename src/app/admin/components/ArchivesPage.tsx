@@ -359,8 +359,7 @@ const selectScannedFile = (selected: File | null) => {
   if (selected && runOcr) void previewOcr(selected)
 }
 
-const deleteDocument = async (id: number) => {
-  const confirmDelete = await confirmAction('Move this document to Recycle Bin?')
+const confirmDelete = await confirmAction('Move this document to Recycle Bin?')
 
   if (!confirmDelete) {
     return
@@ -826,13 +825,7 @@ const records = documents
                         <i className="ti ti-download text-[14px]" />
                       </a>
 
-                    <button
-  onClick={() => deleteDocument(record.id)}
-  className="p-1.5 rounded-lg border border-red-200 text-red-500 bg-red-50"
-  title="Move to Recycle Bin"
->
-  <i className="ti ti-trash text-[14px]" />
-</button>
+                    
                     </div>
                   </td>
                 </tr>

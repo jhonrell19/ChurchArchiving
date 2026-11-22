@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import type { Page } from '../types'
 import MassMediaPlayer from '../../components/MassMediaPlayer'
+import DashboardCalendar from './DashboardCalendar'
 
 type MassRecord = {
   id: number
@@ -230,6 +231,7 @@ export default function HomePage({ setPage }: { setPage: (p: Page) => void }) {
         </div>
 
         <div className="space-y-6">
+          <DashboardCalendar />
           <div>
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-display text-navy-mid text-[15px] font-semibold">

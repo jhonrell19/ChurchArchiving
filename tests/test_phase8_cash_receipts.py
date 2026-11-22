@@ -59,12 +59,12 @@ class CashReceiptsTest(unittest.TestCase):
 
     def test_record_then_reverse_are_separate_append_only_entries(self):
         with patch.dict(os.environ, {"PARISH_CASH_RECEIPTS": "enabled"}):
-            self.assertEqual(self.handler()[1], 200)
+            self.assertEqual(self.handler(42)[1], 200)
             self.assertEqual(self.cert.payment_status, "Paid")
             self.assertEqual(self.rows[0]["amount"], 10000)
             self.request_data.update(action="reverse", receiptNumber="REV-00000001",
                                      reason="Fictional administrative correction")
-            self.assertEqual(self.handler()[1], 200)
+            self.assertEqual(self.handler(42)[1], 200)
         self.assertEqual(len(self.rows), 2)
         self.assertEqual(self.rows[1]["amount"], -10000)
         self.assertEqual(self.rows[1]["original"], 1)
@@ -74,19 +74,19 @@ class CashReceiptsTest(unittest.TestCase):
 
     def test_cash_feature_requires_explicit_flag(self):
         with patch.dict(os.environ, {"PARISH_CASH_RECEIPTS": ""}):
-            self.assertEqual(self.handler()[1], 503)
+            self.assertEqual(self.handler(42)[1], 503)
         self.assertFalse(self.rows)
 
     def test_cash_rejected_without_approved_request(self):
         self.cert.status = "Pending"
         with patch.dict(os.environ, {"PARISH_CASH_RECEIPTS": "enabled"}):
-            self.assertEqual(self.handler()[1], 409)
+            self.assertEqual(self.handler(42)[1], 409)
         self.assertFalse(self.rows)
 
     def test_duplicate_cash_record_while_paid_is_rejected(self):
         self.cert.payment_status = "Paid"
         with patch.dict(os.environ, {"PARISH_CASH_RECEIPTS": "enabled"}):
-            self.assertEqual(self.handler()[1], 409)
+            self.assertEqual(self.handler(42)[1], 409)
         self.assertFalse(self.rows)
 
 

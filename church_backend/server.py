@@ -3599,6 +3599,8 @@ def api_create_mass():
         if video_url:
             filepath = video_url
         elif file:
+            if os.path.splitext(secure_filename(file.filename or ""))[1].lower() not in {".mp4", ".mov", ".mp3", ".m4a", ".wav"}:
+                return {"error": "Unsupported recording type; use MP4, MOV, MP3, M4A or WAV."}, 415
             if os.environ.get("RENDER_SERVICE_ID") and not private_uploads.enabled():
                 return {"error": "Video uploads require private storage on Render. Paste a YouTube link instead."}, 503
             if (file.mimetype or "").lower() not in {"video/mp4", "video/quicktime", "audio/mpeg", "audio/mp4", "audio/wav", "application/octet-stream"}:

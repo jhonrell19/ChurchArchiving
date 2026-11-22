@@ -1,5 +1,7 @@
 'use client'
 
+import { useFeedback } from '@/components/ui/FeedbackProvider'
+
 import { useEffect, useState } from 'react'
 import { inputCls, selectCls } from '../data/ui'
 
@@ -19,6 +21,7 @@ type Announcement = {
 const blankNotice={title:'',body:'',date:'',category:'Event',starts:'',ends:'',priority:'0',image:''}
 
 export default function AnnouncementsPage() {
+  const { toast, confirmAction } = useFeedback()
   const [editing,setEditing]=useState<number|null>(null)
   const [saving,setSaving]=useState(false)
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
@@ -47,7 +50,7 @@ export default function AnnouncementsPage() {
       setAnnouncements(data.announcements || [])
     } catch (err) {
       console.warn('Load announcements error:', err)
-      alert('Cannot load announcements. The parish backend service is unavailable.')
+      toast.error('Cannot load announcements. The parish backend service is unavailable.')
     } finally {
       setLoading(false)
     }
@@ -70,7 +73,7 @@ export default function AnnouncementsPage() {
     e.preventDefault()
 
     if (!form.title.trim() || !form.body.trim()) {
-      alert('Title and body are required.')
+      toast.error('Title and body are required.')
       return
     }
 
@@ -87,7 +90,7 @@ export default function AnnouncementsPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        alert(data.error || 'Failed to publish announcement.')
+        toast.error(data.error || 'Failed to publish announcement.')
         return
       }
 
@@ -95,12 +98,12 @@ export default function AnnouncementsPage() {
       await loadAnnouncements()
     } catch (err) {
       console.warn('Publish announcement error:', err)
-      alert('Failed to save announcement.')
+      toast.error('Failed to save announcement.')
     } finally {setSaving(false)}
   }
 
   const deleteAnnouncement = async (id: number) => {
-    if (!confirm('Delete this announcement?')) return
+    if (!await confirmAction('Delete this announcement?')) return
 
     try {
       const res = await fetch(`/api/backend/api/announcements/${id}`, {
@@ -110,7 +113,7 @@ export default function AnnouncementsPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        alert(data.error || 'Failed to delete announcement.')
+        toast.error(data.error || 'Failed to delete announcement.')
         return
       }
 
@@ -118,7 +121,7 @@ export default function AnnouncementsPage() {
       await loadAnnouncements()
     } catch (err) {
       console.warn('Delete announcement error:', err)
-      alert('Failed to delete announcement.')
+      toast.error('Failed to delete announcement.')
     }
   }
 

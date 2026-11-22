@@ -1,5 +1,7 @@
 'use client'
 
+import { useFeedback } from '@/components/ui/FeedbackProvider'
+
 import { useEffect, useState } from 'react'
 import MassMediaPlayer from '../../components/MassMediaPlayer'
 import { STATUS_STYLE, inputCls, selectCls } from '../data/ui'
@@ -22,6 +24,7 @@ type MassRecord = {
 }
 
 export default function MassesPage({ initialTranscript }: { initialTranscript: number | null }) {
+  const { toast, confirmAction } = useFeedback()
   const [playing, setPlaying] = useState<{ title: string; filepath: string } | null>(null)
   const [masses, setMasses] = useState<MassRecord[]>([])
   const [filterStatus, setFilter] = useState<'All' | MassStatus>('All')
@@ -61,7 +64,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
       setMasses(data.masses || [])
     } catch (err) {
       console.warn('Load masses error:', err)
-      alert('Cannot load mass records. The parish backend service is unavailable.')
+      toast.error('Cannot load mass records. The parish backend service is unavailable.')
     } finally {
       setLoading(false)
     }
@@ -84,7 +87,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
     e.preventDefault()
 
     if (!form.title.trim()) {
-      alert('Mass title is required.')
+      toast.error('Mass title is required.')
       return
     }
 
@@ -99,7 +102,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
       formData.append('status', form.status)
 
       if (file && videoUrl.trim()) {
-        alert('Choose a YouTube link OR a file, not both.')
+        toast.warning('Choose a YouTube link OR a file, not both.')
         return
       }
       if (videoUrl.trim()) formData.append('videoUrl', videoUrl.trim())
@@ -113,11 +116,11 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
       const data = await res.json()
 
       if (!res.ok) {
-        alert(data.error || 'Failed to create mass record.')
+        toast.error(data.error || 'Failed to create mass record.')
         return
       }
 
-      alert('Mass record added successfully.')
+      toast.success('Mass record added successfully.')
 
       setForm({
         title: '',
@@ -134,7 +137,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
       await loadMasses()
     } catch (err) {
       console.warn('Create mass error:', err)
-      alert('Failed to create mass record.')
+      toast.error('Failed to create mass record.')
     }
   }
 
@@ -151,14 +154,14 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
       const data = await res.json()
 
       if (!res.ok) {
-        alert(data.error || 'Failed to update status.')
+        toast.error(data.error || 'Failed to update status.')
         return
       }
 
       await loadMasses()
     } catch (err) {
       console.warn('Update mass status error:', err)
-      alert('Failed to update mass status.')
+      toast.error('Failed to update mass status.')
     }
   }
 
@@ -166,7 +169,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
     const values = transcriptionForm[id]
 
     if (!values?.transcriptText?.trim() && !values?.summaryText?.trim()) {
-      alert('Please enter transcript or summary text.')
+      toast.warning('Please enter transcript or summary text.')
       return
     }
 
@@ -185,20 +188,20 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
       const data = await res.json()
 
       if (!res.ok) {
-        alert(data.error || 'Failed to save transcription.')
+        toast.error(data.error || 'Failed to save transcription.')
         return
       }
 
-      alert('Transcription and summary saved.')
+      toast.success('Transcription and summary saved.')
       await loadMasses()
     } catch (err) {
       console.warn('Save transcription error:', err)
-      alert('Failed to save transcription.')
+      toast.error('Failed to save transcription.')
     }
   }
 
   const deleteMass = async (id: number) => {
-    if (!confirm('Delete this mass record?')) return
+    if (!await confirmAction('Delete this mass record?')) return
 
     try {
       const res = await fetch(`/api/backend/api/masses/${id}`, {
@@ -208,14 +211,14 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
       const data = await res.json()
 
       if (!res.ok) {
-        alert(data.error || 'Failed to delete mass record.')
+        toast.error(data.error || 'Failed to delete mass record.')
         return
       }
 
       await loadMasses()
     } catch (err) {
       console.warn('Delete mass error:', err)
-      alert('Failed to delete mass record.')
+      toast.error('Failed to delete mass record.')
     }
   }
 
@@ -536,7 +539,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
                               const draft=JSON.parse(await file.text())
                               if (typeof draft.transcriptText!=='string' || !draft.transcriptText.trim() || draft.transcriptText.length>500000 || typeof draft.summaryText!=='string' || draft.summaryText.length>50000) throw Error()
                               setTranscriptionForm(prev=>({...prev,[m.id]:{transcriptText:draft.transcriptText, summaryText:draft.summaryText}}))
-                            } catch { alert('Choose a valid local transcript JSON draft.') }
+                            } catch { toast.warning('Choose a valid local transcript JSON draft.') }
                           }}/>
                         </label>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

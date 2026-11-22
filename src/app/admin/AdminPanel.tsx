@@ -1,5 +1,7 @@
 'use client'
 
+import { useFeedback } from '@/components/ui/FeedbackProvider'
+
 import ParishLogo from '../components/ParishLogo'
 
 
@@ -32,6 +34,7 @@ const MAIN_NAV: {
 ]
 
 export default function AdminPanel({managePolicy=false,manageWebsite=false}:{managePolicy?:boolean;manageWebsite?:boolean}) {
+  const { toast } = useFeedback()
   useRefreshOnHistoryRestore()
   const [page, setPage] = useState<ExtendedAdminPage>('dashboard')
   const [transcriptId, setTranscriptId] = useState<number | null>(null)
@@ -67,7 +70,7 @@ export default function AdminPanel({managePolicy=false,manageWebsite=false}:{man
       // Full navigation removes the old authenticated React/router state.
       window.location.replace('/login')
     } catch {
-      alert('Logout failed. Please try again.')
+      toast.error('Logout failed. Please try again.')
     }
   }
 

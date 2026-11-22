@@ -1,5 +1,7 @@
 'use client'
 
+import { useFeedback } from '@/components/ui/FeedbackProvider'
+
 import { useEffect, useState } from 'react'
 import { inputCls } from '../../admin/data/ui'
 
@@ -23,6 +25,7 @@ const ARCHIVE_TYPES = [
 ]
 
 export default function ArchivesPage() {
+  const { toast, confirmAction } = useFeedback()
   const [activeTab, setActiveTab] = useState('ownership')  
   const [search, setSearch] = useState('')
   const [documents, setDocuments] = useState<ArchiveDocument[]>([])
@@ -58,7 +61,7 @@ const [form, setForm] = useState({
       setDocuments(data.documents || [])
     } catch (err) {
       console.warn('Archive load error:', err)
-      alert('Cannot load archive records. The parish backend service is unavailable.')
+      toast.error('Cannot load archive records. The parish backend service is unavailable.')
     } finally {
       setLoading(false)
     }
@@ -81,7 +84,7 @@ const [form, setForm] = useState({
     e.preventDefault()
 
     if (!file) {
-      alert('Please upload a scanned PDF or image.')
+      toast.warning('Please upload a scanned PDF or image.')
       return
     }
 
@@ -103,11 +106,11 @@ const [form, setForm] = useState({
       const data = await res.json()
 
       if (!res.ok) {
-        alert(data.error || 'Upload failed')
+        toast.error(data.error || 'Upload failed')
         return
       }
 
-      alert('Record archived successfully')
+      toast.success('Record archived successfully')
 
       setForm({
   person_name: '',
@@ -125,14 +128,14 @@ const [form, setForm] = useState({
       await loadDocuments()
     } catch (err) {
       console.warn('Archive upload error:', err)
-      alert('Upload failed. The parish backend service is unavailable.')
+      toast.error('Upload failed. The parish backend service is unavailable.')
     }
 
   }
 
 const previewOcr = async () => {
   if (!file) {
-    alert('Choose a scanned PDF or image first.')
+    toast.warning('Choose a scanned PDF or image first.')
     return
   }
 
@@ -147,21 +150,21 @@ const previewOcr = async () => {
     })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) {
-      alert(data.error || 'OCR preview failed.')
+      toast.error(data.error || 'OCR preview failed.')
       return
     }
     setOcrText(data.text || '')
     setOcrSuggestions(data.suggestions || {})
   } catch (error) {
     console.warn('OCR preview error:', error)
-    alert('OCR preview is unavailable right now.')
+    toast.error('OCR preview is unavailable right now.')
   } finally {
     setOcrLoading(false)
   }
 }
 
 const deleteDocument = async (id: number) => {
-  const confirmDelete = confirm('Move this document to Recycle Bin?')
+  const confirmDelete = await confirmAction('Move this document to Recycle Bin?')
 
   if (!confirmDelete) {
     return
@@ -175,15 +178,15 @@ const deleteDocument = async (id: number) => {
     const data = await res.json()
 
     if (!res.ok) {
-      alert(data.error || 'Failed to delete document.')
+      toast.error(data.error || 'Failed to delete document.')
       return
     }
 
-    alert('Document moved to Recycle Bin.')
+    toast.success('Document moved to Recycle Bin.')
     await loadDocuments()
   } catch (err) {
     console.warn('Delete document error:', err)
-    alert('Failed to delete document. The parish backend service is unavailable.')
+    toast.error('Failed to delete document. The parish backend service is unavailable.')
   }
 } 
 

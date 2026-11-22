@@ -1,5 +1,7 @@
 'use client'
 
+import { useFeedback } from '@/components/ui/FeedbackProvider'
+
 import { useEffect, useState } from 'react'
 import { REQUEST_ICONS, STATUS_STYLE, inputCls } from '../data/ui'
 
@@ -204,6 +206,7 @@ const formatPeso = (amount: number | null | undefined) =>
   `₱${Number(amount || 0).toLocaleString('en-PH')}`
 
 export default function RequestsPage() {
+  const { toast, confirmAction } = useFeedback()
   const [activeType, setActiveType] = useState<RequestType>('Baptismal')
   const [view, setView] = useState<'form' | 'history'>('form')
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
@@ -294,14 +297,14 @@ export default function RequestsPage() {
     const prompt = action === 'cancel'
       ? 'Cancel this pending certificate request? This cannot be undone.'
       : 'Hide this request from your history? Parish staff will retain official and payment records.'
-    if (!window.confirm(prompt)) return
+    if (!await confirmAction(prompt)) return
     try {
       const res = await fetch(`/api/backend/api/requests/${id}/${action}`, { method: 'POST' })
       const payload = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(payload.error || 'Request action failed.')
       await loadRequests()
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Unable to update request.')
+      toast.error(error instanceof Error ? error.message : 'Unable to update request.')
     }
   }
 
@@ -387,29 +390,29 @@ export default function RequestsPage() {
 
   const handleSubmit = async () => {
     if (!profile) {
-      alert('Your account information is still loading. Please try again.')
+      toast.warning('Your account information is still loading. Please try again.')
       return
     }
 
     if (activeType === 'Land Agreement' && !selectedSlotId) {
-      alert('Please choose an available cemetery lot first.')
+      toast.warning('Please choose an available cemetery lot first.')
       return
     }
 
     if (!formData.personName.trim()) {
-      alert('Please enter the name on record.')
+      toast.warning('Please enter the name on record.')
       return
     }
 
     if (!formData.purpose.trim()) {
-  alert('Please select a request purpose.')
+  toast.warning('Please select a request purpose.')
   return
 }
 
 if (
   !purposes.includes(formData.purpose)
 ) {
-  alert('Please select a valid purpose for this document.')
+  toast.warning('Please select a valid purpose for this document.')
   return
 }
 
@@ -417,7 +420,7 @@ if (
   formData.purpose === 'Other (Specify in Notes)' &&
   !formData.notes.trim()
 ) {
-  alert('Please specify your purpose in the Notes field.')
+  toast.warning('Please specify your purpose in the Notes field.')
   return
 }
     try {
@@ -445,7 +448,7 @@ if (
       const data = await res.json().catch(() => ({}))
 
       if (!res.ok) {
-        alert(data.error || 'Request submission failed.')
+        toast.error(data.error || 'Request submission failed.')
         return
       }
 
@@ -467,7 +470,7 @@ if (
       window.setTimeout(() => setSuccessMsg(null), 6000)
     } catch (err) {
       console.warn('Submit request error:', err)
-      alert('Cannot submit request right now. Please try again.')
+      toast.error('Cannot submit request right now. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -477,14 +480,14 @@ if (
     try {
       const res = await fetch(`/api/backend/api/requests/${requestId}/paymongo-checkout`, { method: 'POST' })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) { alert(data.error || 'Checkout unavailable.'); return }
+      if (!res.ok) { toast.error(data.error || 'Checkout unavailable.'); return }
       if (!data.checkoutUrl?.startsWith('https://checkout.paymongo.com/')) {
-        alert('Invalid payment destination.'); return
+        toast.error('Invalid payment destination.'); return
       }
       window.location.assign(data.checkoutUrl)
     } catch (error) {
       console.warn('PayMongo checkout error:', error)
-      alert('Unable to reach payment checkout.')
+      toast.error('Unable to reach payment checkout.')
     }
   }
 

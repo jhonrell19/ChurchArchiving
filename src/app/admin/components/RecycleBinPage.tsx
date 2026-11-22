@@ -1,5 +1,7 @@
 'use client'
 
+import { useFeedback } from '@/components/ui/FeedbackProvider'
+
 import { useEffect, useState } from 'react'
 
 type ArchiveDocument = {
@@ -31,6 +33,7 @@ const toDisplayType = (type: string) => {
 }
 
 export default function RecycleBinPage({ scope }: RecycleBinPageProps) {
+  const { toast, confirmAction } = useFeedback()
   const [documents, setDocuments] = useState<ArchiveDocument[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -48,7 +51,7 @@ export default function RecycleBinPage({ scope }: RecycleBinPageProps) {
       setDocuments(data.documents || [])
     } catch (err) {
       console.warn('Recycle bin load error:', err)
-      alert('Cannot load recycle bin. The parish backend service is unavailable.')
+      toast.error('Cannot load recycle bin. The parish backend service is unavailable.')
     } finally {
       setLoading(false)
     }
@@ -59,7 +62,7 @@ export default function RecycleBinPage({ scope }: RecycleBinPageProps) {
   }, [])
 
   const restoreDocument = async (id: number) => {
-    const confirmRestore = confirm('Restore this document back to the archive?')
+    const confirmRestore = await confirmAction('Restore this document back to the archive?')
 
     if (!confirmRestore) {
       return
@@ -73,15 +76,15 @@ export default function RecycleBinPage({ scope }: RecycleBinPageProps) {
       const data = await res.json()
 
       if (!res.ok) {
-        alert(data.error || 'Failed to restore document.')
+        toast.error(data.error || 'Failed to restore document.')
         return
       }
 
-      alert('Document restored successfully.')
+      toast.success('Document restored successfully.')
       await loadDeletedDocuments()
     } catch (err) {
       console.warn('Restore document error:', err)
-      alert('Failed to restore document. The parish backend service is unavailable.')
+      toast.error('Failed to restore document. The parish backend service is unavailable.')
     }
   }
 

@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import '@tabler/icons-webfont/dist/tabler-icons.min.css'
 import './globals.css'
 import Navbar from './components/Navbar'
+import { FeedbackProvider } from '@/components/ui/FeedbackProvider'
 
 export const metadata: Metadata = {
   title: 'Iglesia Filipina Independiente – Maragondon, Cavite',
@@ -12,8 +13,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <body suppressHydrationWarning>
-        <Navbar />
-        {children}
+        <FeedbackProvider>
+          <Navbar />
+          {children}
+        </FeedbackProvider>
       </body>
     </html>
   )

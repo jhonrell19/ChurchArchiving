@@ -17,8 +17,10 @@ CREATE TABLE IF NOT EXISTS parish_private.cash_receipt_ledger (
       OR (entry_kind = 'reversal' AND amount_cents < 0 AND original_entry_id IS NOT NULL)
     )
 );
-CREATE UNIQUE INDEX IF NOT EXISTS cash_receipt_single_original
-    ON parish_private.cash_receipt_ledger(request_id) WHERE entry_kind='receipt';
+-- Multiple receipts can exist historically after a documented reversal.
+-- The request row is locked by the application to allow only ONE active payment.
+CREATE INDEX IF NOT EXISTS cash_receipt_by_request
+    ON parish_private.cash_receipt_ledger(request_id, created_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS cash_receipt_single_reversal
     ON parish_private.cash_receipt_ledger(original_entry_id) WHERE entry_kind='reversal';
 CREATE INDEX IF NOT EXISTS cash_receipt_by_date

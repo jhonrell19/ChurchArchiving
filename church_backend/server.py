@@ -1808,6 +1808,9 @@ def api_upload_document():
 
         return denied
 
+    if os.getenv("RENDER_SERVICE_ID") and not private_uploads.enabled():
+        return {"error": "Durable private storage is required on Render. Configure a private Supabase bucket before saving documents."}, 503
+
     try:
 
         file = request.files.get("file")
@@ -3248,6 +3251,9 @@ def api_upload_release_document(request_id):
     if denied:
         return denied
 
+    if os.getenv("RENDER_SERVICE_ID") and not private_uploads.enabled():
+        return {"error": "Durable private storage is required on Render. Configure a private Supabase bucket before saving documents."}, 503
+
     try:
         cert_request = db.session.get(CertificateRequest, request_id)
 
@@ -3326,6 +3332,9 @@ def api_generate_release_document(request_id):
     denied = require_roles("ADMIN", "BURIAL_ADMIN")
     if denied:
         return denied
+
+    if os.getenv("RENDER_SERVICE_ID") and not private_uploads.enabled():
+        return {"error": "Durable private storage is required on Render. Configure a private Supabase bucket before saving documents."}, 503
 
     try:
         cert_request = db.session.get(CertificateRequest, request_id)

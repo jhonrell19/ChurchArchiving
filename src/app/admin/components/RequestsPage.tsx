@@ -2,6 +2,7 @@
 
 import { useFeedback } from '@/components/ui/FeedbackProvider'
 import RequestTracking from '@/components/RequestTracking'
+import NotificationOutboxControl from './NotificationOutboxControl'
 
 import { useEffect, useRef, useState } from 'react'
 import { CERT_ICONS, STATUS_STYLE } from '../data/ui'
@@ -396,6 +397,8 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
         </div>
         <p className="font-body text-slate-500 text-[14px] mt-1">{description}</p>
       </div>
+
+      <NotificationOutboxControl />
 
       <div className="flex gap-2 mb-5 flex-wrap">
         {FILTERS.map(status => (

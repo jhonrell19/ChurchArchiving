@@ -2536,11 +2536,11 @@ def api_create_request():
         record_date_hint = (data.get("recordDateHint") or "").strip()[:100] or None
         record_details = (data.get("recordDetails") or "").strip()[:500] or None
 
-        is_urgent = (
-
-            data.get("isUrgent") is True
-
-        )
+        # Phase 9: standard request queue only. Refuse legacy urgent requests
+        # explicitly instead of silently accepting a paid priority flag.
+        if data.get("isUrgent") is True:
+            return {"error": "Urgent request processing has been discontinued. Submit a standard request."}, 400
+        is_urgent = False
 
 
 

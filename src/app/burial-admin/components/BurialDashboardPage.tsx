@@ -1,150 +1,34 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-
-type DashboardData = {
-  counts: {
-    totalSlots: number
-    availableSlots: number
-    reservedSlots: number
-    occupiedSlots: number
-    activeReservations: number
-    burialRecords: number
-    partiallyPaid: number
-    unpaid: number
-    overdue: number
-    outstandingBalance: number
-  }
-  recentPayments: {
-    id: number
-    amount: number
-    paymentType: string
-    paymentDate: string | null
-    receiptNumber: string | null
-  }[]
-  recentReservations: {
-    id: number
-    buyerName: string
-    raNumber: string | null
-    balance: number
-    paymentStatus: string
-    slot?: { slotCode: string } | null
-  }[]
-}
-
-const peso = (value: number) =>
-  new Intl.NumberFormat('en-PH', {
-    style: 'currency',
-    currency: 'PHP',
-    maximumFractionDigits: 0,
-  }).format(value || 0)
-
-export default function BurialDashboardPage({navigate}:{navigate:(page:'slots'|'payments'|'reservations'|'burials',status?:string)=>void}) {
-  const [data, setData] = useState<DashboardData | null>(null)
-  const [error, setError] = useState('')
-
-  const [retry,setRetry]=useState(0)
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const response = await fetch('/api/backend/api/cemetery/dashboard', {
-          cache: 'no-store',
-        })
-        const json = await response.json().catch(() => ({}))
-        if (!response.ok) throw new Error(json.error || json.message || 'Failed to load cemetery dashboard.')
-        setData(json)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load cemetery dashboard.')
-      }
-    }
-    setError('')
-    void load()
-  }, [retry])
-
-  if (error) {
-    return <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">{error} <button className="underline" onClick={()=>setRetry(v=>v+1)}>Try again</button></div>
-  }
-
-  if (!data) {
-    return <div className="text-sm text-slate-500">Loading cemetery dashboard...</div>
-  }
-
-  const cards = [
-    ['Available Slots', data.counts.availableSlots, 'ti-map-pin','slots','AVAILABLE'],
-    ['Reserved Slots', data.counts.reservedSlots, 'ti-bookmark','slots','RESERVED'],
-    ['Occupied Slots', data.counts.occupiedSlots, 'ti-cross','slots','OCCUPIED'],
-    ['Active Reservations', data.counts.activeReservations, 'ti-file-text','reservations',''],
-    ['Burial Records', data.counts.burialRecords, 'ti-certificate','burials',''],
-    ['Partial Payments', data.counts.partiallyPaid, 'ti-receipt','payments',''],
-    ['Overdue Accounts', data.counts.overdue, 'ti-alert-triangle','reservations',''],
-  ] as const
-
+export default function BurialDashboardPage({
+  navigate,
+}: {
+  navigate: (page: 'dashboard' | 'burials' | 'requests' | 'archives') => void
+}) {
+  const sections = [
+    { id: 'burials' as const, title: 'Burial and deceased records', description: 'Review burial details and historical records.', icon: 'ti-file-text' },
+    { id: 'requests' as const, title: 'Document requests', description: 'Review burial-related document requests in your assigned scope.', icon: 'ti-inbox' },
+    { id: 'archives' as const, title: 'Land agreements and ownership', description: 'Find and review protected burial-related archive scans.', icon: 'ti-archive' },
+  ]
   return (
     <div className="space-y-6">
-      <div className="office-mast">
-        <h1 className="text-2xl font-semibold text-navy-mid">Cemetery Operations</h1>
-        <p className="mt-1 text-sm text-slate-600">
-          Burial records, cemetery slots, reservations, and payment balances in one place.
-        </p><div className="office-links"><button onClick={()=>navigate('slots')}>Manage slots →</button><button onClick={()=>navigate('reservations')}>Open reservations →</button></div>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {cards.map(([label, value, icon, target, status]) => (
-          <button type="button" key={label} aria-label={'Open '+label} onClick={()=>navigate(target,status)} className="metric-link text-left rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</p>
-                <p className="mt-2 text-3xl font-semibold text-navy-mid">{value}</p>
-              </div>
-              <i className={`ti ${icon} text-2xl text-gold`} />
-            </div>
+      <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
+        <h1 className="text-2xl font-semibold text-emerald-950">Burial document office</h1>
+        <p className="mt-2 max-w-3xl text-base leading-relaxed text-emerald-900">
+          This workspace manages historical burial records, ownership evidence and land agreements.
+          Cemetery lot reservations, slots and payment operations are no longer offered in this interface.
+          Existing financial and historical records are retained for authorized reconciliation.
+        </p>
+      </section>
+      <div className="grid gap-4 md:grid-cols-3">
+        {sections.map(section => (
+          <button key={section.id} type="button" onClick={() => navigate(section.id)}
+            className="min-h-48 rounded-2xl border border-slate-200 bg-white p-6 text-left shadow-sm transition-colors hover:border-emerald-500 hover:bg-emerald-50 focus-visible:outline-2 focus-visible:outline-offset-2">
+            <i aria-hidden="true" className={`ti ${section.icon} text-3xl text-emerald-700`} />
+            <h2 className="mt-4 text-lg font-semibold text-slate-900">{section.title}</h2>
+            <p className="mt-2 text-base text-slate-600">{section.description}</p>
           </button>
         ))}
-      <button type="button" onClick={()=>navigate('payments')} className="metric-link text-left rounded-2xl border border-amber-200 bg-amber-50 p-5">
-        <p className="text-xs font-semibold uppercase tracking-wider text-amber-700">Outstanding cemetery balance</p>
-        <p className="mt-2 text-3xl font-semibold text-navy-mid">{peso(data.counts.outstandingBalance)}</p>
-        <p className="mt-1 text-sm text-slate-600">
-          {data.counts.unpaid} unpaid account(s) and {data.counts.partiallyPaid} partially paid account(s).
-        </p>
-      </button></div>
-
-      <div className="grid gap-6 xl:grid-cols-2">
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="font-semibold text-navy-mid">Recent Reservations</h2>
-          <div className="mt-4 space-y-3">
-            {data.recentReservations.length === 0 && <p className="text-sm text-slate-500">No reservations yet.</p>}
-            {data.recentReservations.map(item => (
-              <div key={item.id} className="rounded-xl border border-slate-100 p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="font-medium text-navy-mid">{item.buyerName}</p>
-                    <p className="text-xs text-slate-500">{item.raNumber || `Reservation #${item.id}`} · {item.slot?.slotCode || 'No slot'}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold text-navy-mid">{peso(item.balance)}</p>
-                    <p className="text-xs text-slate-500">remaining</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="font-semibold text-navy-mid">Recent Payments</h2>
-          <div className="mt-4 space-y-3">
-            {data.recentPayments.length === 0 && <p className="text-sm text-slate-500">No payments recorded yet.</p>}
-            {data.recentPayments.map(payment => (
-              <div key={payment.id} className="flex items-center justify-between rounded-xl border border-slate-100 p-4">
-                <div>
-                  <p className="font-medium text-navy-mid">{payment.paymentType.split('_').join(' ')}</p>
-                  <p className="text-xs text-slate-500">{payment.paymentDate || 'No date'} {payment.receiptNumber ? `· ${payment.receiptNumber}` : ''}</p>
-                </div>
-                <p className="font-semibold text-navy-mid">{peso(payment.amount)}</p>
-              </div>
-            ))}
-          </div>
-        </section>
       </div>
     </div>
   )

@@ -16,22 +16,10 @@ import TranscriptionsPage from './components/TranscriptionsPage'
 import RequestsPage from './components/RequestsPage'
 import AnnouncementsPage from './components/AnnouncementsPage'
 import SettingsPage from './components/SettingsPage'
-import RecycleBinPage from './components/RecycleBinPage'
 
-type ExtendedAdminPage = AdminPage | 'recycle'
+type ExtendedAdminPage = AdminPage
 
-const MAIN_NAV: {
-  id: ExtendedAdminPage
-  label: string
-  icon: string
-}[] = [
-  ...ADMIN_NAV,
-  {
-    id: 'recycle',
-    label: 'Recycle Bin',
-    icon: 'ti-trash',
-  },
-]
+const MAIN_NAV = ADMIN_NAV
 
 export default function AdminPanel({managePolicy=false,manageWebsite=false}:{managePolicy?:boolean;manageWebsite?:boolean}) {
   const { toast } = useFeedback()
@@ -41,7 +29,6 @@ export default function AdminPanel({managePolicy=false,manageWebsite=false}:{man
   const [archiveTab,setArchiveTab]=useState('baptismal')
   const [sidebarOpen, setSidebar] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
-  const [urgentCount, setUrgentCount] = useState(0)
 
   const loadRequestCounts = async () => {
     try {
@@ -50,10 +37,8 @@ export default function AdminPanel({managePolicy=false,manageWebsite=false}:{man
 
       const data = await res.json()
       setPendingCount(data.pending)
-      setUrgentCount(data.urgent)
     } catch {
       setPendingCount(0)
-      setUrgentCount(0)
     }
   }
 
@@ -80,7 +65,7 @@ export default function AdminPanel({managePolicy=false,manageWebsite=false}:{man
   const navigate = (id: ExtendedAdminPage) => {
     setPage(id)
     setSidebar(false)
-    if (id === 'requests' || id === 'urgent-requests') {
+    if (id === 'requests') {
       void loadRequestCounts()
     }
   }
@@ -123,13 +108,7 @@ export default function AdminPanel({managePolicy=false,manageWebsite=false}:{man
                 <span className="bg-navy text-white font-display text-[9px] px-1.5 py-0.5 rounded-full">
                   {pendingCount}
                 </span>
-              )}
-              {id === 'urgent-requests' && urgentCount > 0 && (
-                <span className="bg-orange-500 text-white font-display text-[9px] px-1.5 py-0.5 rounded-full">
-                  {urgentCount}
-                </span>
-              )}
-            </button>
+              )}            </button>
           ))}
           <a href="/admin/member-approvals"
             className="mt-3 block rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-[12px] font-semibold text-[#14264b] hover:bg-amber-100">
@@ -183,10 +162,8 @@ export default function AdminPanel({managePolicy=false,manageWebsite=false}:{man
           {page === 'masses' && <MassesPage initialTranscript={transcriptId} />}
           {page === 'transcriptions' && <TranscriptionsPage openMass={id => { setTranscriptId(id); setPage('masses') }} />}
           {page === 'requests' && <RequestsPage />}
-          {page === 'urgent-requests' && <RequestsPage urgentOnly />}
           {page === 'announcements' && <AnnouncementsPage />}
           {page === 'settings' && <SettingsPage />}
-          {page === 'recycle' && <RecycleBinPage scope="main" />}
         </main>
       </div>
     </div>

@@ -1,5 +1,7 @@
 'use client'
 
+import { useFeedback } from '@/components/ui/FeedbackProvider'
+
 import ParishLogo from '../components/ParishLogo'
 
 
@@ -7,39 +9,23 @@ import { useState } from 'react'
 import { useRefreshOnHistoryRestore } from '@/hooks/useRefreshOnHistoryRestore'
 
 import RequestsPage from '../admin/components/RequestsPage'
-import RecycleBinPage from '../admin/components/RecycleBinPage'
 import BurialArchivesPage from './components/BurialArchivesPage'
 import BurialDashboardPage from './components/BurialDashboardPage'
 import BurialRecordsPage from './components/BurialRecordsPage'
-import CemeterySlotsPage from './components/CemeterySlotsPage'
-import PaymentsPage from './components/PaymentsPage'
-import ReservationsPage from './components/ReservationsPage'
 
-type BurialPage =
-  | 'dashboard'
-  | 'slots'
-  | 'reservations'
-  | 'payments'
-  | 'burials'
-  | 'requests'
-  | 'archives'
-  | 'recycle'
+type BurialPage = 'dashboard' | 'burials' | 'requests' | 'archives'
 
 const NAV: { id: BurialPage; label: string; icon: string }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: 'ti-layout-dashboard' },
-  { id: 'slots', label: 'Cemetery Slots', icon: 'ti-map-pin' },
-  { id: 'reservations', label: 'Reservations', icon: 'ti-file-contract' },
-  { id: 'payments', label: 'Payments', icon: 'ti-receipt' },
   { id: 'burials', label: 'Burial Records', icon: 'ti-cross' },
   { id: 'requests', label: 'Document Requests', icon: 'ti-inbox' },
   { id: 'archives', label: 'Legacy Archives', icon: 'ti-archive' },
-  { id: 'recycle', label: 'Recycle Bin', icon: 'ti-trash' },
 ]
 
 export default function BurialAdminPage() {
+  const { toast } = useFeedback()
   useRefreshOnHistoryRestore()
   const [page, setPage] = useState<BurialPage>('dashboard')
-  const [slotStatus,setSlotStatus]=useState('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const logout = async () => {
@@ -49,7 +35,7 @@ export default function BurialAdminPage() {
       // Full navigation removes the old authenticated React/router state.
       window.location.replace('/login')
     } catch {
-      alert('Logout failed. Please try again.')
+      toast.error('Logout failed. Please try again.')
     }
   }
 
@@ -69,7 +55,7 @@ export default function BurialAdminPage() {
               <h1 className="font-display text-navy-mid text-[12px] tracking-wide font-semibold">
                 Smart Parish System
               </h1>
-              <p className="font-body text-[11px] text-slate-500">Burial & Cemetery Management</p>
+              <p className="font-body text-[11px] text-slate-500">Burial Document Management</p>
             </div>
           </div>
         </div>
@@ -95,8 +81,7 @@ export default function BurialAdminPage() {
           ))}
           <a className="parish-report-link" href="/office-reports">Certificate reports</a>
           {process.env.NEXT_PUBLIC_PARISH_RELATIVE_CLAIMS === 'enabled' && <a className="parish-report-link" href="/claims">Relationship claims</a>}
-          {process.env.NEXT_PUBLIC_PARISH_APPOINTMENTS === 'enabled' && <a className="parish-report-link" href="/appointments">Office appointments</a>}
-        </nav>
+                  </nav>
 
         <div className="px-3 pb-4">
           <button
@@ -131,19 +116,15 @@ export default function BurialAdminPage() {
             <h2 className="font-display text-navy-mid text-[15px] font-semibold tracking-wide">
               {currentLabel}
             </h2>
-            <p className="text-[11px] text-slate-500">Philippine Independent Church Cemetery Extension</p>
+            <p className="text-[11px] text-slate-500">Burial documents and historical agreements</p>
           </div>
         </header>
 
         <main className="flex-1 p-4 md:p-6 overflow-auto">
-          {page === 'dashboard' && <BurialDashboardPage navigate={(page,status)=>{setSlotStatus(status || '');setPage(page)}}/>}
-          {page === 'slots' && <CemeterySlotsPage initialStatus={slotStatus}/>}
-          {page === 'reservations' && <ReservationsPage />}
-          {page === 'payments' && <PaymentsPage />}
+          {page === 'dashboard' && <BurialDashboardPage navigate={setPage} />}
           {page === 'burials' && <BurialRecordsPage />}
           {page === 'requests' && <RequestsPage office="burial" />}
           {page === 'archives' && <BurialArchivesPage />}
-          {page === 'recycle' && <RecycleBinPage scope="burial" />}
         </main>
       </div>
     </div>

@@ -10,7 +10,7 @@ const manilaToday = () => new Intl.DateTimeFormat('en-CA', {
 const isoDate = (year: number, month: number, day: number) =>
   [year, String(month + 1).padStart(2, '0'), String(day).padStart(2, '0')].join('-')
 const noticesFor = (items: Notice[], date: string) => items.filter(item =>
-  item.date === date || (!!item.starts && !!item.ends && item.starts <= date && date <= item.ends)
+  item.date ? item.date === date : (!!item.starts && !!item.ends && item.starts <= date && date <= item.ends)
 )
 
 export default function DashboardCalendar() {

@@ -35,6 +35,9 @@ class CertificateOwnershipTests(unittest.TestCase):
         self.send_file = Mock(return_value={"ok": True})
         self.scope = {
             "db": self.db,
+            "request": SimpleNamespace(args={}),
+            "jsonify": lambda value: value,
+            "private_uploads": SimpleNamespace(signed_download=Mock(return_value="https://storage.example.test/signed-fixture")),
             "CertificateRequest": object,
             "g": SimpleNamespace(user_role="USER"),
             "current_user_id": lambda: self.actor_id,
@@ -75,6 +78,14 @@ class CertificateOwnershipTests(unittest.TestCase):
     def test_owner_can_download_paid_released_file(self):
         self.assertEqual(status(self.download(42)), 200)
         self.send_file.assert_called_once()
+
+    def test_signed_download_is_only_available_to_owner(self):
+        self.scope["request"].args = {"signed": "1"}
+        result = self.download(42)
+        self.assertEqual(result["signedUrl"], "https://storage.example.test/signed-fixture")
+        self.assertEqual(result["expiresInSeconds"], 60)
+        self.actor_id = 8
+        self.assertEqual(status(self.download(42)), 403)
 
     def test_wrong_office_cannot_download(self):
         self.scope["g"].user_role = "BURIAL_ADMIN"

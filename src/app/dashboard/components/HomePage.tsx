@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import type { Page } from '../types'
 import MassMediaPlayer from '../../components/MassMediaPlayer'
+import TrackingDashboardCard from './TrackingDashboardCard'
 
 type MassRecord = {
   id: number
@@ -108,6 +109,7 @@ export default function HomePage({ setPage }: { setPage: (p: Page) => void }) {
           <button onClick={()=>setPage('archives')}>Watch a Mass <span aria-hidden="true">→</span></button>
         </div>
       </section>
+      <TrackingDashboardCard onOpen={() => setPage('requests')} />
   )
 
   if (loading) {

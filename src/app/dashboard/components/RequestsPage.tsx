@@ -1,6 +1,7 @@
 'use client'
 
 import { useFeedback } from '@/components/ui/FeedbackProvider'
+import RequestTracking from '@/components/RequestTracking'
 
 import { useEffect, useState } from 'react'
 import { REQUEST_ICONS, STATUS_STYLE, inputCls } from '../data/ui'
@@ -208,7 +209,7 @@ const formatPeso = (amount: number | null | undefined) =>
 export default function RequestsPage() {
   const { toast, confirmAction } = useFeedback()
   const [activeType, setActiveType] = useState<RequestType>('Baptismal')
-  const [view, setView] = useState<'form' | 'history'>('form')
+  const [view, setView] = useState<'form' | 'history'>('history')
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [requestsLoading, setRequestsLoading] = useState(true)
@@ -850,6 +851,13 @@ if (
         </div>
       ) : (
         <div>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-slate-700">Track actual parish request and payment records here. No SMS service is needed to view updates.</p>
+            <button type="button" disabled={requestsLoading} onClick={() => void loadRequests()}
+              className="min-h-11 rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-900 hover:bg-emerald-100 disabled:opacity-50">
+              <i aria-hidden="true" className="ti ti-refresh mr-2" />{requestsLoading ? 'Updating…' : 'Refresh tracking'}
+            </button>
+          </div>
           <nav className="parish-pager" aria-label="Request history pages"><button disabled={requestsLoading || historyPage<=1} onClick={()=>setHistoryPage(historyPage-1)}>Previous</button><span>Page {historyPage} of {historyPages}</span><button disabled={requestsLoading || historyPage>=historyPages} onClick={()=>setHistoryPage(historyPage+1)}>Next</button></nav>
           {requestsLoading ? (
             <div className="bg-white border border-gold/20 rounded-xl p-12 text-center">
@@ -957,6 +965,10 @@ if (
                           {req.paymentStatus || 'Unpaid'}
                         </span>
                       </div>
+                    </div>
+
+                    <div className="mt-4">
+                      <RequestTracking request={req} />
                     </div>
 
                     <div className="mt-4 pt-3 border-t border-gold/10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">

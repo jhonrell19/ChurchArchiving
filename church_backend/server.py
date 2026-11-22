@@ -2133,8 +2133,8 @@ def api_archive_storage_status():
     if not enabled:
         return {"durable": False, "message": "Private storage is disabled. Local Render files can disappear after restart."}, 200
     try:
-        private_uploads.private_bucket()
-        return {"durable": True, "message": "A private bucket is accessible. Verify upload and retrieval after restart."}, 200
+        private_uploads.check_connection()
+        return {"durable": True, "message": "A private bucket and its server-side storage connection are accessible. Verify upload and retrieval after restart."}, 200
     except Exception:
         app.logger.exception("Private storage preflight failed")
         return {"durable": False, "message": "Private storage configuration or bucket access failed."}, 503

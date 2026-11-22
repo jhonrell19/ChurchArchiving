@@ -59,7 +59,9 @@ Generate a new pepper locally in Windows PowerShell without printing it into log
 
 ```powershell
 $bytes = New-Object byte[] 48
-[System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+$rng.GetBytes($bytes)
+$rng.Dispose()
 $pepper = [Convert]::ToBase64String($bytes)
 Set-Clipboard $pepper
 # Paste the clipboard into the private Render environment variable value, then clear the clipboard manually.

@@ -26,6 +26,7 @@ PHONE_OTP_PROVIDER=textbee
 TEXTBEE_OTP_ENABLED=true
 TEXTBEE_API_KEY=<private real key>
 TEXTBEE_DEVICE_ID=<registered enabled device>
+TEXTBEE_SIM_SLOT_INDEX=0
 PHONE_OTP_PEPPER=<unchanged high-entropy server secret>
 ```
 
@@ -55,7 +56,7 @@ Leave **AUTO_SEND disabled** for tomorrow: staff deliberately clicks `Send queue
 
 ## Delivery failures
 
-- Manual phone message previously showed **Not sent • TM**. That is a carrier/SIM issue, not evidence the Render code failed. On the Android txtBee app, select a SIM that can actually send standard SMS (SMART vs TM), allow unrestricted background activity, and send a txtBee dashboard test before OTP/status.
+- Manual phone message previously showed **Not sent • TM**. That is a carrier/SIM issue, not evidence the Render code failed. For the user-tested phone, try `TEXTBEE_SIM_SLOT_INDEX=0` (SMART, SIM 1). Set `1` for TM (SIM 2) only if it can send ordinary SMS. Confirm SIM selection and the txtBee app can send standard SMS (SMART vs TM), allow unrestricted background activity, and send a txtBee dashboard test before OTP/status.
 - The SMS outbox state `accepted` means txtBee queued the SMS; only handset receipt or provider signed delivery report proves delivery. A carrier can fail after API acceptance.
 - Network timeouts are recorded as `uncertain` **not automatically retried**, preventing costly or duplicated texts.
 - A user can opt out at any time. SMS is never sent unless a number is saved, verified by OTP, and opted in.

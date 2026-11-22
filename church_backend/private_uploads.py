@@ -8,6 +8,106 @@ from functools import lru_cache
 from sqlalchemy import text
 
 from models import db
+from urllib.parse import quote, urlsplit
+import requests
+
+
+def storage_provider():
+    mode = os.getenv("PARISH_STORAGE_PROVIDER", "s3").strip().lower()
+    if mode not in {"s3", "supabase_rest"}:
+        raise RuntimeError("Unsupported private storage provider.")
+    return mode
+
+
+def _rest_credentials():
+    """Only for trusted Flask server; this bypass-RLS key must never reach browsers."""
+    base = os.environ["PARISH_SUPABASE_URL"].strip().rstrip("/")
+    parsed = urlsplit(base)
+    if (parsed.scheme != "https" or not parsed.hostname
+            or not parsed.hostname.endswith(".supabase.co")
+            or parsed.username or parsed.password or parsed.port or parsed.path not in ("", "/")
+            or parsed.query or parsed.fragment):
+        raise RuntimeError("Invalid HTTPS Supabase REST project URL.")
+    key = os.environ["PARISH_SUPABASE_SERVICE_ROLE_KEY"].strip()
+    if len(key) < 32:
+        raise RuntimeError("Server-side Supabase service-role secret is missing.")
+    return base, {"apikey": key, "Authorization": "Bearer " + key}
+
+
+def _rest_object_url(bucket, name, authenticated=False):
+    base, headers = _rest_credentials()
+    prefix = "object/authenticated" if authenticated else "object"
+    return (f"{base}/storage/v1/{prefix}/"
+            f"{quote(bucket, safe='')}/{quote(name, safe='/')}"), headers
+
+
+def _rest_download(bucket, name, destination):
+    url, headers = _rest_object_url(bucket, name, authenticated=True)
+    with requests.get(url, headers=headers, timeout=(8, 45), stream=True,
+                      allow_redirects=False) as response:
+        if response.status_code != 200:
+            raise RuntimeError("Private Storage download failed (HTTP %s)." % response.status_code)
+        with open(destination, "wb") as stream:
+            for chunk in response.iter_content(chunk_size=128 * 1024):
+                if chunk:
+                    stream.write(chunk)
+
+
+def _rest_upload(bucket, name, physical, digest):
+    url, headers = _rest_object_url(bucket, name)
+    headers = {**headers, "Content-Type": "application/octet-stream", "x-upsert": "false"}
+    with open(physical, "rb") as source:
+        response = requests.post(url, headers=headers, data=source,
+                                 timeout=(8, 90), allow_redirects=False)
+    # 409 may mean another logical path already stored the same digest.
+    # Verify the existing object before reusing it.
+    if response.status_code not in (200, 201, 409):
+        raise RuntimeError("Private Storage upload failed (HTTP %s)." % response.status_code)
+    with tempfile.TemporaryDirectory(prefix="parish-rest-verify-") as temp:
+        downloaded = Path(temp) / "verify"
+        _rest_download(bucket, name, downloaded)
+        if file_digest(downloaded) != digest or downloaded.stat().st_size != os.path.getsize(physical):
+            raise RuntimeError("Private Storage upload hash verification failed.")
+
+
+def _rest_signed_url(bucket, name, expiry_seconds):
+    base, headers = _rest_credentials()
+    endpoint = f"{base}/storage/v1/object/sign/{quote(bucket, safe='')}/{quote(name, safe='/')}"
+    response = requests.post(endpoint, headers=headers,
+                             json={"expiresIn": expiry_seconds}, timeout=(8, 20),
+                             allow_redirects=False)
+    if response.status_code != 200:
+        raise RuntimeError("Private Storage URL signing failed (HTTP %s)." % response.status_code)
+    data = response.json()
+    raw = data.get("signedURL") or data.get("signedUrl")
+    if not isinstance(raw, str) or not raw:
+        raise RuntimeError("Private Storage signing response missing URL.")
+    if raw.startswith("/storage/v1/"):
+        full = base + raw
+    elif raw.startswith("/object/"):
+        full = base + "/storage/v1" + raw
+    elif raw.startswith("https://"):
+        full = raw
+    else:
+        raise RuntimeError("Unexpected signed URL format.")
+    if urlsplit(full).hostname != urlsplit(base).hostname:
+        raise RuntimeError("Unexpected private Storage URL host.")
+    return full
+
+
+def check_connection():
+    """Probe object-storage access, not only database bucket metadata."""
+    bucket = private_bucket()
+    if storage_provider() == "supabase_rest":
+        base, headers = _rest_credentials()
+        response = requests.get(f"{base}/storage/v1/bucket/{quote(bucket, safe='')}",
+                                headers=headers, timeout=(8, 20), allow_redirects=False)
+        if response.status_code != 200 or response.json().get("public") is not False:
+            raise RuntimeError("Supabase private bucket REST preflight failed.")
+    else:
+        client().list_objects_v2(Bucket=bucket, MaxKeys=1)
+    return bucket
+
 
 
 def enabled():
@@ -56,7 +156,10 @@ def preserve(relative, physical):
     if size>quota.max_file_bytes or size+usage>quota.byte_limit:
         raise ValueError("Private upload quota exceeded.")
     digest = file_digest(physical)
-    client().upload_file(str(physical), bucket, 'parish/' + digest)
+    if storage_provider() == "supabase_rest":
+        _rest_upload(bucket, "parish/" + digest, physical, digest)
+    else:
+        client().upload_file(str(physical), bucket, 'parish/' + digest)
     db.session.execute(text('''INSERT INTO parish_private.upload_object(logical_path,sha256,size_bytes)
         VALUES (:path,:digest,:size) ON CONFLICT(logical_path) DO UPDATE SET
         sha256=excluded.sha256,size_bytes=excluded.size_bytes,updated_at=now()'''),
@@ -73,10 +176,13 @@ def signed_download(relative, expiry_seconds=60):
     ).first()
     if not row or not re.fullmatch(r'[0-9a-f]{64}', row.sha256):
         return None
+    expiry = min(max(int(expiry_seconds), 1), 60)
+    if storage_provider() == "supabase_rest":
+        return _rest_signed_url(private_bucket(), "parish/" + row.sha256, expiry)
     return client().generate_presigned_url(
         'get_object',
         Params={'Bucket': private_bucket(), 'Key': 'parish/' + row.sha256},
-        ExpiresIn=min(max(int(expiry_seconds), 1), 60),
+        ExpiresIn=expiry,
         HttpMethod='GET',
     )
 
@@ -97,7 +203,10 @@ def readable(relative, physical):
     with tempfile.NamedTemporaryFile(dir=directory,delete=False) as stream:
         tmp = Path(stream.name)
     try:
-        client().download_file(private_bucket(), 'parish/' + info.sha256, str(tmp))
+        if storage_provider() == "supabase_rest":
+            _rest_download(private_bucket(), "parish/" + info.sha256, tmp)
+        else:
+            client().download_file(private_bucket(), 'parish/' + info.sha256, str(tmp))
         if tmp.stat().st_size != info.size_bytes or file_digest(tmp) != info.sha256:
             raise RuntimeError('Stored file failed verification.')
         os.replace(tmp,cached)

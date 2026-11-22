@@ -240,7 +240,9 @@ export default function ArchivesPage({initialTab='baptismal'}:{initialTab?:strin
       const data = await res.json()
 
       if (!res.ok) {
-        toast.error(data.error || 'Upload failed')
+        const message = typeof data.error === 'string' ? data.error : 'Upload failed'
+        if (/duplicate/i.test(message)) toast.warning(message)
+        else toast.error(message)
         return
       }
 

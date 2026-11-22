@@ -5525,8 +5525,8 @@ def api_record_cash_receipt(request_id):
                                 document_id=cert.matched_document_id))
         db.session.commit()
         return {"ok": True, "requestId": request_id, "action": action,
-                "requesterUserId": cert.requester_user_id,
-                "sacramentType": cert.sacrament_type,
+                "requesterUserId": getattr(cert, "requester_user_id", None),
+                "sacramentType": getattr(cert, "sacrament_type", None),
                 "paymentStatus": cert.payment_status,
                 "paymentMethod": cert.payment_method,
                 "paymentReference": cert.payment_reference}, 200
@@ -5566,8 +5566,8 @@ def paymongo_confirm_internal():
     if cert.payment_status == "Paid":
         return {"ok": True, "alreadyProcessed": True,
                 "requestId": cert.id,
-                "requesterUserId": cert.requester_user_id,
-                "sacramentType": cert.sacrament_type,
+                "requesterUserId": getattr(cert, "requester_user_id", None),
+                "sacramentType": getattr(cert, "sacrament_type", None),
                 "paymentStatus": cert.payment_status,
                 "paymentMethod": cert.payment_method,
                 "paymentReference": cert.payment_reference}, 200
@@ -5620,8 +5620,8 @@ def paymongo_confirm_internal():
         db.session.add(AuditLog(user="PAYMONGO_WEBHOOK", action=f"Verified PayMongo {pay_mode} payment for certificate #{cert.id}", document_id=cert.matched_document_id))
         db.session.commit()
         return {"ok": True, "requestId": cert.id,
-                "requesterUserId": cert.requester_user_id,
-                "sacramentType": cert.sacrament_type,
+                "requesterUserId": getattr(cert, "requester_user_id", None),
+                "sacramentType": getattr(cert, "sacrament_type", None),
                 "paymentStatus": cert.payment_status,
                 "paymentMethod": cert.payment_method,
                 "paymentReference": cert.payment_reference}, 200

@@ -34,6 +34,32 @@ export default function ArchivesPage({initialTab='baptismal'}:{initialTab?:strin
   const [documents, setDocuments] = useState<ArchiveDocument[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
+  const [storageMessage, setStorageMessage] = useState('')
+  const [ocrMessage, setOcrMessage] = useState('')
+  useEffect(() => {
+    let active = true
+    async function check() {
+      try {
+        const [storage, ocr] = await Promise.all([
+          fetch('/api/backend/api/archive/storage-status', {cache:'no-store'}),
+          fetch('/api/backend/api/archive/ocr-health', {cache:'no-store'}),
+        ])
+        const [storageInfo, ocrInfo] = await Promise.all([
+          storage.json().catch(() => ({})), ocr.json().catch(() => ({})),
+        ])
+        if (!active) return
+        if (!storage.ok || !storageInfo.durable)
+          setStorageMessage(storageInfo.message || 'Private storage could not be verified. Do not upload actual parish records.')
+        if (!ocr.ok || !ocrInfo.available)
+          setOcrMessage(ocrInfo.message || 'OCR is unavailable. Staff can enter reviewed fields manually.')
+      } catch {
+        if (active) setStorageMessage('Storage status could not be checked. Do not assume uploads are durable.')
+      }
+    }
+    void check()
+    return () => { active = false }
+  }, [])
+
   const [showForm, setShowForm] = useState(false)
   const [recordData, setRecordData] = useState<TemplateRecordData>({})
 
@@ -408,6 +434,12 @@ const records = documents
         Store scanned church records with metadata, categorization, and searchable archive retrieval.
       </p>
 
+      {storageMessage && <p role="alert" className="mb-3 rounded-lg border border-rose-300 bg-rose-50 p-3 text-sm text-rose-900">
+        <strong>Storage warning:</strong> {storageMessage}
+      </p>}
+      {ocrMessage && <p role="status" className="mb-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+        <strong>OCR warning:</strong> {ocrMessage}
+      </p>}
       {loadError && (
         <div role="alert" className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900">
           <span className="font-body text-sm">{loadError}</span>

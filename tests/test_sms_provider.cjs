@@ -54,7 +54,7 @@ async function run() {
     assert.deepEqual(body.recipients, [user.phoneNumber])
     assert.equal(body.deviceId, 'fixture-phone')
     assert.equal(body.simSlotIndex, 0)
-    sentCode = body.message.match(/\\d{6}/)[0]
+    sentCode = body.message.match(/\d{6}/)[0]
     return Response.json({ data: { success: true, smsBatchId: 'fixture-batch' } })
   }
   assert.equal((await handlers.POST(request({ action: 'send' }))).status, 200)

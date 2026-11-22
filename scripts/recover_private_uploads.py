@@ -101,7 +101,9 @@ def pg_connection():
         connect_timeout=12,
     )
     params["password"] = getpass("Supabase database password (hidden): ")
-    return psycopg.connect(**params)
+    # Autocommit makes each explicit file transaction durable independently.
+    # A later failure must not roll back the upload index for earlier files.
+    return psycopg.connect(**params, autocommit=True)
 
 
 def private_storage(conn, expected):

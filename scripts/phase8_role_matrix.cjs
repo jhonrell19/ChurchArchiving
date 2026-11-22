@@ -26,6 +26,7 @@ const endpoints = [
   ['PATCH','api/requests/42/select-record'],
   ['POST','api/requests/42/generate-document'],
   ['POST','api/requests/42/release-document'],
+  ['POST','api/requests/42/cash-receipt'],
   ['GET','api/requests/42/download'],
   ['POST','api/requests/42/paymongo-checkout'],
   ['GET','api/archive/documents'], ['GET','api/archive/documents/baptismal'],

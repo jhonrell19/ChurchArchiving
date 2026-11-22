@@ -5437,6 +5437,93 @@ def certificate_checkout(request_id):
         return {"error": "Unable to start PayMongo checkout; contact staff."}, 502
 
 
+@app.route("/api/requests/<int:request_id>/cash-receipt", methods=["POST"])
+def api_record_cash_receipt(request_id):
+    """Opt-in, office-scoped, append-only full cash receipts and reversals.
+
+    Requires deploy/migrations/20261122_cash_receipts.sql. Receipt entry never
+    updates or deletes a previous ledger row; a reversal is a NEW negative row.
+    """
+    denied = require_roles("ADMIN", "BURIAL_ADMIN")
+    if denied:
+        return denied
+    if os.getenv("PARISH_CASH_RECEIPTS") != "enabled":
+        return {"error": "Cash ledger is not enabled; do not mark cash paid manually."}, 503
+    from sqlalchemy.exc import IntegrityError
+    payload = request.get_json(silent=True) or {}
+    action = payload.get("action")
+    reference = str(payload.get("receiptNumber") or "").strip().upper()
+    reason = str(payload.get("reason") or "").strip()
+    if action not in {"record", "reverse"} or not re.fullmatch(r"[A-Z0-9][A-Z0-9-]{5,63}", reference):
+        return {"error": "Enter a valid official receipt number and action."}, 400
+    if not 5 <= len(reason) <= 500:
+        return {"error": "Record a reason of 5–500 characters."}, 400
+    try:
+        actor = int(getattr(g, "user_id", "") or 0)
+        if actor <= 0:
+            return {"error": "Authenticated staff ID required."}, 403
+        cert = (CertificateRequest.query.filter_by(id=request_id)
+                .with_for_update().one_or_none())
+        if not cert:
+            return {"error": "Request not found."}, 404
+        if not staff_can_access_request(cert):
+            return {"error": "Forbidden."}, 403
+        if cert.status not in {"Approved", "Ready"}:
+            return {"error": "Only approved, unreleased requests may record or reverse cash."}, 409
+        amount = int(cert.total_fee or 0) * 100
+        if amount <= 0:
+            return {"error": "A verified, positive certificate fee is required."}, 409
+
+        if action == "record":
+            if cert.payment_status == "Paid":
+                return {"error": "This request is already paid."}, 409
+            db.session.execute(text("""
+                INSERT INTO parish_private.cash_receipt_ledger
+                (request_id,entry_kind,receipt_number,amount_cents,
+                 actor_user_id,actor_role,reason)
+                VALUES (:rid,'receipt',:ref,:amount,:actor,:role,:reason)
+            """), {"rid": request_id, "ref": reference, "amount": amount,
+                    "actor": actor, "role": g.user_role, "reason": reason})
+            cert.payment_status = "Paid"
+            cert.payment_method = "CASH"
+            cert.payment_reference = reference
+            cert.paid_at = datetime.utcnow()
+        else:
+            if cert.payment_status != "Paid" or cert.payment_method != "CASH":
+                return {"error": "No active cash receipt to reverse."}, 409
+            original = db.session.execute(text("""
+                SELECT id,amount_cents FROM parish_private.cash_receipt_ledger
+                WHERE request_id=:rid AND receipt_number=:reference
+                  AND entry_kind='receipt' FOR UPDATE
+            """), {"rid": request_id, "reference": cert.payment_reference}).first()
+            if not original or original.amount_cents != amount:
+                return {"error": "Original receipt does not match this request."}, 409
+            db.session.execute(text("""
+                INSERT INTO parish_private.cash_receipt_ledger
+                (request_id,entry_kind,receipt_number,amount_cents,
+                 original_entry_id,actor_user_id,actor_role,reason)
+                VALUES (:rid,'reversal',:ref,:amount,:original,:actor,:role,:reason)
+            """), {"rid": request_id, "ref": reference, "amount": -amount,
+                    "original": original.id, "actor": actor,
+                    "role": g.user_role, "reason": reason})
+            cert.payment_status = "Pending"
+            cert.payment_method = "CASH_REVERSED"
+            cert.paid_at = None
+        db.session.add(AuditLog(user=g.user_email or str(actor),
+                                action=f"Cash receipt {action} for request #{request_id}: {reference}; reason: {reason[:250]}",
+                                document_id=cert.matched_document_id))
+        db.session.commit()
+        return {"ok": True, "requestId": request_id, "action": action,
+                "paymentStatus": cert.payment_status}, 200
+    except IntegrityError:
+        db.session.rollback()
+        return {"error": "Receipt reference already used or reversal already recorded."}, 409
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("Cash receipt ledger operation failed")
+        return {"error": "Cash receipt could not be recorded. No status change committed."}, 500
+
+
 @app.route("/api/paymongo/confirm-internal", methods=["POST"])
 def paymongo_confirm_internal():
     # The public Next.js webhook verifies PayMongo's HMAC signature first.

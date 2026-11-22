@@ -25,10 +25,10 @@ def ranked_summary(transcript, max_sentences=4):
     No hallucinated facts: each line is copied from the transcript. This
     is a staff-review draft, not an official summary of a sermon.
     """
-    clean = re.sub(r"\\s+", " ", transcript or "").strip()
+    clean = re.sub(r"\s+", " ", transcript or "").strip()
     if not clean:
         return ""
-    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\\s+", clean) if s.strip()]
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", clean) if s.strip()]
     # Whisper sometimes omits punctuation in a long recording. Use roughly
     # 55-word windows so the summary does not become the complete transcript.
     if len(sentences) < 2 and len(clean.split()) > 100:
@@ -38,7 +38,7 @@ def ranked_summary(transcript, max_sentences=4):
         return " ".join(sentences)[:8000]
 
     def terms(sentence):
-        return [word.casefold() for word in re.findall(r"[^\\W\\d_]{3,}", sentence)
+        return [word.casefold() for word in re.findall(r"[^\W\d_]{3,}", sentence)
                 if word.casefold() not in _STOP]
 
     frequency = Counter(word for sentence in sentences for word in terms(sentence))

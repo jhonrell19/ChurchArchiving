@@ -1,6 +1,7 @@
 'use client'
 
 import { useFeedback } from '@/components/ui/FeedbackProvider'
+import RequestTracking from '@/components/RequestTracking'
 
 import { useEffect, useRef, useState } from 'react'
 import { CERT_ICONS, STATUS_STYLE } from '../data/ui'
@@ -126,7 +127,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
     setLoadError(false)
     try {
       setLoading(true)
-      const priority = urgentOnly ? 'urgent' : 'regular'
+      const priority = urgentOnly ? 'urgent' : 'all'
       const res = await fetch(`/api/backend/api/requests?priority=${priority}&page=${page}&status=${encodeURIComponent(filter)}`, {
         cache: 'no-store',
       })
@@ -418,6 +419,13 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
         ))}
       </div>
 
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-slate-600">Request tracking is sourced from the parish database; legacy urgent requests remain visible in the main queue.</p>
+        <button type="button" disabled={loading} onClick={() => void loadRequests()}
+          className="min-h-11 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50">
+          <i aria-hidden="true" className="ti ti-refresh mr-2" />Refresh statuses
+        </button>
+      </div>
       <nav className="parish-pager" aria-label="Request pages">
         <button disabled={loading || page <= 1} onClick={() => setPage(page - 1)}>Previous</button>
         <span>Page {page} of {pages}</span>
@@ -536,6 +544,8 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
                         </div>
                       </div>
                     </section>
+
+                    <RequestTracking request={item} />
 
                     <section className="rounded-xl border border-blue-200 bg-blue-50/50 p-4">
                       <StepTitle number="1" title="Find and verify the archive source record" />

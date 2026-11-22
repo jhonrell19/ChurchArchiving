@@ -136,13 +136,15 @@ export async function POST(req: Request) {
     if (current.attempts >= MAX_ATTEMPTS) return json({ message: 'Too many incorrect codes. Request a new code.' }, 429)
     // Count the attempt atomically; no one gets an unlimited guessing window.
     const attempt = await prisma.phoneVerification.updateMany({
-      where: { userId: user.id, phoneNumber: user.phoneNumber, otpHash: current.otpHash, attempts: { lt: MAX_ATTEMPTS } },
+      where: { userId: user.id, phoneNumber: user.phoneNumber, otpHash: current.otpHash,
+        expiresAt: { gt: new Date() }, attempts: { lt: MAX_ATTEMPTS } },
       data: { attempts: { increment: 1 } },
     })
     if (attempt.count !== 1) return json({ message: 'Please request a new code.' }, 409)
     if (!equalHash(current.otpHash, otpHash(user.id, user.phoneNumber, code))) return json({ message: 'Incorrect code.' }, 401)
     const verified = await prisma.phoneVerification.updateMany({
-      where: { userId: user.id, phoneNumber: user.phoneNumber, otpHash: current.otpHash, verifiedAt: null },
+      where: { userId: user.id, phoneNumber: user.phoneNumber, otpHash: current.otpHash,
+        expiresAt: { gt: new Date() }, verifiedAt: null },
       data: { otpHash: null, expiresAt: null, verifiedAt: new Date() },
     })
     if (verified.count !== 1) return json({ message: 'Verification already processed. Refresh your profile.' }, 409)

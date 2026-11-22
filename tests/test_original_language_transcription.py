@@ -118,8 +118,9 @@ class VerifiedMassStatusTests(unittest.TestCase):
         self.assertIn("transcript", result["error"].lower())
         session.commit.assert_not_called()
         mass.transcript_text = "Magandang umaga po. Today we gather."
-        result, status = scope["api_update_mass_status"](12)
-        self.assertEqual(status, 200)
+        success = scope["api_update_mass_status"](12)
+        self.assertIsInstance(success, dict)
+        self.assertEqual(success["mass"]["status"], "Transcribed")
         self.assertEqual(mass.status, "Transcribed")
         session.commit.assert_called_once()
 

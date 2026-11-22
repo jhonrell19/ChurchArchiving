@@ -1600,6 +1600,13 @@ def api_archive_original_scan(document_id):
     scan_path, scan_name = _archive_original_scan(document)
     if not scan_path or not scan_path.startswith(f'uploads/{document.sacrament_type}/'):
         return {'error': 'Original scan is unavailable.'}, 404
+    if request.args.get("signed") == "1":
+        url = private_uploads.signed_download(scan_path)
+        if not url:
+            return {"error": "The original scan is not in durable private storage."}, 503
+        result = jsonify({"signedUrl": url, "expiresInSeconds": 60})
+        result.headers["Cache-Control"] = "private, no-store"
+        return result
     if not os.path.isfile(readable_upload(scan_path)):
         return {'error': 'Original scan file is missing.'}, 404
     response = send_file(readable_upload(scan_path), as_attachment=False, download_name=scan_name)
@@ -1801,6 +1808,9 @@ def api_upload_document():
 
         return denied
 
+    if os.getenv("RENDER_SERVICE_ID") and not private_uploads.enabled():
+        return {"error": "Durable private storage is required on Render. Configure a private Supabase bucket before saving documents."}, 503
+
     try:
 
         file = request.files.get("file")
@@ -1978,7 +1988,6 @@ def api_upload_document():
         physical_filepath = backend_storage_path(filepath)
 
         file.save(physical_filepath)
-        private_uploads.preserve(filepath, physical_filepath)
 
         ocr_text = None
         extracted_metadata = None
@@ -1990,7 +1999,16 @@ def api_upload_document():
                     ensure_ascii=False,
                 )
             except RuntimeError as ocr_error:
-                app.logger.warning("OCR skipped for %s: %s", filename, ocr_error)
+                # Never claim OCR succeeded or upload an unreviewed document
+                # when staff specifically requested machine extraction.
+                if os.path.isfile(physical_filepath):
+                    os.remove(physical_filepath)
+                db.session.rollback()
+                app.logger.warning("OCR unavailable for %s: %s", filename, ocr_error)
+                return {"error": f"OCR unavailable: {ocr_error}. Disable OCR and enter reviewed fields manually if necessary."}, 503
+
+        # Keep the object and index durable before committing its archive row.
+        private_uploads.preserve(filepath, physical_filepath)
 
         new_document = Document(
 
@@ -2104,6 +2122,33 @@ def api_upload_document():
         app.logger.exception('Archive upload failed')
         return {'error': 'Archive upload failed; check backend logs.'}, 500
 
+
+
+@app.get("/api/archive/storage-status")
+def api_archive_storage_status():
+    denied = require_roles("ADMIN", "BURIAL_ADMIN")
+    if denied:
+        return denied
+    enabled = private_uploads.enabled()
+    if not enabled:
+        return {"durable": False, "message": "Private storage is disabled. Local Render files can disappear after restart."}, 200
+    try:
+        private_uploads.private_bucket()
+        return {"durable": True, "message": "A private bucket is accessible. Verify upload and retrieval after restart."}, 200
+    except Exception:
+        app.logger.exception("Private storage preflight failed")
+        return {"durable": False, "message": "Private storage configuration or bucket access failed."}, 503
+
+
+@app.get("/api/archive/ocr-health")
+def api_archive_ocr_health():
+    denied = require_roles("ADMIN", "BURIAL_ADMIN")
+    if denied:
+        return denied
+    available = bool(find_tesseract_executable())
+    return {"available": available,
+            "message": "OCR engine is installed." if available else
+            "Tesseract is missing. Install it on the backend host or configure TESSERACT_CMD."}, 200
 
 
 @app.route("/api/archive/stats")
@@ -3206,6 +3251,9 @@ def api_upload_release_document(request_id):
     if denied:
         return denied
 
+    if os.getenv("RENDER_SERVICE_ID") and not private_uploads.enabled():
+        return {"error": "Durable private storage is required on Render. Configure a private Supabase bucket before saving documents."}, 503
+
     try:
         cert_request = db.session.get(CertificateRequest, request_id)
 
@@ -3284,6 +3332,9 @@ def api_generate_release_document(request_id):
     denied = require_roles("ADMIN", "BURIAL_ADMIN")
     if denied:
         return denied
+
+    if os.getenv("RENDER_SERVICE_ID") and not private_uploads.enabled():
+        return {"error": "Durable private storage is required on Render. Configure a private Supabase bucket before saving documents."}, 503
 
     try:
         cert_request = db.session.get(CertificateRequest, request_id)
@@ -3367,6 +3418,14 @@ def api_download_request_document(request_id):
         return {"error": "No release document is attached to this request."}, 404
 
     normalized = normalize_path(cert_request.generated_file)
+    if request.args.get("signed") == "1":
+        # The owner/payment/office check above must happen BEFORE presigning.
+        url = private_uploads.signed_download(normalized)
+        if not url:
+            return {"error": "A durable private file is not available for signed download."}, 503
+        result = jsonify({"signedUrl": url, "expiresInSeconds": 60})
+        result.headers["Cache-Control"] = "private, no-store"
+        return result
     physical_path = readable_upload(normalized)
     if not os.path.isfile(physical_path):
         return {"error": "Release document file is missing."}, 404
@@ -3497,6 +3556,31 @@ def api_create_mass():
 
 
         file = request.files.get("file")
+        raw_video_url = (request.form.get("videoUrl") or "").strip()
+        video_url = None
+        if raw_video_url:
+            from urllib.parse import urlsplit, parse_qs
+            if len(raw_video_url) > 400:
+                return {"error": "Video link is too long."}, 400
+            parsed = urlsplit(raw_video_url)
+            host = (parsed.hostname or "").lower()
+            if parsed.scheme != "https" or parsed.username or parsed.password or parsed.port:
+                return {"error": "Use a valid HTTPS YouTube link."}, 400
+            if host in {"youtube.com", "www.youtube.com", "m.youtube.com"}:
+                if parsed.path == "/watch":
+                    video_id = parse_qs(parsed.query).get("v", [""])[0]
+                else:
+                    route = re.fullmatch(r"/(?:live|shorts|embed)/([a-zA-Z0-9_-]{11})/?", parsed.path)
+                    video_id = route.group(1) if route else ""
+            elif host == "youtu.be":
+                video_id = parsed.path.strip("/")
+            else:
+                return {"error": "Only YouTube video links are supported."}, 400
+            if not re.fullmatch(r"[a-zA-Z0-9_-]{11}", video_id or ""):
+                return {"error": "YouTube video ID is invalid."}, 400
+            video_url = "https://www.youtube.com/watch?v=" + video_id
+        if file and video_url:
+            return {"error": "Choose either a YouTube link or an uploaded file, not both."}, 400
 
 
 
@@ -3512,7 +3596,20 @@ def api_create_mass():
 
 
 
-        if file:
+        if video_url:
+            filepath = video_url
+        elif file:
+            if os.path.splitext(secure_filename(file.filename or ""))[1].lower() not in {".mp4", ".mov", ".mp3", ".m4a", ".wav"}:
+                return {"error": "Unsupported recording type; use MP4, MOV, MP3, M4A or WAV."}, 415
+            if os.environ.get("RENDER_SERVICE_ID") and not private_uploads.enabled():
+                return {"error": "Video uploads require private storage on Render. Paste a YouTube link instead."}, 503
+            if (file.mimetype or "").lower() not in {"video/mp4", "video/quicktime", "audio/mpeg", "audio/mp4", "audio/wav", "application/octet-stream"}:
+                return {"error": "Use an MP4, MOV, MP3, M4A or WAV recording."}, 415
+            file.stream.seek(0, os.SEEK_END)
+            media_bytes = file.stream.tell()
+            file.stream.seek(0)
+            if media_bytes <= 0 or media_bytes > 80 * 1024 * 1024:
+                return {"error": "Maximum media upload size is 80 MB. Use a YouTube link for longer recordings."}, 413
 
             relative_folder = "uploads/masses"
 
@@ -3528,7 +3625,8 @@ def api_create_mass():
 
                 return {"error": "Invalid filename"}, 400
 
-            filepath = f"{relative_folder}/{filename}"
+            from uuid import uuid4
+            filepath = f"{relative_folder}/{uuid4().hex}_{filename}"
 
             file.save(backend_storage_path(filepath))
             private_uploads.preserve(filepath, backend_storage_path(filepath))
@@ -5350,6 +5448,93 @@ def certificate_checkout(request_id):
         return {"error": "Unable to start PayMongo checkout; contact staff."}, 502
 
 
+@app.route("/api/requests/<int:request_id>/cash-receipt", methods=["POST"])
+def api_record_cash_receipt(request_id):
+    """Opt-in, office-scoped, append-only full cash receipts and reversals.
+
+    Requires deploy/migrations/20261122_cash_receipts.sql. Receipt entry never
+    updates or deletes a previous ledger row; a reversal is a NEW negative row.
+    """
+    denied = require_roles("ADMIN", "BURIAL_ADMIN")
+    if denied:
+        return denied
+    if os.getenv("PARISH_CASH_RECEIPTS") != "enabled":
+        return {"error": "Cash ledger is not enabled; do not mark cash paid manually."}, 503
+    from sqlalchemy.exc import IntegrityError
+    payload = request.get_json(silent=True) or {}
+    action = payload.get("action")
+    reference = str(payload.get("receiptNumber") or "").strip().upper()
+    reason = str(payload.get("reason") or "").strip()
+    if action not in {"record", "reverse"} or not re.fullmatch(r"[A-Z0-9][A-Z0-9-]{5,63}", reference):
+        return {"error": "Enter a valid official receipt number and action."}, 400
+    if not 5 <= len(reason) <= 500:
+        return {"error": "Record a reason of 5–500 characters."}, 400
+    try:
+        actor = int(getattr(g, "user_id", "") or 0)
+        if actor <= 0:
+            return {"error": "Authenticated staff ID required."}, 403
+        cert = (CertificateRequest.query.filter_by(id=request_id)
+                .with_for_update().one_or_none())
+        if not cert:
+            return {"error": "Request not found."}, 404
+        if not staff_can_access_request(cert):
+            return {"error": "Forbidden."}, 403
+        if cert.status not in {"Approved", "Ready"}:
+            return {"error": "Only approved, unreleased requests may record or reverse cash."}, 409
+        amount = int(cert.total_fee or 0) * 100
+        if amount <= 0:
+            return {"error": "A verified, positive certificate fee is required."}, 409
+
+        if action == "record":
+            if cert.payment_status == "Paid":
+                return {"error": "This request is already paid."}, 409
+            db.session.execute(text("""
+                INSERT INTO parish_private.cash_receipt_ledger
+                (request_id,entry_kind,receipt_number,amount_cents,
+                 actor_user_id,actor_role,reason)
+                VALUES (:rid,'receipt',:ref,:amount,:actor,:role,:reason)
+            """), {"rid": request_id, "ref": reference, "amount": amount,
+                    "actor": actor, "role": g.user_role, "reason": reason})
+            cert.payment_status = "Paid"
+            cert.payment_method = "CASH"
+            cert.payment_reference = reference
+            cert.paid_at = datetime.utcnow()
+        else:
+            if cert.payment_status != "Paid" or cert.payment_method != "CASH":
+                return {"error": "No active cash receipt to reverse."}, 409
+            original = db.session.execute(text("""
+                SELECT id,amount_cents FROM parish_private.cash_receipt_ledger
+                WHERE request_id=:rid AND receipt_number=:reference
+                  AND entry_kind='receipt' FOR UPDATE
+            """), {"rid": request_id, "reference": cert.payment_reference}).first()
+            if not original or original.amount_cents != amount:
+                return {"error": "Original receipt does not match this request."}, 409
+            db.session.execute(text("""
+                INSERT INTO parish_private.cash_receipt_ledger
+                (request_id,entry_kind,receipt_number,amount_cents,
+                 original_entry_id,actor_user_id,actor_role,reason)
+                VALUES (:rid,'reversal',:ref,:amount,:original,:actor,:role,:reason)
+            """), {"rid": request_id, "ref": reference, "amount": -amount,
+                    "original": original.id, "actor": actor,
+                    "role": g.user_role, "reason": reason})
+            cert.payment_status = "Unpaid"
+            cert.payment_method = "CASH_REVERSED"
+            cert.paid_at = None
+        db.session.add(AuditLog(user=g.user_email or str(actor),
+                                action=f"Cash receipt {action} for request #{request_id}: {reference}; reason: {reason[:250]}",
+                                document_id=cert.matched_document_id))
+        db.session.commit()
+        return {"ok": True, "requestId": request_id, "action": action,
+                "paymentStatus": cert.payment_status}, 200
+    except IntegrityError:
+        db.session.rollback()
+        return {"error": "Receipt reference already used or reversal already recorded."}, 409
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("Cash receipt ledger operation failed")
+        return {"error": "Cash receipt could not be recorded. No status change committed."}, 500
+
+
 @app.route("/api/paymongo/confirm-internal", methods=["POST"])
 def paymongo_confirm_internal():
     # The public Next.js webhook verifies PayMongo's HMAC signature first.
@@ -5364,9 +5549,16 @@ def paymongo_confirm_internal():
         return {"error": "PayMongo not configured"}, 503
     if data.get('mode') != pay_mode:
         return {"error": "Mode mismatch"}, 409
-    if not session_id.startswith("cs_"): return {"error": "Invalid checkout reference"}, 400
-    cert = CertificateRequest.query.filter_by(payment_reference=session_id).first()
-    if not cert: return {"error": "Unknown checkout session"}, 404
+    if not re.fullmatch(r"cs_[A-Za-z0-9_-]{1,128}", session_id):
+        return {"error": "Invalid checkout reference"}, 400
+    # Lock the request until its ledger insert and payment status commit together.
+    # Refuse ambiguous checkout IDs instead of crediting an arbitrary request.
+    matching = CertificateRequest.query.filter_by(payment_reference=session_id).with_for_update().limit(2).all()
+    if not matching:
+        return {"error": "Unknown checkout session"}, 404
+    if len(matching) != 1:
+        return {"error": "Duplicate checkout reference; manual reconciliation required"}, 409
+    cert = matching[0]
     if cert.payment_status == "Paid": return {"ok": True, "alreadyProcessed": True}, 200
     if cert.status not in {"Approved", "Ready"}: return {"error": "Request not approved"}, 409
     try:

@@ -1,0 +1,53 @@
+name: Phase 8 offline verification
+
+on:
+  pull_request:
+    branches: [staging]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase8-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  phase8-offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Prisma Client generation only; NEVER a real service or production database.
+      ARCHIVE_POSTGRES_URL: postgresql://fictional:fictional@127.0.0.1:6543/parish_ci_fake?sslmode=verify-full
+      PARISH_E2E_DISPOSABLE: "NO"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Node dependencies and Prisma Client
+        run: |
+          npm ci
+          npx prisma generate
+          npx tsc --noEmit
+          npm run build
+      - name: Python and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r church_backend/requirements.txt -r e2e/requirements.txt
+      - name: Existing Python regressions and new isolated Phase 8 tests
+        run: python -m unittest discover -s tests -v
+      - name: Proxy role matrix
+        run: |
+          node scripts/phase8_role_matrix.cjs
+          node tests/test_phase8_roles.cjs
+      - name: PayMongo webhook and Twilio OTP mocked tests
+        run: |
+          node tests/test_phase8_paymongo_webhook.cjs
+          node tests/test_sms_provider.cjs
+      - name: HTTP E2E stays disabled without isolated clone approval
+        run: python -m pytest -q e2e

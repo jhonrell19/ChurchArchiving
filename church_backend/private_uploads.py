@@ -1,6 +1,7 @@
 """Private object storage for uploads. PostgreSQL maps legacy paths to immutable objects."""
 import hashlib
 import os
+import re
 from pathlib import Path
 import tempfile
 from functools import lru_cache
@@ -60,6 +61,24 @@ def preserve(relative, physical):
         VALUES (:path,:digest,:size) ON CONFLICT(logical_path) DO UPDATE SET
         sha256=excluded.sha256,size_bytes=excluded.size_bytes,updated_at=now()'''),
         {'path':relative, 'digest':digest, 'size':os.path.getsize(physical)})
+
+
+def signed_download(relative, expiry_seconds=60):
+    """Presign a previously indexed private object; call ONLY after role/owner authorization."""
+    if not enabled() or not isinstance(relative, str) or not relative.startswith('uploads/'):
+        return None
+    row = db.session.execute(
+        text("SELECT sha256 FROM parish_private.upload_object WHERE logical_path=:p"),
+        {'p': relative},
+    ).first()
+    if not row or not re.fullmatch(r'[0-9a-f]{64}', row.sha256):
+        return None
+    return client().generate_presigned_url(
+        'get_object',
+        Params={'Bucket': private_bucket(), 'Key': 'parish/' + row.sha256},
+        ExpiresIn=min(max(int(expiry_seconds), 1), 60),
+        HttpMethod='GET',
+    )
 
 
 def readable(relative, physical):

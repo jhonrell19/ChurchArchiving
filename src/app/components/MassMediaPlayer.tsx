@@ -9,6 +9,15 @@ export default function MassMediaPlayer({title, filepath, onClose}: Props) {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
+  // URLs from the API must still be allowlisted here before becoming iframe sources.
+  const videoId = (() => {
+    try {
+      const url = new URL(filepath)
+      if (url.protocol !== 'https:' || url.hostname !== 'www.youtube.com' || url.pathname !== '/watch') return null
+      const id = url.searchParams.get('v')
+      return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? id : null
+    } catch { return null }
+  })()
   const source = '/api/backend/files/' + filepath.split('/').map(encodeURIComponent).join('/')
   const isAudio = /\.(mp3|m4a|wav|ogg|aac|flac|opus|wma)$/i.test(filepath)
   return (
@@ -18,8 +27,16 @@ export default function MassMediaPlayer({title, filepath, onClose}: Props) {
           <h2 className="font-semibold text-black text-xl truncate">{title}</h2>
           <button type="button" onClick={onClose} className="rounded-lg bg-slate-200 px-4 py-2 text-black" aria-label="Close media player">Close ✕</button>
         </div>
-        {isAudio ? <audio key={source} controls autoPlay className="w-full" src={source}>Your browser cannot play this audio.</audio> : <video key={source} controls autoPlay playsInline preload="metadata" className="w-full max-h-[70vh] bg-black rounded-lg" src={source}>Your browser cannot play this video.</video>}
-        <p className="mt-2 text-sm text-slate-600">If playback fails, verify the file exists and is a browser-supported video/audio format (MP4 H.264/AAC is recommended).</p>
+        {videoId
+          ? <iframe key={videoId} title={`YouTube Mass: ${title}`}
+              src={`https://www.youtube-nocookie.com/embed/${videoId}`}
+              className="aspect-video w-full rounded-lg bg-black"
+              referrerPolicy="strict-origin-when-cross-origin"
+              allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen />
+          : isAudio
+            ? <audio key={source} controls autoPlay className="w-full" src={source}>Your browser cannot play this audio.</audio>
+            : <video key={source} controls autoPlay playsInline preload="metadata" className="w-full max-h-[70vh] bg-black rounded-lg" src={source}>Your browser cannot play this video.</video>}
+        <p className="mt-2 text-sm text-slate-600">If playback fails, check that the YouTube video allows embedding, or verify the private media file exists.</p>
       </div>
     </div>
   )

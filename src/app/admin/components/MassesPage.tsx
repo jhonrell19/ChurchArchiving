@@ -40,6 +40,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
   })
 
   const [file, setFile] = useState<File | null>(null)
+  const [videoUrl, setVideoUrl] = useState('')
 
   const [transcriptionForm, setTranscriptionForm] = useState<Record<number, {
     transcriptText: string
@@ -97,9 +98,12 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
       formData.append('duration', form.duration)
       formData.append('status', form.status)
 
-      if (file) {
-        formData.append('file', file)
+      if (file && videoUrl.trim()) {
+        alert('Choose a YouTube link OR a file, not both.')
+        return
       }
+      if (videoUrl.trim()) formData.append('videoUrl', videoUrl.trim())
+      if (file) formData.append('file', file)
 
       const res = await fetch('/api/backend/api/masses', {
         method: 'POST',
@@ -125,6 +129,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
       })
 
       setFile(null)
+      setVideoUrl('')
       setShowForm(false)
       await loadMasses()
     } catch (err) {
@@ -227,21 +232,21 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
     <div>
       {playing && <MassMediaPlayer title={playing.title} filepath={playing.filepath} onClose={() => setPlaying(null)} />}
       <div className="flex items-center justify-between mb-1">
-        <h2 className="font-display text-navy-mid text-xl font-semibold">
+        <h2 className="font-display text-emerald-950 text-xl font-semibold">
           Mass Recordings
         </h2>
 
         <button
           onClick={() => setShowForm(!showForm)}
-          className="flex items-center gap-1.5 font-display text-[11px] tracking-wider bg-navy text-gold px-4 py-2 rounded-lg"
+          className="flex items-center gap-1.5 font-display text-sm tracking-wider bg-emerald-900 text-white px-4 py-2 rounded-lg"
         >
-          <i className="ti ti-upload text-[13px]" />
+          <i className="ti ti-upload text-base" />
           {showForm ? 'Close Form' : 'Upload Mass'}
         </button>
       </div>
 
-      <p className="font-body text-[#6b8caa] text-[14px] mb-6">
-        Manage uploaded masses and assign transcription status.
+      <p className="font-body text-slate-700 text-[14px] mb-6">
+        Manage Mass video links and locally reviewed transcription drafts.
       </p>
 
       <p role="status" className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
@@ -250,15 +255,15 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
       {showForm && (
         <form
           onSubmit={handleCreateMass}
-          className="bg-white border border-gold/20 rounded-xl p-5 mb-6"
+          className="bg-white border border-emerald-200 rounded-xl p-5 mb-6"
         >
-          <p className="font-display text-navy-mid text-[13px] font-semibold mb-4">
+          <p className="font-display text-emerald-950 text-base font-semibold mb-4">
             Add Mass Record
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1">
+              <label className="block font-display text-sm tracking-wider text-emerald-950 mb-1">
                 Mass Title *
               </label>
               <input
@@ -272,7 +277,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
             </div>
 
             <div>
-              <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1">
+              <label className="block font-display text-sm tracking-wider text-emerald-950 mb-1">
                 Priest
               </label>
               <input
@@ -285,7 +290,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
             </div>
 
             <div>
-              <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1">
+              <label className="block font-display text-sm tracking-wider text-emerald-950 mb-1">
                 Category
               </label>
               <select
@@ -303,7 +308,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
             </div>
 
             <div>
-              <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1">
+              <label className="block font-display text-sm tracking-wider text-emerald-950 mb-1">
                 Mass Date
               </label>
               <input
@@ -316,7 +321,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
             </div>
 
             <div>
-              <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1">
+              <label className="block font-display text-sm tracking-wider text-emerald-950 mb-1">
                 Duration
               </label>
               <input
@@ -329,7 +334,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
             </div>
 
             <div>
-              <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1">
+              <label className="block font-display text-sm tracking-wider text-emerald-950 mb-1">
                 Status
               </label>
               <select
@@ -345,7 +350,19 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
             </div>
 
             <div className="md:col-span-3">
-              <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1">
+              <label htmlFor="mass-video-url" className="mb-1 block text-sm font-semibold text-emerald-950">
+                YouTube Mass video link (recommended for Render Free)
+              </label>
+              <input id="mass-video-url" type="url" value={videoUrl}
+                onChange={event => setVideoUrl(event.target.value)}
+                placeholder="https://www.youtube.com/watch?v=XXXXXXXXXXX"
+                className="w-full rounded-lg border border-emerald-300 bg-white p-3 text-base text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700" />
+              <p className="mt-1 text-sm text-slate-600">
+                Store an unlisted YouTube video link. Upload the original recording separately to the parish backup drive for transcription.
+              </p>
+            </div>
+            <div className="md:col-span-3">
+              <label className="block font-display text-sm tracking-wider text-emerald-950 mb-1">
                 Upload Video/Audio File
               </label>
               <input
@@ -358,14 +375,14 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
           </div>
 
           <div className="flex gap-3 mt-4">
-            <button className="font-display text-[11px] tracking-wider bg-navy text-gold px-4 py-2 rounded-lg">
+            <button className="font-display text-sm tracking-wider bg-emerald-900 text-white px-4 py-2 rounded-lg">
               Save Mass Record
             </button>
 
             <button
               type="button"
               onClick={() => setShowForm(false)}
-              className="font-display text-[11px] tracking-wider text-[#6b8caa] border border-gold/20 px-4 py-2 rounded-lg"
+              className="font-display text-sm tracking-wider text-slate-700 border border-emerald-200 px-4 py-2 rounded-lg"
             >
               Cancel
             </button>
@@ -378,14 +395,14 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
           <button
             key={s}
             onClick={() => setFilter(s)}
-            className={`font-display text-[11px] tracking-wider px-4 py-1.5 rounded-full border transition-all ${
+            className={`font-display text-sm tracking-wider px-4 py-1.5 rounded-full border transition-all ${
               filterStatus === s
-                ? 'bg-navy text-gold border-navy'
-                : 'bg-white text-navy-mid border-gold/20'
+                ? 'bg-emerald-900 text-white border-navy'
+                : 'bg-white text-emerald-950 border-emerald-200'
             }`}
           >
             {s}
-            <span className="ml-1 text-[10px]">
+            <span className="ml-1 text-xs">
               {s === 'All'
                 ? masses.length
                 : masses.filter(m => m.status === s).length}
@@ -394,34 +411,34 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
         ))}
 
         <div className="relative ml-auto">
-          <i className="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-[#9ab0c4] text-[14px]" />
+          <i className="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-600 text-[14px]" />
           <input
             type="text"
             placeholder="Search…"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="pl-9 pr-4 py-1.5 border border-gold/20 rounded-full font-body text-[13px] text-navy-mid bg-white focus:outline-none w-48"
+            className="pl-9 pr-4 py-1.5 border border-emerald-200 rounded-full font-body text-base text-emerald-950 bg-white focus:outline-none w-48"
           />
         </div>
       </div>
 
-      <div className="bg-white border border-gold/20 rounded-xl overflow-hidden">
+      <div className="bg-white border border-emerald-200 rounded-xl overflow-hidden">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-gold/10 bg-gold/5">
-              <th className="font-display text-[10px] tracking-widest uppercase text-[#9ab0c4] text-left px-5 py-3">
+            <tr className="border-b border-emerald-100 bg-emerald-50">
+              <th className="font-display text-xs tracking-widest uppercase text-slate-600 text-left px-5 py-3">
                 Mass Title
               </th>
-              <th className="font-display text-[10px] tracking-widest uppercase text-[#9ab0c4] text-left px-5 py-3 hidden md:table-cell">
+              <th className="font-display text-xs tracking-widest uppercase text-slate-600 text-left px-5 py-3 hidden md:table-cell">
                 Date
               </th>
-              <th className="font-display text-[10px] tracking-widest uppercase text-[#9ab0c4] text-left px-5 py-3 hidden lg:table-cell">
+              <th className="font-display text-xs tracking-widest uppercase text-slate-600 text-left px-5 py-3 hidden lg:table-cell">
                 Priest
               </th>
-              <th className="font-display text-[10px] tracking-widest uppercase text-[#9ab0c4] text-left px-5 py-3">
+              <th className="font-display text-xs tracking-widest uppercase text-slate-600 text-left px-5 py-3">
                 Status
               </th>
-              <th className="font-display text-[10px] tracking-widest uppercase text-[#9ab0c4] text-left px-5 py-3">
+              <th className="font-display text-xs tracking-widest uppercase text-slate-600 text-left px-5 py-3">
                 Actions
               </th>
             </tr>
@@ -430,39 +447,39 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={5} className="font-body text-[#9ab0c4] text-[13px] text-center py-10">
+                <td colSpan={5} className="font-body text-slate-600 text-base text-center py-10">
                   Loading mass records...
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={5} className="font-body text-[#9ab0c4] text-[13px] text-center py-10">
+                <td colSpan={5} className="font-body text-slate-600 text-base text-center py-10">
                   No mass records found.
                 </td>
               </tr>
             ) : (
               filtered.map(m => (
-                <tr key={m.id} className="border-b border-gold/10 last:border-0">
+                <tr key={m.id} className="border-b border-emerald-100 last:border-0">
                   <td className="px-5 py-3">
-                    <p className="font-display text-navy-mid text-[13px] font-semibold">
+                    <p className="font-display text-emerald-950 text-base font-semibold">
                       {m.title}
                     </p>
-                    <p className="font-body text-[#9ab0c4] text-[11px]">
+                    <p className="font-body text-slate-600 text-sm">
                       {m.category || 'No category'} · {m.duration || 'No duration'}
                     </p>
                   </td>
 
-                  <td className="px-5 py-3 font-body text-[#6b8caa] text-[12px] hidden md:table-cell">
+                  <td className="px-5 py-3 font-body text-slate-700 text-sm hidden md:table-cell">
                     {m.date || 'No date'}
                   </td>
 
-                  <td className="px-5 py-3 font-body text-[#6b8caa] text-[12px] hidden lg:table-cell">
+                  <td className="px-5 py-3 font-body text-slate-700 text-sm hidden lg:table-cell">
                     {m.priest || 'N/A'}
                   </td>
 
                   <td className="px-5 py-3">
-                    <span className={`font-display text-[10px] tracking-wider border px-2 py-0.5 rounded-full ${
-                      STATUS_STYLE[m.status] || 'bg-white text-[#9ab0c4] border-gold/20'
+                    <span className={`font-display text-xs tracking-wider border px-2 py-0.5 rounded-full ${
+                      STATUS_STYLE[m.status] || 'bg-white text-slate-600 border-emerald-200'
                     }`}>
                       {m.status}
                     </span>
@@ -478,7 +495,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
                               m.status === 'Pending' ? 'In Progress' : 'Transcribed'
                             )
                           }
-                          className="font-display text-[10px] tracking-wider text-gold border border-gold/30 px-2.5 py-1 rounded-lg bg-gold/5"
+                          className="font-display text-xs tracking-wider text-emerald-800 border border-emerald-300 px-2.5 py-1 rounded-lg bg-emerald-50"
                         >
                           {m.status === 'Pending' ? 'Start' : 'Mark Done'}
                         </button>
@@ -492,7 +509,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
                       {m.filepath && (
                         <button type="button" onClick={() => setPlaying({ title: m.title, filepath: m.filepath! })}
                           aria-label={`Play ${m.title}`}
-                          className="p-1.5 rounded-lg border border-gold/20 text-[#6b8caa]"
+                          className="p-1.5 rounded-lg border border-emerald-200 text-slate-700"
                         >
                           <i className="ti ti-player-play text-[14px]" />
                         </button>
@@ -507,7 +524,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
                     </div>
 
                     {expanded === m.id && (
-                      <div className="mt-4 bg-gold/5 border border-gold/10 rounded-xl p-4">
+                      <div className="mt-4 bg-emerald-50 border border-emerald-100 rounded-xl p-4">
                         <p className="mb-3">On the parish PC, open the transcription assistant, choose your audio or video, then import the JSON draft here. Review the text before saving.</p>
                         <a className="underline" href="/mass_transcription_assistant.py" download>Download transcription assistant for the parish PC</a>
                         <label className="my-4 block font-semibold">Import local transcription draft
@@ -524,7 +541,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
                         </label>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
-                            <label className="block font-display text-[10px] tracking-widest uppercase text-[#9ab0c4] mb-1">
+                            <label className="block font-display text-xs tracking-widest uppercase text-slate-600 mb-1">
                               Summary
                             </label>
                             <textarea
@@ -545,7 +562,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
                           </div>
 
                           <div>
-                            <label className="block font-display text-[10px] tracking-widest uppercase text-[#9ab0c4] mb-1">
+                            <label className="block font-display text-xs tracking-widest uppercase text-slate-600 mb-1">
                               Full Transcript
                             </label>
                             <textarea
@@ -569,7 +586,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
                         <div className="flex justify-end mt-3">
                           <button
                             onClick={() => saveTranscription(m.id)}
-                            className="font-display text-[11px] tracking-wider bg-navy text-gold px-4 py-2 rounded-lg"
+                            className="font-display text-sm tracking-wider bg-emerald-900 text-white px-4 py-2 rounded-lg"
                           >
                             Save Transcription & Summary
                           </button>

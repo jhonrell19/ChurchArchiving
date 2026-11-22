@@ -96,6 +96,10 @@ if (
   return m === 'POST' && role === 'USER'
 }
 
+  if (/^api\/requests\/\d+\/cash-receipt$/.test(path)) {
+    return m === 'POST' && ['ADMIN', 'BURIAL_ADMIN'].includes(role)
+  }
+
   if (/^api\/requests\/\d+\/(status|attach-document|select-record)$/.test(path)) {
     return m === 'PATCH' && ['ADMIN', 'BURIAL_ADMIN'].includes(role)
   }

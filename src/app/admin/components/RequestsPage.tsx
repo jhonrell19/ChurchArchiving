@@ -385,7 +385,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
         <div className="flex items-center gap-2 flex-wrap">
           <h2 className="font-display text-navy-mid text-xl font-semibold">{title}</h2>
           {urgentOnly && (
-            <span className="font-display text-[9px] tracking-wider uppercase bg-orange-100 text-orange-700 border border-orange-200 px-2 py-1 rounded-full">
+            <span className="font-display text-xs tracking-wider uppercase bg-orange-100 text-orange-700 border border-orange-200 px-2 py-1 rounded-full">
               Priority Queue
             </span>
           )}
@@ -399,14 +399,14 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
             key={status}
             type="button"
             onClick={() => { setPage(1); setFilter(status) }}
-            className={`font-display text-[11px] tracking-wider px-4 py-1.5 rounded-full border transition-all ${
+            className={`font-display text-sm tracking-wider px-4 py-1.5 rounded-full border transition-all ${
               filter === status
                 ? 'bg-navy text-white border-navy'
                 : 'bg-white text-navy-mid border-slate-200 hover:border-gold/60'
             }`}
           >
             {status}
-            <span className="ml-1.5 text-[10px] opacity-70">
+            <span className="ml-1.5 text-xs opacity-70">
               {status === 'All'
                 ? Object.values(counts).reduce((a, b) => a + b, 0)
                 : counts[status] || 0}
@@ -461,19 +461,19 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
 
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-display text-navy-mid text-[13px] font-semibold">
+                        <p className="font-display text-navy-mid text-base font-semibold">
                           {item.personName}
                         </p>
-                        <span className="font-display text-[10px] tracking-wider text-slate-500">
+                        <span className="font-display text-xs tracking-wider text-slate-500">
                           IFI-REQ-{item.id.toString().padStart(4, '0')}
                         </span>
                         {item.isUrgent && (
-                          <span className="font-display text-[9px] tracking-wider uppercase bg-orange-100 text-orange-700 border border-orange-200 px-2 py-0.5 rounded-full">
+                          <span className="font-display text-xs tracking-wider uppercase bg-orange-100 text-orange-700 border border-orange-200 px-2 py-0.5 rounded-full">
                             Urgent
                           </span>
                         )}
                       </div>
-                      <p className="font-body text-slate-500 text-[11px] mt-0.5">
+                      <p className="font-body text-slate-500 text-sm mt-0.5">
                         {toDisplayType(item.sacramentType)}
                         {item.createdAt ? ` · Submitted ${item.createdAt.slice(0, 10)}` : ''}
                       </p>
@@ -482,14 +482,14 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
 
                   <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
                     <span
-                      className={`font-display text-[10px] tracking-wider border px-2.5 py-0.5 rounded-full ${getStatusStyle(
+                      className={`font-display text-xs tracking-wider border px-2.5 py-0.5 rounded-full ${getStatusStyle(
                         item.status
                       )}`}
                     >
                       {item.status}
                     </span>
                     <span
-                      className={`font-display text-[10px] tracking-wider border px-2.5 py-0.5 rounded-full ${
+                      className={`font-display text-xs tracking-wider border px-2.5 py-0.5 rounded-full ${
                         item.paymentStatus === 'Paid'
                           ? 'bg-green-50 text-green-700 border-green-200'
                           : 'bg-amber-50 text-amber-700 border-amber-200'
@@ -511,7 +511,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
                 {expanded === item.id && (
                   <div className="border-t border-slate-100 px-5 py-5 bg-slate-50/60 space-y-4">
                     <section className="rounded-xl border border-slate-200 bg-white p-4">
-                      <p className="font-display text-[11px] tracking-wider uppercase text-navy-mid mb-3">
+                      <p className="font-display text-sm tracking-wider uppercase text-navy-mid mb-3">
                         Request Details
                       </p>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -541,13 +541,13 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
                         <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 mb-3">
                           <div className="flex items-start justify-between gap-3 flex-wrap">
                             <div>
-                              <p className="font-display text-[11px] text-emerald-800 font-semibold">
+                              <p className="font-display text-sm text-emerald-800 font-semibold">
                                 ✓ Verified source record
                               </p>
-                              <p className="font-body text-[13px] text-navy-mid mt-1 font-semibold">
+                              <p className="font-body text-base text-navy-mid mt-1 font-semibold">
                                 {item.matchedDocument.personName}
                               </p>
-                              <p className="font-body text-[11px] text-slate-600 mt-1">
+                              <p className="font-body text-sm text-slate-600 mt-1">
                                 {item.matchedDocument.certificateNumber || `Archive #${item.matchedDocument.id}`}
                                 {item.matchedDocument.dateOfRecord ? ` · ${item.matchedDocument.dateOfRecord}` : ''}
                               </p>
@@ -556,14 +556,14 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
                               href={backendFileUrl(item.matchedDocument.filepath)}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="font-display text-[10px] tracking-wider bg-white text-emerald-700 border border-emerald-200 px-3 py-2 rounded-lg"
+                              className="font-display text-xs tracking-wider bg-white text-emerald-700 border border-emerald-200 px-3 py-2 rounded-lg"
                             >
                               Preview Source
                             </a>
                           </div>
                         </div>
                       ) : (
-                        <p className="font-body text-[12px] text-slate-600 mb-3">
+                        <p className="font-body text-sm text-slate-600 mb-3">
                           Search is already restricted to {toDisplayType(item.sacramentType)} records.
                         </p>
                       )}
@@ -578,13 +578,13 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
                                 setSearchTerms(prev => ({ ...prev, [item.id]: e.target.value }))
                               }
                               placeholder="Search name in archive"
-                              className="min-w-[240px] flex-1 border border-slate-200 rounded-lg px-3 py-2 font-body text-[12px] text-navy-mid bg-white focus:outline-none focus:border-gold"
+                              className="min-w-[240px] flex-1 border border-slate-200 rounded-lg px-3 py-2 font-body text-sm text-navy-mid bg-white focus:outline-none focus:border-gold"
                             />
                             <button
                               type="button"
                               disabled={isSearching}
                               onClick={() => void searchArchive(item)}
-                              className="font-display text-[10px] tracking-wider bg-navy text-white px-4 py-2 rounded-lg disabled:opacity-50"
+                              className="font-display text-xs tracking-wider bg-navy text-white px-4 py-2 rounded-lg disabled:opacity-50"
                             >
                               {isSearching ? 'Searching...' : item.matchedDocument ? 'Change / Search Again' : 'Search Archive'}
                             </button>
@@ -594,14 +594,14 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
                             <div className="mt-3 grid grid-cols-1 xl:grid-cols-2 gap-3">
                               {results.map(document => (
                                 <div key={document.id} className="rounded-lg border border-slate-200 bg-white p-3">
-                                  <p className="font-display text-[12px] text-navy-mid font-semibold">
+                                  <p className="font-display text-sm text-navy-mid font-semibold">
                                     {document.personName}
                                   </p>
-                                  <p className="font-body text-[11px] text-slate-500 mt-1">
+                                  <p className="font-body text-sm text-slate-500 mt-1">
                                     {document.certificateNumber || `Archive #${document.id}`}
                                     {document.dateOfRecord ? ` · ${document.dateOfRecord}` : ''}
                                   </p>
-                                  <p className="font-body text-[11px] text-slate-500 mt-1">
+                                  <p className="font-body text-sm text-slate-500 mt-1">
                                     {document.parish || 'No parish listed'}
                                     {document.priest ? ` · ${document.priest}` : ''}
                                   </p>
@@ -610,7 +610,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
                                       href={backendFileUrl(document.filepath)}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="font-display text-[10px] tracking-wider border border-slate-200 text-slate-700 px-3 py-1.5 rounded-lg"
+                                      className="font-display text-xs tracking-wider border border-slate-200 text-slate-700 px-3 py-1.5 rounded-lg"
                                     >
                                       Preview
                                     </a>
@@ -618,7 +618,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
                                       type="button"
                                       disabled={isBusy}
                                       onClick={() => void selectSourceRecord(item, document)}
-                                      className="font-display text-[10px] tracking-wider bg-emerald-600 text-white px-3 py-1.5 rounded-lg disabled:opacity-50"
+                                      className="font-display text-xs tracking-wider bg-emerald-600 text-white px-3 py-1.5 rounded-lg disabled:opacity-50"
                                     >
                                       Select Record
                                     </button>
@@ -629,7 +629,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
                           )}
 
                           {searchResults[item.id] && results.length === 0 && !isSearching && (
-                            <p className="font-body text-[12px] text-amber-700 mt-3">
+                            <p className="font-body text-sm text-amber-700 mt-3">
                               No matching archive record found. Try another spelling or add the record to Archives first.
                             </p>
                           )}
@@ -645,7 +645,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
                             type="button"
                             disabled={isBusy || !item.matchedDocumentId}
                             onClick={() => void updateStatus(item, 'Approved')}
-                            className="font-display text-[10px] tracking-wider bg-blue-600 text-white px-3 py-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
+                            className="font-display text-xs tracking-wider bg-blue-600 text-white px-3 py-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
                           >
                             Approve Verified Request
                           </button>
@@ -653,18 +653,18 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
                             type="button"
                             disabled={isBusy}
                             onClick={() => void updateStatus(item, 'Rejected')}
-                            className="font-display text-[10px] tracking-wider bg-white text-red-700 border border-red-200 px-3 py-2 rounded-lg disabled:opacity-50"
+                            className="font-display text-xs tracking-wider bg-white text-red-700 border border-red-200 px-3 py-2 rounded-lg disabled:opacity-50"
                           >
                             Reject Request
                           </button>
                           {!item.matchedDocumentId && (
-                            <span className="font-body text-[11px] text-amber-700">
+                            <span className="font-body text-sm text-amber-700">
                               Select the source record first.
                             </span>
                           )}
                         </div>
                       ) : (
-                        <p className="font-body text-[12px] text-slate-600">
+                        <p className="font-body text-sm text-slate-600">
                           Current request status: <strong>{item.status}</strong>
                         </p>
                       )}
@@ -676,10 +676,10 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
                       {item.draftFile && (
                         <div className="rounded-lg border border-blue-200 bg-white p-3 mb-3 flex items-center justify-between gap-3 flex-wrap">
                           <div>
-                            <p className="font-display text-[10px] tracking-wider uppercase text-blue-700">
+                            <p className="font-display text-xs tracking-wider uppercase text-blue-700">
                               Generated official-form draft
                             </p>
-                            <p className="font-body text-[12px] text-navy-mid mt-1">
+                            <p className="font-body text-sm text-navy-mid mt-1">
                               Review this draft, complete signatures/legal fields when applicable, then upload the reviewed final document.
                             </p>
                           </div>
@@ -687,7 +687,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
                             href={backendFileUrl(item.draftFile)}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="font-display text-[10px] tracking-wider text-blue-700 border border-blue-200 px-3 py-2 rounded-lg"
+                            className="font-display text-xs tracking-wider text-blue-700 border border-blue-200 px-3 py-2 rounded-lg"
                           >
                             Preview Draft
                           </a>
@@ -697,10 +697,10 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
                       {item.generatedFile && (
                         <div className="rounded-lg border border-violet-200 bg-white p-3 mb-3 flex items-center justify-between gap-3 flex-wrap">
                           <div>
-                            <p className="font-display text-[10px] tracking-wider uppercase text-violet-700">
+                            <p className="font-display text-xs tracking-wider uppercase text-violet-700">
                               Final release document
                             </p>
-                            <p className="font-body text-[12px] text-navy-mid mt-1">
+                            <p className="font-body text-sm text-navy-mid mt-1">
                               {releaseFileName(item.generatedFile)}
                             </p>
                           </div>
@@ -708,7 +708,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
                             href={backendFileUrl(item.generatedFile)}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="font-display text-[10px] tracking-wider text-violet-700 border border-violet-200 px-3 py-2 rounded-lg"
+                            className="font-display text-xs tracking-wider text-violet-700 border border-violet-200 px-3 py-2 rounded-lg"
                           >
                             Preview Final File
                           </a>
@@ -723,17 +723,17 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
                               type="button"
                               disabled={isBusy || !item.matchedDocumentId}
                               onClick={() => void generateReleaseDocument(item)}
-                              className="font-display text-[10px] tracking-wider bg-blue-600 text-white px-3 py-2 rounded-lg disabled:opacity-40"
+                              className="font-display text-xs tracking-wider bg-blue-600 text-white px-3 py-2 rounded-lg disabled:opacity-40"
                             >
                               Generate Official Form Draft
                             </button>
                             ) : (
-                              <span className="font-body text-[11px] text-amber-800">
+                              <span className="font-body text-sm text-amber-800">
                                 No automatic ownership-certificate template is configured. Verify the ownership record, then upload the approved and signed final document below.
                               </span>
                             )}
                             {item.sacramentType !== 'ownership' && (
-                              <span className="font-body text-[11px] text-slate-500">
+                              <span className="font-body text-sm text-slate-500">
                                 Then upload the reviewed/signed final certificate below.
                               </span>
                             )}
@@ -748,23 +748,23 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
                                 [item.id]: e.target.files?.[0] || null,
                               }))
                             }
-                            className="font-body text-[12px] text-slate-600 bg-white border border-slate-200 rounded-lg px-3 py-2"
+                            className="font-body text-sm text-slate-600 bg-white border border-slate-200 rounded-lg px-3 py-2"
                           />
                           <button
                             type="button"
                             disabled={isBusy || !releaseFiles[item.id]}
                             onClick={() => void uploadReleaseDocument(item)}
-                            className="font-display text-[10px] tracking-wider bg-violet-600 text-white px-3 py-2 rounded-lg disabled:opacity-40"
+                            className="font-display text-xs tracking-wider bg-violet-600 text-white px-3 py-2 rounded-lg disabled:opacity-40"
                           >
                             {item.generatedFile ? 'Replace Final Document' : 'Upload Final Document'}
                           </button>
-                          <span className="font-body text-[11px] text-slate-500">
+                          <span className="font-body text-sm text-slate-500">
                             PDF is recommended. DOCX/JPG/PNG are also accepted.
                           </span>
                           </div>
                         </div>
                       ) : (
-                        <p className="font-body text-[12px] text-slate-600">
+                        <p className="font-body text-sm text-slate-600">
                           {item.status === 'Pending'
                             ? 'Approve the verified request before preparing the final document.'
                             : item.status === 'Released'
@@ -787,16 +787,16 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
                           type="button"
                           disabled={isBusy}
                           onClick={() => void updateStatus(item, 'Released')}
-                          className="font-display text-[10px] tracking-wider bg-emerald-600 text-white px-4 py-2 rounded-lg disabled:opacity-50"
+                          className="font-display text-xs tracking-wider bg-emerald-600 text-white px-4 py-2 rounded-lg disabled:opacity-50"
                         >
                           Release Document to User
                         </button>
                       ) : item.status === 'Released' ? (
-                        <p className="font-body text-[12px] text-emerald-700">
+                        <p className="font-body text-sm text-emerald-700">
                           Released. The request owner can now download the final document.
                         </p>
                       ) : (
-                        <p className="font-body text-[12px] text-amber-700">
+                        <p className="font-body text-sm text-amber-700">
                           Release becomes available only when the request is Ready, the final document exists, and payment is Paid.
                         </p>
                       )}
@@ -819,10 +819,10 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
 function StepTitle({ number, title }: { number: string; title: string }) {
   return (
     <div className="flex items-center gap-2 mb-3">
-      <span className="w-6 h-6 rounded-full bg-navy text-white font-display text-[10px] flex items-center justify-center">
+      <span className="w-6 h-6 rounded-full bg-navy text-white font-display text-xs flex items-center justify-center">
         {number}
       </span>
-      <p className="font-display text-[11px] tracking-wider text-navy-mid font-semibold">{title}</p>
+      <p className="font-display text-sm tracking-wider text-navy-mid font-semibold">{title}</p>
     </div>
   )
 }
@@ -830,7 +830,7 @@ function StepTitle({ number, title }: { number: string; title: string }) {
 function CheckRow({ label, ok }: { label: string; ok: boolean }) {
   return (
     <div className={`rounded-lg border p-3 ${ok ? 'bg-white border-emerald-200' : 'bg-white border-amber-200'}`}>
-      <p className={`font-body text-[12px] ${ok ? 'text-emerald-700' : 'text-amber-700'}`}>
+      <p className={`font-body text-sm ${ok ? 'text-emerald-700' : 'text-amber-700'}`}>
         <i className={`ti ${ok ? 'ti-circle-check' : 'ti-clock'} mr-1`} />
         {label}
       </p>
@@ -841,8 +841,8 @@ function CheckRow({ label, ok }: { label: string; ok: boolean }) {
 function Info({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="font-display text-[9px] tracking-widest uppercase text-slate-400 mb-1">{label}</p>
-      <p className="font-body text-navy-mid text-[13px] break-words">{value}</p>
+      <p className="font-display text-xs tracking-widest uppercase text-slate-400 mb-1">{label}</p>
+      <p className="font-body text-navy-mid text-base break-words">{value}</p>
     </div>
   )
 }
@@ -851,7 +851,7 @@ function EmptyCard({ icon, title }: { icon: string; title: string }) {
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-10 text-center shadow-sm">
       <i className={`ti ${icon} text-slate-300 text-3xl inline-block mb-2`} />
-      <p className="font-body text-slate-500 text-[13px]">{title}</p>
+      <p className="font-body text-slate-500 text-base">{title}</p>
     </div>
   )
 }

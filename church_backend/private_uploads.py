@@ -59,9 +59,9 @@ def _rest_upload(bucket, name, physical, digest):
     with open(physical, "rb") as source:
         response = requests.post(url, headers=headers, data=source,
                                  timeout=(8, 90), allow_redirects=False)
-    # 409 may mean another logical path already stored the same digest.
-    # Verify the existing object before reusing it.
-    if response.status_code not in (200, 201, 409):
+    # Supabase returns HTTP 400 "Asset Already Exists" in some Storage API versions.
+    # Never trust that response alone: download and checksum-verify the object.
+    if response.status_code not in (200, 201, 400, 409):
         raise RuntimeError("Private Storage upload failed (HTTP %s)." % response.status_code)
     with tempfile.TemporaryDirectory(prefix="parish-rest-verify-") as temp:
         downloaded = Path(temp) / "verify"

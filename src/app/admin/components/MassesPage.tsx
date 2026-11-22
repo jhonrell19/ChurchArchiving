@@ -350,7 +350,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
               >
                 <option value="Pending">Pending</option>
                 <option value="In Progress">In Progress</option>
-                <option value="Transcribed">Transcribed</option>
+                {/* Full transcription is assigned only after staff saves actual speech text. */}
               </select>
             </div>
 

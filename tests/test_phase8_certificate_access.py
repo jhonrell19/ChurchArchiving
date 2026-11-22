@@ -20,6 +20,12 @@ def status(result):
     return result[1] if isinstance(result, tuple) else 200
 
 
+class StubJson(dict):
+    def __init__(self, values):
+        super().__init__(values)
+        self.headers = {}
+
+
 class CertificateOwnershipTests(unittest.TestCase):
     def setUp(self):
         self.record = SimpleNamespace(
@@ -36,7 +42,7 @@ class CertificateOwnershipTests(unittest.TestCase):
         self.scope = {
             "db": self.db,
             "request": SimpleNamespace(args={}),
-            "jsonify": lambda value: value,
+            "jsonify": lambda value: StubJson(value),
             "private_uploads": SimpleNamespace(signed_download=Mock(return_value="https://storage.example.test/signed-fixture")),
             "CertificateRequest": object,
             "g": SimpleNamespace(user_role="USER"),

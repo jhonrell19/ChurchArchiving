@@ -74,7 +74,7 @@ async function main() {
     PARISH_NOTIFICATION_SMS: 'enabled',
     PHONE_OTP_PROVIDER: 'textbee',
     TEXTBEE_API_KEY: 'fixture-key',
-    TEXTBEE_DEVICE_ID: 'fixture-device',
+    TEXTBEE_DEVICE_ID: 'fixture-device', TEXTBEE_SIM_SLOT_INDEX: '0',
   })
   const approved = {
     id: 42, requesterUserId: 7, sacramentType: 'baptismal',
@@ -105,6 +105,7 @@ async function main() {
     const data = JSON.parse(opts.body)
     assert.deepEqual(data.recipients, ['+639000000000'])
     assert.equal(data.deviceId, 'fixture-device')
+    assert.equal(data.simSlotIndex, 0)
     assert.match(data.message, /IFI-REQ-0042/)
     sentSms++
     return Response.json({ data: { smsBatchId: 'batch-fixture' } })

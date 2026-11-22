@@ -5506,7 +5506,7 @@ def api_record_cash_receipt(request_id):
             """), {"rid": request_id, "ref": reference, "amount": -amount,
                     "original": original.id, "actor": actor,
                     "role": g.user_role, "reason": reason})
-            cert.payment_status = "Pending"
+            cert.payment_status = "Unpaid"
             cert.payment_method = "CASH_REVERSED"
             cert.paid_at = None
         db.session.add(AuditLog(user=g.user_email or str(actor),

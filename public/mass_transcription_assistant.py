@@ -84,9 +84,25 @@ def draft(segments):
     transcript = " ".join(parts)
     return {'transcriptText': transcript, 'summaryText': ranked_summary(transcript)}
 
-def transcribe(recording, output, language, progress=print, model_size='base', beam_size=5):
+# The parish's primary output is a SOURCE-LANGUAGE transcript, not a translation.
+# Faster-Whisper 1.2.1 supports task='transcribe' and multilingual=True to
+# detect a fresh language on each segment in mixed Tagalog/English Masses.
+VALID_LANGUAGES = ('auto', 'tl', 'en')
+VALID_MODELS = ('base', 'small', 'medium')
+
+
+def transcribe(recording, output, language='auto', progress=print, model_size='small', beam_size=5):
+    """Create a review draft containing what was SPOKEN (Tagalog/English), not an English translation.
+
+    'auto' is best for code-switching; 'tl' is useful when almost the entire
+    homily is Tagalog. The AI may still mishear individual words, so staff must
+    compare the transcript against the original recording before publishing.
+    """
+    recording, output = Path(recording), Path(output)
     if not recording.is_file() or output.exists():
-        raise ValueError("Select an existing recording and a new output filename.")
+        raise ValueError("Select an existing local recording and a new output filename.")
+    if language not in VALID_LANGUAGES or model_size not in VALID_MODELS or not 1 <= beam_size <= 8:
+        raise ValueError("Invalid language, model, or beam size.")
     try:
         import av
         from faster_whisper import WhisperModel
@@ -94,18 +110,38 @@ def transcribe(recording, output, language, progress=print, model_size='base', b
         raise RuntimeError("Install the speech engine once: py -3.11 -m pip install faster-whisper==1.2.1 av==14.2.0") from error
     if av.__version__ != '14.2.0':
         raise RuntimeError("Install the tested audio decoder: py -3.11 -m pip install av==14.2.0")
-    progress("Loading the " + model_size + " speech model…")
+    progress("Loading the " + model_size + " multilingual speech model…")
     try:
         model = WhisperModel(model_size, device='cpu', compute_type='int8', local_files_only=True)
     except (FileNotFoundError, OSError, ValueError):
         progress("Downloading the speech model for first use. Internet is required for this step.")
         model = WhisperModel(model_size, device='cpu', compute_type='int8')
-    progress("Transcribing the recording on this computer…")
-    segments, _ = model.transcribe(str(recording), language=None if language == 'auto' else language,
-                                   vad_filter=True, beam_size=beam_size, condition_on_previous_text=False)
+
+    progress("Transcribing actual spoken words; translation to English is OFF…")
+    # IMPORTANT: Do not change task to 'translate'. Some recordings begin with
+    # English greetings before a Tagalog sermon; auto detection once at the
+    # beginning can incorrectly bias the entire transcript toward English.
+    # Per-segment multilingual detection helps with Tagalog/English switching.
+    segments, info = model.transcribe(
+        str(recording),
+        task='transcribe',
+        language=None if language == 'auto' else language,
+        multilingual=(language == 'auto'),
+        vad_filter=True,
+        beam_size=beam_size,
+        condition_on_previous_text=False,
+    )
     result = draft(segments)
+    result['transcriptionTask'] = 'transcribe'
+    result['languageMode'] = language
+    result['detectedLanguage'] = getattr(info, 'language', None)
+    result['modelSize'] = model_size
+    result['reviewRequired'] = True
+    # Use ensure_ascii=False to preserve Tagalog spellings and other Unicode.
+    # Keeping full transcript and extractive summary distinct prevents the
+    # sermon summary from silently replacing words actually spoken.
     with output.open('x', encoding='utf-8') as target:
-        json.dump(result, target, ensure_ascii=False)
+        json.dump(result, target, ensure_ascii=False, indent=2)
 
 
 def desktop():
@@ -118,9 +154,22 @@ def desktop():
     status = tk.StringVar(value="Choose a Mass recording to create a draft on this computer.")
     tk.Label(root, textvariable=status, wraplength=420, padx=18, pady=16).pack()
     events = Queue()
-    model_choice = tk.StringVar(value="base")
-    tk.Label(root, text="Speech model: base = faster; small = usually more accurate").pack()
-    tk.OptionMenu(root, model_choice, "base", "small", "medium").pack()
+    model_choice = tk.StringVar(value="small")
+    tk.Label(root, text="Speech model: small = recommended accuracy; base = fastest; medium = slowest",
+             wraplength=450).pack()
+    tk.OptionMenu(root, model_choice, "small", "base", "medium").pack()
+    language_options = {
+        "Auto - Tagalog + English (recommended)": "auto",
+        "Tagalog-dominant Mass": "tl",
+        "English-dominant Mass": "en",
+    }
+    language_choice = tk.StringVar(value="Auto - Tagalog + English (recommended)")
+    tk.Label(root, text="Language of speech: keep original wording (no English translation)",
+             wraplength=450).pack(pady=(10, 0))
+    tk.OptionMenu(root, language_choice, *language_options).pack()
+    tk.Label(root, text="Choose a LOCAL audio or video recording. A YouTube URL is not a recording file.\n"
+             "AI speech recognition can mishear words: compare the full draft to the source.",
+             wraplength=450, justify="left").pack(pady=(10, 0))
 
     def start():
         source = filedialog.askopenfilename(title="Choose a Mass audio or video recording")
@@ -133,7 +182,9 @@ def desktop():
         button.config(state="disabled")
         def work():
             try:
-                transcribe(Path(source), Path(output), 'auto', lambda msg: events.put(('progress', msg)), model_choice.get())
+                transcribe(Path(source), Path(output),
+                           language_options[language_choice.get()],
+                           lambda msg: events.put(('progress', msg)), model_choice.get())
                 events.put(('done', 'Draft saved. Import it in Mass Recordings and review both fields.'))
             except Exception as error:
                 events.put(('error', str(error)))
@@ -163,7 +214,7 @@ def main():
     parser.add_argument('recording', nargs='?', type=Path)
     parser.add_argument('output', nargs='?', type=Path)
     parser.add_argument('--language', choices=['auto', 'tl', 'en'], default='auto')
-    parser.add_argument('--model', choices=['base','small','medium'], default='base')
+    parser.add_argument('--model', choices=['base','small','medium'], default='small')
     parser.add_argument('--beam-size', type=int, choices=range(1,9), default=5)
     args = parser.parse_args()
     if not args.recording and not args.output:

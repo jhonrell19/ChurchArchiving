@@ -1,5 +1,7 @@
 'use client'
 
+import { useFeedback } from '@/components/ui/FeedbackProvider'
+
 import { useEffect, useRef, useState } from 'react'
 import { inputCls } from '../data/ui'
 import TemplateDataFields, { type TemplateRecordData } from './TemplateDataFields'
@@ -29,6 +31,7 @@ const ARCHIVE_TYPES = [
 ]
 
 export default function ArchivesPage({initialTab='baptismal'}:{initialTab?:string}) {
+  const { toast, confirmAction } = useFeedback()
   const [activeTab, setActiveTab] = useState(initialTab)
   const [search, setSearch] = useState('')
   const [documents, setDocuments] = useState<ArchiveDocument[]>([])
@@ -208,11 +211,11 @@ export default function ArchivesPage({initialTab='baptismal'}:{initialTab?:strin
 
     if (saving || ocrLoading) return
     if (!file) {
-      alert('Please upload a scanned PDF or image.')
+      toast.warning('Please upload a scanned PDF or image.')
       return
     }
     if (!ocrReviewed) {
-      alert('Review the OCR-populated form against the original scan and tick the review checkbox before saving.')
+      toast.warning('Review the OCR-populated form against the original scan and tick the review checkbox before saving.')
       return
     }
 
@@ -237,11 +240,11 @@ export default function ArchivesPage({initialTab='baptismal'}:{initialTab?:strin
       const data = await res.json()
 
       if (!res.ok) {
-        alert(data.error || 'Upload failed')
+        toast.error(data.error || 'Upload failed')
         return
       }
 
-      alert('Archive saved: the filled official-template DRAFT PDF is the primary document. The original scan is retained separately.')
+      toast.success('Archive saved: the filled official-template DRAFT PDF is the primary document. The original scan is retained separately.')
 
       setForm({
   person_name: '',
@@ -263,7 +266,7 @@ export default function ArchivesPage({initialTab='baptismal'}:{initialTab?:strin
       await loadDocuments()
     } catch (err) {
       console.warn('Archive upload error:', err)
-      alert('Could not confirm the save. Refresh the archive and check for the record before retrying.')
+      toast.error('Could not confirm the save. Refresh the archive and check for the record before retrying.')
     } finally {
       setSaving(false)
     }
@@ -355,7 +358,7 @@ const selectScannedFile = (selected: File | null) => {
 }
 
 const deleteDocument = async (id: number) => {
-  const confirmDelete = confirm('Move this document to Recycle Bin?')
+  const confirmDelete = await confirmAction('Move this document to Recycle Bin?')
 
   if (!confirmDelete) {
     return
@@ -369,34 +372,34 @@ const deleteDocument = async (id: number) => {
     const data = await res.json()
 
     if (!res.ok) {
-      alert(data.error || 'Failed to delete document.')
+      toast.error(data.error || 'Failed to delete document.')
       return
     }
 
-    alert('Document moved to Recycle Bin.')
+    toast.success('Document moved to Recycle Bin.')
     await loadDocuments()
   } catch (err) {
     console.warn('Delete document error:', err)
-    alert('Failed to delete document. The parish backend service is unavailable.')
+    toast.error('Failed to delete document. The parish backend service is unavailable.')
   }
 }
 
 const makeFilledTemplatePrimary = async (record: ArchiveDocument) => {
-  if (!confirm(`Convert ${record.personName}'s existing archive to use the filled IFI template PDF as its primary document? The scanned original will be preserved.`)) return
+  if (!await confirmAction(`Convert ${record.personName}'s existing archive to use the filled IFI template PDF as its primary document? The scanned original will be preserved.`)) return
   try {
     const res = await fetch(`/api/backend/api/archive/documents/${record.id}/promote-filled-template`, {
       method: 'POST',
     })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) {
-      alert(data.error || 'Could not update the primary archive document.')
+      toast.error(data.error || 'Could not update the primary archive document.')
       return
     }
     await loadDocuments()
-    alert('The filled IFI template PDF is now the primary archive document. The original scan remains available.')
+    toast.success('The filled IFI template PDF is now the primary archive document. The original scan remains available.')
   } catch (error) {
     console.error('Archive primary PDF promotion error:', error)
-    alert('Could not contact the parish backend. No change was confirmed.')
+    toast.error('Could not contact the parish backend. No change was confirmed.')
   }
 }
 

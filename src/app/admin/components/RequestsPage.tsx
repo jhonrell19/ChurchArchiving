@@ -1,5 +1,7 @@
 'use client'
 
+import { useFeedback } from '@/components/ui/FeedbackProvider'
+
 import { useEffect, useRef, useState } from 'react'
 import { CERT_ICONS, STATUS_STYLE } from '../data/ui'
 
@@ -103,6 +105,7 @@ const releaseFileName = (filepath: string | null) => {
 }
 
 export default function RequestsPage({ urgentOnly = false, office = 'main' }: Props) {
+  const { toast, confirmAction } = useFeedback()
   const [requests, setRequests] = useState<CertificateRequest[]>([])
   const [filter, setFilter] = useState<ReqStatus>('All')
   const [expanded, setExpanded] = useState<number | null>(null)
@@ -169,7 +172,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
     const query = (searchTerms[item.id] ?? item.personName).trim()
 
     if (!query) {
-      alert('Enter a name to search for.')
+      toast.warning('Enter a name to search for.')
       return
     }
 
@@ -195,14 +198,14 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
       }))
     } catch (error) {
       console.warn('Archive search error:', error)
-      alert('Unable to search the archive right now.')
+      toast.error('Unable to search the archive right now.')
     } finally {
       setSearchingId(null)
     }
   }
 
   const selectSourceRecord = async (item: CertificateRequest, document: ArchiveDocument) => {
-    const confirmed = window.confirm(
+    const confirmed = await confirmAction(
       `Use ${document.personName} (${document.certificateNumber || `Archive #${document.id}`}) as the verified source record for this request?`
     )
 
@@ -218,7 +221,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
       const data = await res.json().catch(() => ({}))
 
       if (!res.ok) {
-        alert(data.error || data.message || 'Unable to select this archive record.')
+        toast.error(data.error || data.message || 'Unable to select this archive record.')
         return
       }
 
@@ -226,7 +229,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
       await loadRequests()
     } catch (error) {
       console.warn('Select source record error:', error)
-      alert('Unable to select this archive record right now.')
+      toast.error('Unable to select this archive record right now.')
     } finally {
       setBusyId(null)
     }
@@ -237,21 +240,21 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
     status: 'Approved' | 'Rejected' | 'Released'
   ) => {
     if (status === 'Approved' && !item.matchedDocumentId) {
-      alert('Find and select the matching archive record before approving this request.')
+      toast.warning('Find and select the matching archive record before approving this request.')
       return
     }
 
     if (status === 'Released') {
       if (item.status !== 'Ready') {
-        alert('The final release document must be prepared first.')
+        toast.warning('The final release document must be prepared first.')
         return
       }
       if (item.paymentStatus !== 'Paid') {
-        alert('Payment must be confirmed before the document can be released.')
+        toast.warning('Payment must be confirmed before the document can be released.')
         return
       }
       if (!item.generatedFile) {
-        alert('Upload the final release document before releasing it.')
+        toast.warning('Upload the final release document before releasing it.')
         return
       }
     }
@@ -273,14 +276,14 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
       const data = await res.json().catch(() => ({}))
 
       if (!res.ok) {
-        alert(data.error || data.message || 'Failed to update request status.')
+        toast.error(data.error || data.message || 'Failed to update request status.')
         return
       }
 
       await loadRequests()
     } catch (err) {
       console.warn('Update status error:', err)
-      alert('Unable to update this request right now.')
+      toast.error('Unable to update this request right now.')
     } finally {
       setBusyId(null)
     }
@@ -290,17 +293,17 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
     const file = releaseFiles[item.id]
 
     if (!item.matchedDocumentId) {
-      alert('Select the verified archive source record first.')
+      toast.warning('Select the verified archive source record first.')
       return
     }
 
     if (item.status !== 'Approved' && item.status !== 'Ready') {
-      alert('Approve the request before uploading the final release document.')
+      toast.warning('Approve the request before uploading the final release document.')
       return
     }
 
     if (!file) {
-      alert('Choose the final certificate/document file first.')
+      toast.warning('Choose the final certificate/document file first.')
       return
     }
 
@@ -316,7 +319,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
       const data = await res.json().catch(() => ({}))
 
       if (!res.ok) {
-        alert(data.error || data.message || 'Unable to upload the final document.')
+        toast.error(data.error || data.message || 'Unable to upload the final document.')
         return
       }
 
@@ -324,7 +327,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
       await loadRequests()
     } catch (error) {
       console.warn('Release document upload error:', error)
-      alert('Unable to upload the final document right now.')
+      toast.error('Unable to upload the final document right now.')
     } finally {
       setBusyId(null)
     }
@@ -332,16 +335,16 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
 
   const generateReleaseDocument = async (item: CertificateRequest) => {
     if (!item.matchedDocumentId) {
-      alert('Select the verified archive source record first.')
+      toast.warning('Select the verified archive source record first.')
       return
     }
 
     if (item.status !== 'Approved' && item.status !== 'Ready') {
-      alert('Approve the request before generating the final release document.')
+      toast.warning('Approve the request before generating the final release document.')
       return
     }
 
-    const confirmed = window.confirm(
+    const confirmed = await confirmAction(
       'Generate an official-form draft from the verified archive record? The draft is not released to the parishioner. Staff must review it, complete required signatures/legal fields, and upload the reviewed final document.'
     )
     if (!confirmed) return
@@ -353,13 +356,13 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        alert(data.error || data.message || 'Unable to generate the release document.')
+        toast.error(data.error || data.message || 'Unable to generate the release document.')
         return
       }
       await loadRequests()
     } catch (error) {
       console.warn('Generate release document error:', error)
-      alert('Unable to generate the release document right now.')
+      toast.error('Unable to generate the release document right now.')
     } finally {
       setBusyId(null)
     }

@@ -1,5 +1,7 @@
 'use client'
 
+import { useFeedback } from '@/components/ui/FeedbackProvider'
+
 import { useEffect, useState } from 'react'
 import { STATUS_STYLE } from '../data/ui'
 
@@ -18,6 +20,7 @@ type TranscriptionRecord = {
 }
 
 export default function TranscriptionsPage({ openMass }: { openMass: (id: number | null) => void }) {
+  const { toast } = useFeedback()
   const [transcriptions, setTranscriptions] = useState<TranscriptionRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<number | null>(null)
@@ -36,7 +39,7 @@ export default function TranscriptionsPage({ openMass }: { openMass: (id: number
       setTranscriptions(data.transcriptions || [])
     } catch (err) {
       console.warn('Load admin transcriptions error:', err)
-      alert('Cannot load transcriptions. The parish backend service is unavailable.')
+      toast.error('Cannot load transcriptions. The parish backend service is unavailable.')
       setTranscriptions([])
     } finally {
       setLoading(false)

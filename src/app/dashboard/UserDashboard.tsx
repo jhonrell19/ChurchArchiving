@@ -1,5 +1,7 @@
 'use client'
 
+import { useFeedback } from '@/components/ui/FeedbackProvider'
+
 import ParishLogo from '../components/ParishLogo'
 
 
@@ -16,6 +18,7 @@ import ProfilePage from './components/ProfilePage'
 
 import type {Service} from '@/lib/siteContent'
 export default function UserDashboard({services}:{services:Service[]}) {
+  const { toast } = useFeedback()
   useRefreshOnHistoryRestore()
   const [page, setPage] = useState<Page>('home')
   const [sidebarOpen, setSidebar] = useState(false)
@@ -27,7 +30,7 @@ export default function UserDashboard({services}:{services:Service[]}) {
       // Full navigation removes the old authenticated React/router state.
       window.location.replace('/login')
     } catch {
-      alert('Logout failed. Please try again.')
+      toast.error('Logout failed. Please try again.')
     }
   }
 

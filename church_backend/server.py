@@ -3532,6 +3532,31 @@ def api_create_mass():
 
 
         file = request.files.get("file")
+        raw_video_url = (request.form.get("videoUrl") or "").strip()
+        video_url = None
+        if raw_video_url:
+            from urllib.parse import urlsplit, parse_qs
+            if len(raw_video_url) > 400:
+                return {"error": "Video link is too long."}, 400
+            parsed = urlsplit(raw_video_url)
+            host = (parsed.hostname or "").lower()
+            if parsed.scheme != "https" or parsed.username or parsed.password or parsed.port:
+                return {"error": "Use a valid HTTPS YouTube link."}, 400
+            if host in {"youtube.com", "www.youtube.com", "m.youtube.com"}:
+                if parsed.path == "/watch":
+                    video_id = parse_qs(parsed.query).get("v", [""])[0]
+                else:
+                    route = re.fullmatch(r"/(?:live|shorts|embed)/([a-zA-Z0-9_-]{11})/?", parsed.path)
+                    video_id = route.group(1) if route else ""
+            elif host == "youtu.be":
+                video_id = parsed.path.strip("/")
+            else:
+                return {"error": "Only YouTube video links are supported."}, 400
+            if not re.fullmatch(r"[a-zA-Z0-9_-]{11}", video_id or ""):
+                return {"error": "YouTube video ID is invalid."}, 400
+            video_url = "https://www.youtube.com/watch?v=" + video_id
+        if file and video_url:
+            return {"error": "Choose either a YouTube link or an uploaded file, not both."}, 400
 
 
 
@@ -3547,7 +3572,18 @@ def api_create_mass():
 
 
 
-        if file:
+        if video_url:
+            filepath = video_url
+        elif file:
+            if os.environ.get("RENDER_SERVICE_ID") and not private_uploads.enabled():
+                return {"error": "Video uploads require private storage on Render. Paste a YouTube link instead."}, 503
+            if (file.mimetype or "").lower() not in {"video/mp4", "video/quicktime", "audio/mpeg", "audio/mp4", "audio/wav", "application/octet-stream"}:
+                return {"error": "Use an MP4, MOV, MP3, M4A or WAV recording."}, 415
+            file.stream.seek(0, os.SEEK_END)
+            media_bytes = file.stream.tell()
+            file.stream.seek(0)
+            if media_bytes <= 0 or media_bytes > 80 * 1024 * 1024:
+                return {"error": "Maximum media upload size is 80 MB. Use a YouTube link for longer recordings."}, 413
 
             relative_folder = "uploads/masses"
 
@@ -3563,7 +3599,8 @@ def api_create_mass():
 
                 return {"error": "Invalid filename"}, 400
 
-            filepath = f"{relative_folder}/{filename}"
+            from uuid import uuid4
+            filepath = f"{relative_folder}/{uuid4().hex}_{filename}"
 
             file.save(backend_storage_path(filepath))
             private_uploads.preserve(filepath, backend_storage_path(filepath))

@@ -56,6 +56,28 @@ export async function POST(req: NextRequest) {
       signal: AbortSignal.timeout(12000),
     })
     if (!upstream.ok) return response('Payment verification pending', 503)
+    // The signed webhook is NOT the source of the payment amount or owner.
+    // Flask independently verifies PayMongo and returns trusted request IDs.
+    // Never block or fail webhook acknowledgement because SMS/email is down.
+    if (process.env.PARISH_STATUS_NOTIFICATIONS === 'enabled') {
+      try {
+        const committed = await upstream.json()
+        if (committed?.ok && Number.isSafeInteger(committed.requestId) &&
+            Number.isSafeInteger(committed.requesterUserId)) {
+          const { queueRequestNotification } = await import('@/lib/statusNotifications')
+          await queueRequestNotification('payment', {
+            id: committed.requestId,
+            requesterUserId: committed.requesterUserId,
+            sacramentType: committed.sacramentType,
+            paymentStatus: committed.paymentStatus,
+            paymentMethod: committed.paymentMethod,
+            paymentReference: committed.paymentReference,
+          })
+        }
+      } catch {
+        console.warn('PAYMENT NOTICE: Payment verified, notification queue unavailable.')
+      }
+    }
     return NextResponse.json({ received: true })
   } catch {
     return response('Payment verification pending', 503)

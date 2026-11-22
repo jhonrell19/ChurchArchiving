@@ -268,6 +268,41 @@ async function forward(request: NextRequest, context: { params: Promise<{ path: 
       signal: deadline,
     })
 
+    // Post-commit notifications: ONLY the authoritative Flask response may
+    // supply the request id/owner/status. This is not client-provided input.
+    // Failure to enqueue/deliver must not change an approved request, payment,
+    // or returned HTTP status.
+    if (upstreamResponse.ok && process.env.PARISH_STATUS_NOTIFICATIONS === 'enabled') {
+      const method = request.method.toUpperCase()
+      const eventAction =
+        (path === 'api/requests' && method === 'POST') ? 'submitted' :
+        (/^api\/requests\/\d+\/status$/.test(path) && method === 'PATCH') ? 'status' :
+        (/^api\/requests\/\d+\/release-document$/.test(path) && method === 'POST') ? 'ready' :
+        (/^api\/requests\/\d+\/cash-receipt$/.test(path) && method === 'POST') ? 'payment' :
+        null
+      if (eventAction) {
+        try {
+          const result = await upstreamResponse.clone().json()
+          const snapshot = result?.request || (
+            eventAction === 'payment' && result?.ok && Number.isSafeInteger(result.requestId)
+              ? { id: result.requestId, requesterUserId: result.requesterUserId,
+                  sacramentType: result.sacramentType, paymentStatus: result.paymentStatus,
+                  paymentMethod: result.paymentMethod, paymentReference: result.paymentReference }
+              : null
+          )
+          if (snapshot && Number.isSafeInteger(snapshot.id) &&
+              snapshot.requesterUserId > 0) {
+            const { queueRequestNotification } = await import('@/lib/statusNotifications')
+            await queueRequestNotification(eventAction, snapshot)
+          }
+        } catch {
+          // Preserve the staff mutation response. The outbox is additive and
+          // a missing migration/Resend/txtBee must NEVER roll back a payment.
+          console.warn('STATUS NOTICE: Could not record the post-commit event.')
+        }
+      }
+    }
+
     const responseHeaders = new Headers()
     for (const key of [
       'content-type',

@@ -39,6 +39,26 @@ async function run() {
   global.fetch = async () => Response.json({ code: 1 }, { status: 403 })
   assert.equal((await handlers.POST(request({ action: 'send' }))).status, 502)
   assert.equal(record.otpHash, null)
-  console.log('PASS Twilio SMS acceptance, cooldown, verification and rejection')
+  // The user's phone is dual-SIM. Explicit SIM index avoids a failed TM
+  // default and permits sending from SMART (SIM 1 / index 0) for the demo.
+  record = null
+  Object.assign(process.env, {
+    PHONE_OTP_PROVIDER: 'textbee', TEXTBEE_OTP_ENABLED: 'true',
+    TEXTBEE_API_KEY: 'fixture-key', TEXTBEE_DEVICE_ID: 'fixture-phone',
+    TEXTBEE_SIM_SLOT_INDEX: '0',
+  })
+  global.fetch = async (url, opts) => {
+    assert.equal(url, 'https://api.textbee.dev/api/v1/gateway/send-sms')
+    assert.equal(opts.headers['x-api-key'], 'fixture-key')
+    const body = JSON.parse(opts.body)
+    assert.deepEqual(body.recipients, [user.phoneNumber])
+    assert.equal(body.deviceId, 'fixture-phone')
+    assert.equal(body.simSlotIndex, 0)
+    sentCode = body.message.match(/\d{6}/)[0]
+    return Response.json({ data: { success: true, smsBatchId: 'fixture-batch' } })
+  }
+  assert.equal((await handlers.POST(request({ action: 'send' }))).status, 200)
+  assert.equal((await (await handlers.POST(request({ action: 'verify', code: sentCode }))).json()).verified, true)
+  console.log('PASS Twilio and txtBee SMS provider acceptance, SIM selection, OTP cooldown and validation')
 }
 run().catch(error => { console.error(error); process.exitCode = 1 })

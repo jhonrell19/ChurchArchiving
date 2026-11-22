@@ -33,8 +33,11 @@ async function sendCode(phone: string, message: string) {
       headers: { Authorization: 'Basic ' + Buffer.from(`${sid}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64') },
     })
   }
-  const body: { recipients: string[]; message: string; deviceId?: string } = { recipients: [phone], message }
+  const body: { recipients: string[]; message: string; deviceId?: string; simSlotIndex?: number } = { recipients: [phone], message }
   if (process.env.TEXTBEE_DEVICE_ID?.trim()) body.deviceId = process.env.TEXTBEE_DEVICE_ID.trim()
+  // Dual-SIM phones can explicitly use SIM 1 (0) when SIM 2 has no SMS load.
+  const slot = process.env.TEXTBEE_SIM_SLOT_INDEX
+  if (slot && /^[0-7]$/.test(slot)) body.simSlotIndex = Number(slot)
   return fetch('https://api.textbee.dev/api/v1/gateway/send-sms', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.TEXTBEE_API_KEY! },

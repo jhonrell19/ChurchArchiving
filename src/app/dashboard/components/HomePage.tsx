@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import type { Page } from '../types'
 import MassMediaPlayer from '../../components/MassMediaPlayer'
 import TrackingDashboardCard from './TrackingDashboardCard'
+import StatusNotificationInbox from './StatusNotificationInbox'
 
 type MassRecord = {
   id: number
@@ -111,6 +112,7 @@ export default function HomePage({ setPage }: { setPage: (p: Page) => void }) {
         </div>
       </section>
       <TrackingDashboardCard onOpen={() => setPage('requests')} />
+      <StatusNotificationInbox />
     </>
   )
 

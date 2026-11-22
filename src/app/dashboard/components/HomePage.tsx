@@ -101,6 +101,7 @@ export default function HomePage({ setPage }: { setPage: (p: Page) => void }) {
   ]
 
   const desk=(
+    <>
       <section className="portal-start">
         <h2>Parishioner desk</h2>
         <div className="portal-actions">
@@ -110,6 +111,7 @@ export default function HomePage({ setPage }: { setPage: (p: Page) => void }) {
         </div>
       </section>
       <TrackingDashboardCard onOpen={() => setPage('requests')} />
+    </>
   )
 
   if (loading) {

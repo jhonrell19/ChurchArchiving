@@ -40,10 +40,16 @@ export default function NotificationOutboxControl() {
           <h3 className="text-base font-semibold text-emerald-950">SMS &amp; email notification queue</h3>
           <p className="mt-1 text-sm text-emerald-900">{pending} queued request update(s) for this office.</p>
         </div>
-        <button type="button" onClick={() => void send()} disabled={busy || pending === 0}
-          className="min-h-11 rounded-lg bg-emerald-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-          {busy ? 'Processing…' : 'Send queued updates'}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={() => void refresh()}
+            className="min-h-11 rounded-lg border border-emerald-300 bg-white px-4 py-2 text-sm font-semibold text-emerald-900">
+            Refresh queue
+          </button>
+          <button type="button" onClick={() => void send()} disabled={busy || pending === 0}
+            className="min-h-11 rounded-lg bg-emerald-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+            {busy ? 'Processing…' : 'Send queued updates'}
+          </button>
+        </div>
       </div>
       <p className="mt-2 text-xs text-emerald-900">
         Only opted-in users with verified mobile numbers receive SMS.

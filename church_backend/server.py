@@ -1978,7 +1978,6 @@ def api_upload_document():
         physical_filepath = backend_storage_path(filepath)
 
         file.save(physical_filepath)
-        private_uploads.preserve(filepath, physical_filepath)
 
         ocr_text = None
         extracted_metadata = None
@@ -1990,7 +1989,16 @@ def api_upload_document():
                     ensure_ascii=False,
                 )
             except RuntimeError as ocr_error:
-                app.logger.warning("OCR skipped for %s: %s", filename, ocr_error)
+                # Never claim OCR succeeded or upload an unreviewed document
+                # when staff specifically requested machine extraction.
+                if os.path.isfile(physical_filepath):
+                    os.remove(physical_filepath)
+                db.session.rollback()
+                app.logger.warning("OCR unavailable for %s: %s", filename, ocr_error)
+                return {"error": f"OCR unavailable: {ocr_error}. Disable OCR and enter reviewed fields manually if necessary."}, 503
+
+        # Keep the object and index durable before committing its archive row.
+        private_uploads.preserve(filepath, physical_filepath)
 
         new_document = Document(
 
@@ -2104,6 +2112,33 @@ def api_upload_document():
         app.logger.exception('Archive upload failed')
         return {'error': 'Archive upload failed; check backend logs.'}, 500
 
+
+
+@app.get("/api/archive/storage-status")
+def api_archive_storage_status():
+    denied = require_roles("ADMIN", "BURIAL_ADMIN")
+    if denied:
+        return denied
+    enabled = private_uploads.enabled()
+    if not enabled:
+        return {"durable": False, "message": "Private storage is disabled. Local Render files can disappear after restart."}, 200
+    try:
+        private_uploads.private_bucket()
+        return {"durable": True, "message": "A private bucket is accessible. Verify upload and retrieval after restart."}, 200
+    except Exception:
+        app.logger.exception("Private storage preflight failed")
+        return {"durable": False, "message": "Private storage configuration or bucket access failed."}, 503
+
+
+@app.get("/api/archive/ocr-health")
+def api_archive_ocr_health():
+    denied = require_roles("ADMIN", "BURIAL_ADMIN")
+    if denied:
+        return denied
+    available = bool(find_tesseract_executable())
+    return {"available": available,
+            "message": "OCR engine is installed." if available else
+            "Tesseract is missing. Install it on the backend host or configure TESSERACT_CMD."}, 200
 
 
 @app.route("/api/archive/stats")

@@ -5525,7 +5525,11 @@ def api_record_cash_receipt(request_id):
                                 document_id=cert.matched_document_id))
         db.session.commit()
         return {"ok": True, "requestId": request_id, "action": action,
-                "paymentStatus": cert.payment_status}, 200
+                "requesterUserId": cert.requester_user_id,
+                "sacramentType": cert.sacrament_type,
+                "paymentStatus": cert.payment_status,
+                "paymentMethod": cert.payment_method,
+                "paymentReference": cert.payment_reference}, 200
     except IntegrityError:
         db.session.rollback()
         return {"error": "Receipt reference already used or reversal already recorded."}, 409
@@ -5559,7 +5563,14 @@ def paymongo_confirm_internal():
     if len(matching) != 1:
         return {"error": "Duplicate checkout reference; manual reconciliation required"}, 409
     cert = matching[0]
-    if cert.payment_status == "Paid": return {"ok": True, "alreadyProcessed": True}, 200
+    if cert.payment_status == "Paid":
+        return {"ok": True, "alreadyProcessed": True,
+                "requestId": cert.id,
+                "requesterUserId": cert.requester_user_id,
+                "sacramentType": cert.sacrament_type,
+                "paymentStatus": cert.payment_status,
+                "paymentMethod": cert.payment_method,
+                "paymentReference": cert.payment_reference}, 200
     if cert.status not in {"Approved", "Ready"}: return {"error": "Request not approved"}, 409
     try:
         # Independently query PayMongo; do not trust webhook client fields for amount.
@@ -5608,7 +5619,12 @@ def paymongo_confirm_internal():
         cert.paid_at = datetime.utcnow()
         db.session.add(AuditLog(user="PAYMONGO_WEBHOOK", action=f"Verified PayMongo {pay_mode} payment for certificate #{cert.id}", document_id=cert.matched_document_id))
         db.session.commit()
-        return {"ok": True}, 200
+        return {"ok": True, "requestId": cert.id,
+                "requesterUserId": cert.requester_user_id,
+                "sacramentType": cert.sacrament_type,
+                "paymentStatus": cert.payment_status,
+                "paymentMethod": cert.payment_method,
+                "paymentReference": cert.payment_reference}, 200
     except Exception:
         db.session.rollback()
         app.logger.exception("PayMongo webhook verification failed")

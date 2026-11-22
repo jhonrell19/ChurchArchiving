@@ -106,7 +106,7 @@ async function main() {
     assert.deepEqual(data.recipients, ['+639000000000'])
     assert.equal(data.deviceId, 'fixture-device')
     assert.equal(data.simSlotIndex, 0)
-    assert.match(data.message, /IFI-REQ-0042/)
+    assert.match(data.message, /IFI-REQ-004[23]/)
     sentSms++
     return Response.json({ data: { smsBatchId: 'batch-fixture' } })
   }

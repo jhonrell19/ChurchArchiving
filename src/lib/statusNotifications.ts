@@ -153,10 +153,12 @@ async function dispatchChannel(id: number, office: string, channel: Channel) {
       await prisma.notificationEvent.update({ where: { id }, data: { smsState: 'rejected' } })
       return false
     }
-    const payload: { recipients: string[]; message: string; deviceId?: string } = {
+    const payload: { recipients: string[]; message: string; deviceId?: string; simSlotIndex?: number } = {
       recipients: [phone!], message: record.message,
     }
     if (process.env.TEXTBEE_DEVICE_ID?.trim()) payload.deviceId = process.env.TEXTBEE_DEVICE_ID.trim()
+    const slot = process.env.TEXTBEE_SIM_SLOT_INDEX
+    if (slot && /^[0-7]$/.test(slot)) payload.simSlotIndex = Number(slot)
     const res = await fetch('https://api.textbee.dev/api/v1/gateway/send-sms', {
       method: 'POST', cache: 'no-store',
       headers: { 'x-api-key': process.env.TEXTBEE_API_KEY.trim(), 'Content-Type': 'application/json' },

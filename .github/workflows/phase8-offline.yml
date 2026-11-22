@@ -49,5 +49,6 @@ jobs:
         run: |
           node tests/test_phase8_paymongo_webhook.cjs
           node tests/test_sms_provider.cjs
+          node tests/test_status_notifications.cjs
       - name: HTTP E2E stays disabled without isolated clone approval
         run: python -m pytest -q e2e

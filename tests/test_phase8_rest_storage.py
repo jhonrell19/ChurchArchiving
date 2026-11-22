@@ -62,10 +62,11 @@ class RESTStorageTests(unittest.TestCase):
             ):
                 m._rest_upload("smart-parish-private", "parish/"+digest, p, digest)
                 self.assertIn("/storage/v1/object/smart-parish-private/parish/", post.call_args.args[0])
-            with patch.object(m.requests, "post", return_value=SimpleNamespace(status_code=409)), patch.object(
-                m.requests, "get", return_value=Download(b"fictional")
-            ):
-                m._rest_upload("smart-parish-private", "parish/"+digest, p, digest)
+            for already_exists_status in (400, 409):
+                with patch.object(m.requests, "post", return_value=SimpleNamespace(status_code=already_exists_status)), patch.object(
+                    m.requests, "get", return_value=Download(b"fictional")
+                ):
+                    m._rest_upload("smart-parish-private", "parish/"+digest, p, digest)
 
     def test_wrong_remote_bytes_rejected(self):
         with tempfile.TemporaryDirectory() as d:

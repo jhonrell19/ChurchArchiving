@@ -5364,9 +5364,16 @@ def paymongo_confirm_internal():
         return {"error": "PayMongo not configured"}, 503
     if data.get('mode') != pay_mode:
         return {"error": "Mode mismatch"}, 409
-    if not session_id.startswith("cs_"): return {"error": "Invalid checkout reference"}, 400
-    cert = CertificateRequest.query.filter_by(payment_reference=session_id).first()
-    if not cert: return {"error": "Unknown checkout session"}, 404
+    if not re.fullmatch(r"cs_[A-Za-z0-9_-]{1,128}", session_id):
+        return {"error": "Invalid checkout reference"}, 400
+    # Lock the request until its ledger insert and payment status commit together.
+    # Refuse ambiguous checkout IDs instead of crediting an arbitrary request.
+    matching = CertificateRequest.query.filter_by(payment_reference=session_id).with_for_update().limit(2).all()
+    if not matching:
+        return {"error": "Unknown checkout session"}, 404
+    if len(matching) != 1:
+        return {"error": "Duplicate checkout reference; manual reconciliation required"}, 409
+    cert = matching[0]
     if cert.payment_status == "Paid": return {"ok": True, "alreadyProcessed": True}, 200
     if cert.status not in {"Approved", "Ready"}: return {"error": "Request not approved"}, 409
     try:

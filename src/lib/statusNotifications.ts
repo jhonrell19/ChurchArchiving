@@ -15,7 +15,7 @@ export type NotificationSnapshot = {
   paymentReference?: string | null
   generatedFile?: string | null
 }
-export type NotificationAction = 'submitted' | 'status' | 'ready' | 'payment'
+export type NotificationAction = 'submitted' | 'status' | 'ready' | 'payment' | 'cancelled'
 export function notificationFeatureEnabled() {
   return process.env.PARISH_STATUS_NOTIFICATIONS === 'enabled'
 }
@@ -24,6 +24,8 @@ export function deriveEvent(action: NotificationAction, req: NotificationSnapsho
   const code = 'IFI-REQ-' + String(req.id).padStart(4, '0')
   if (action === 'submitted' && req.status === 'Pending')
     return { kind: 'submitted', text: 'Smart Parish: ' + code + ' was submitted. Log in to track staff verification and payment.' }
+  if (action === 'cancelled' && req.status === 'Cancelled')
+    return { kind:'cancelled', text:'Smart Parish: '+code+' has been cancelled. Your request history remains available in the portal.' }
   if (action === 'status') {
     if (req.status === 'Approved')
       return { kind: 'approved', text: 'Smart Parish: ' + code + ' was approved by staff. Log in for payment and preparation details.' }

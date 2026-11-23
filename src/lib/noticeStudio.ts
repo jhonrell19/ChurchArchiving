@@ -162,3 +162,21 @@ export async function publicNotices(limit=15){
   `
   return formatNotices(rows,media)
 }
+
+export function parseNotice(data:any){
+  if(!data||typeof data!=='object')return null
+  const title=typeof data.title==='string'?data.title.trim():''
+  const body=typeof data.body==='string'?data.body.trim():''
+  const category=typeof data.category==='string'?data.category:'Event'
+  const starts=data.starts
+  const ends=data.ends
+  const date=data.date||null
+  const priority=Number(data.priority||0)
+  if(!title||title.length>180||!body||body.length>2000||!categories.includes(category)||
+     !isISODate(starts)||!isISODate(ends)||starts>ends||(date!==null&&!isISODate(date))||
+     !Number.isSafeInteger(priority)||priority< -100||priority>100)return null
+  const startDate=new Date(starts+'T12:00:00Z')
+  const endDate=new Date(ends+'T12:00:00Z')
+  if(endDate.getTime()-startDate.getTime()>366*86400000)return null
+  return {title,body,category,starts,ends,date,priority}
+}

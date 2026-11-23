@@ -3,7 +3,6 @@ export type AdminPage =
   | 'archives'
   | 'transcriptions'
   | 'requests'
-  | 'urgent-requests'
   | 'masses'
   | 'announcements'
   | 'settings'

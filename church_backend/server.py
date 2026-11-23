@@ -2536,11 +2536,9 @@ def api_create_request():
         record_date_hint = (data.get("recordDateHint") or "").strip()[:100] or None
         record_details = (data.get("recordDetails") or "").strip()[:500] or None
 
-        is_urgent = (
-
-            data.get("isUrgent") is True
-
-        )
+        if data.get("isUrgent") is True:
+            return {"error": "Urgent processing has been discontinued. Submit a regular request."}, 400
+        is_urgent = False
 
 
 

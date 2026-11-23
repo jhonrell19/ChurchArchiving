@@ -7,7 +7,6 @@ import { useState } from 'react'
 import { useRefreshOnHistoryRestore } from '@/hooks/useRefreshOnHistoryRestore'
 
 import RequestsPage from '../admin/components/RequestsPage'
-import RecycleBinPage from '../admin/components/RecycleBinPage'
 import BurialArchivesPage from './components/BurialArchivesPage'
 import BurialDashboardPage from './components/BurialDashboardPage'
 import BurialRecordsPage from './components/BurialRecordsPage'
@@ -23,7 +22,6 @@ type BurialPage =
   | 'burials'
   | 'requests'
   | 'archives'
-  | 'recycle'
 
 const NAV: { id: BurialPage; label: string; icon: string }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: 'ti-layout-dashboard' },
@@ -33,7 +31,6 @@ const NAV: { id: BurialPage; label: string; icon: string }[] = [
   { id: 'burials', label: 'Burial Records', icon: 'ti-cross' },
   { id: 'requests', label: 'Document Requests', icon: 'ti-inbox' },
   { id: 'archives', label: 'Legacy Archives', icon: 'ti-archive' },
-  { id: 'recycle', label: 'Recycle Bin', icon: 'ti-trash' },
 ]
 
 export default function BurialAdminPage() {
@@ -143,7 +140,6 @@ export default function BurialAdminPage() {
           {page === 'burials' && <BurialRecordsPage />}
           {page === 'requests' && <RequestsPage office="burial" />}
           {page === 'archives' && <BurialArchivesPage />}
-          {page === 'recycle' && <RecycleBinPage scope="burial" />}
         </main>
       </div>
     </div>

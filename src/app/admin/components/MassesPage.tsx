@@ -50,6 +50,62 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
     summaryText: string
   }>>({})
 
+  const [cloudRecording, setCloudRecording] = useState<Record<number, File | null>>({})
+  const [cloudAuthorized, setCloudAuthorized] = useState<Record<number, boolean>>({})
+  const [cloudBusy, setCloudBusy] = useState<number | null>(null)
+
+  const transcribeInWebsite = async (massId: number) => {
+    const recording = cloudRecording[massId]
+    if (!recording) {
+      toast.warning('Select a recorded Mass audio or video file.')
+      return
+    }
+    if (recording.size > 23 * 1024 * 1024) {
+      toast.warning('First release supports files smaller than 23 MB. Larger Masses need chunked processing.')
+      return
+    }
+    if (!cloudAuthorized[massId]) {
+      toast.warning('Confirm that the parish is authorized to send this recording to the external AI provider.')
+      return
+    }
+    if (cloudBusy !== null) return
+    setCloudBusy(massId)
+    try {
+      const body = new FormData()
+      body.append('recording', recording)
+      body.append('authorized', 'yes')
+      const response = await fetch('/api/admin/masses/' + massId + '/transcribe', {
+        method: 'POST', body, cache: 'no-store',
+      })
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        toast.error(result.error || 'Cloud transcription failed.')
+        return
+      }
+      if (typeof result.transcriptText !== 'string' || !result.transcriptText.trim()) {
+        toast.error('No transcription was returned.')
+        return
+      }
+      setTranscriptionForm(prev => ({
+        ...prev,
+        [massId]: {
+          transcriptText: result.transcriptText,
+          summaryText: typeof result.summaryText === 'string' && result.summaryText.trim()
+            ? result.summaryText : '',
+        },
+      }))
+      if (result.summaryGenerated) {
+        toast.success('Cloud transcript and AI summary prepared. Review both before saving.')
+      } else {
+        toast.warning('Cloud transcript prepared. Enter your summary before saving.')
+      }
+    } catch {
+      toast.error('Could not reach the cloud transcription service.')
+    } finally {
+      setCloudBusy(null)
+    }
+  }
+
   const loadMasses = async () => {
     try {
       setLoading(true)
@@ -525,29 +581,52 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
 
                     {expanded === m.id && (
                       <div className="mt-4 bg-emerald-50 border border-emerald-100 rounded-xl p-4">
-                        <p className="mb-3 text-sm text-emerald-950">
-                          Run the <strong>original-language transcription assistant</strong> on the parish PC.
-                          Select <strong>Auto - Tagalog + English</strong> for mixed-language sermons, or
-                          <strong> Tagalog-dominant</strong> if the homily is mostly Tagalog.
-                          It produces a full speech transcript (NOT an English translation) and a separate extractive summary.
-                        </p>
-                        <p className="mb-3 text-sm text-slate-700">
-                          Choose a local MP4, MP3, WAV, or recorded mixer audio file, not a YouTube URL.
-                          A YouTube Mass link can be displayed on the website, but the local assistant needs
-                          a recording file that you are authorized to process.
-                        </p>
-                        <a className="underline font-semibold text-emerald-900"
-                          href="/mass_transcription_assistant.py" download>
-                          Download updated parish PC transcription assistant (.py)
-                        </a>
-                        <p className="mt-3 text-sm text-slate-700">
-                          First-time Windows setup (Python 3.11):
-                          <code className="mt-1 block rounded-lg bg-white p-3 text-xs break-all select-all">
-                            py -3.11 -m pip install faster-whisper==1.2.1 av==14.2.0
-                          </code>
-                          Then run the downloaded .py file, select the recording and language,
-                          import its JSON draft here, verify words against the source, and save.
-                        </p>
+                        <div className="rounded-xl border border-emerald-300 bg-white p-4 space-y-3">
+                          <h3 className="text-lg font-semibold text-emerald-950">Transcribe directly in Smart Parish</h3>
+                          <p className="text-sm text-slate-700">
+                            Upload a recording and create a <strong>review-only draft</strong> using hosted multilingual Whisper.
+                            The site does not run Whisper itself, and you do not need to install Python.
+                            Tagalog and English are transcribed in their recognized spoken language; review errors before publishing.
+                          </p>
+                          <label className="block text-sm font-semibold text-slate-800">
+                            Mass recording (up to 23 MB)
+                            <input
+                              type="file"
+                              accept=".mp3,.m4a,.wav,.mp4,.flac,.ogg,.webm,.mpeg,.mpga,audio/*,video/mp4"
+                              className="mt-2 block w-full text-base"
+                              disabled={cloudBusy !== null}
+                              onChange={event => setCloudRecording(prev => ({
+                                ...prev,
+                                [m.id]: event.target.files?.[0] ?? null,
+                              }))}
+                            />
+                          </label>
+                          <label className="flex items-start gap-2 text-sm text-slate-700">
+                            <input
+                              type="checkbox"
+                              className="mt-1"
+                              checked={cloudAuthorized[m.id] || false}
+                              disabled={cloudBusy !== null}
+                              onChange={event => setCloudAuthorized(prev => ({ ...prev, [m.id]: event.target.checked }))}
+                            />
+                            <span>I confirm the parish is authorized to send this recording to an external AI provider for transcription and summarization.</span>
+                          </label>
+                          <div className="flex flex-wrap items-center gap-3">
+                            <button type="button"
+                              disabled={cloudBusy !== null || !cloudRecording[m.id] || !cloudAuthorized[m.id]}
+                              onClick={() => void transcribeInWebsite(m.id)}
+                              className="min-h-11 rounded-lg bg-emerald-900 px-4 py-2 font-semibold text-white disabled:opacity-50">
+                              {cloudBusy === m.id ? 'Transcribing in the cloud…' : 'Transcribe Mass in Website'}
+                            </button>
+                            <span className="text-xs text-slate-600">
+                              First release: keep this page open while processing. Long recordings need the next queued/chunked upgrade.
+                            </span>
+                          </div>
+                        </div>
+                        <details className="mt-4 rounded-lg border border-slate-200 bg-white p-3">
+                          <summary className="cursor-pointer text-sm font-semibold text-slate-700">
+                            Optional: import an existing transcript JSON draft
+                          </summary>
                         <label className="my-4 block font-semibold">Import local transcription draft
                           <input type="file" accept=".json,application/json" className="block" onChange={async event=>{
                             const file=event.target.files?.[0]; event.target.value=''
@@ -560,6 +639,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
                             } catch { toast.warning('Choose a valid local transcript JSON draft.') }
                           }}/>
                         </label>
+                        </details>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
                             <label className="block font-display text-xs tracking-widest uppercase text-slate-600 mb-1">

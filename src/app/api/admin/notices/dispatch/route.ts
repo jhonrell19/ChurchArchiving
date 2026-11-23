@@ -2,6 +2,7 @@ import {NextResponse} from 'next/server'
 import {getCurrentUser} from '@/lib/auth'
 import {prisma} from '@/lib/prisma'
 import {isSupervisor} from '@/lib/portalConfig'
+import {noticeMutationIsSameOrigin} from '@/lib/noticeStudio'
 import {flushPendingNotifications,notificationFeatureEnabled} from '@/lib/statusNotifications'
 export const runtime='nodejs'
 const json=(d:object,status=200)=>NextResponse.json(d,{status,headers:{'Cache-Control':'no-store'}})
@@ -19,8 +20,9 @@ export async function GET(){
     return json({enabled:true,pending})
   }catch{return json({message:'Announcement delivery queue not configured.'},503)}
 }
-export async function POST(){
+export async function POST(req:Request){
   if(!await allowed())return json({message:'Super Admin required'},403)
+  if(!noticeMutationIsSameOrigin(req))return json({message:'Invalid request origin'},403)
   if(!notificationFeatureEnabled())return json({message:'Notification outbox is disabled'},503)
   try{
     const result=await flushPendingNotifications('public',5)

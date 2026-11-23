@@ -34,7 +34,7 @@ export default function DeceasedRecords() {
         <input className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 px-3 text-base" value={search}
           onChange={event => setSearch(event.target.value)} maxLength={100} />
       </label>
-      <button type="submit" className="self-end rounded-lg bg-emerald-900 px-5 py-3 text-white">Search records</button>
+      <button type="submit" className="self-end rounded-lg bg-navy px-5 py-3 text-white">Search records</button>
     </form>
     {error && <p role="alert" className="rounded-lg bg-red-50 p-4 text-red-800">{error}</p>}
     {loading ? <p>Loading burial records…</p> : <div className="space-y-4">
@@ -47,7 +47,7 @@ export default function DeceasedRecords() {
             ['Burial permit', record.burialPermitFile],
             ['Authorization', record.authorizationFile],
           ] as const).map(([name, path]) => fileUrl(path) &&
-            <a key={name} className="text-emerald-800 underline" target="_blank" rel="noopener noreferrer" href={fileUrl(path)!}>{name}</a>)}
+            <a key={name} className="text-navy-mid underline" target="_blank" rel="noopener noreferrer" href={fileUrl(path)!}>{name}</a>)}
         </div>
       </article>)}
       {!records.length && <p>No matching deceased records found.</p>}

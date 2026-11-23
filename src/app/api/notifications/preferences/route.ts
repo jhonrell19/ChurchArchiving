@@ -25,6 +25,8 @@ export async function GET() {
     return json({
       enabled: true,
       emailUpdates: settings?.emailUpdates ?? true,
+      announcementEmail: settings?.announcementEmail ?? false,
+      announcementSms: settings?.announcementSms ?? false,
       smsUpdates: settings?.smsUpdates ?? false,
       phoneVerified,
       phoneEnding: user.phoneNumber?.slice(-4) || '',
@@ -41,8 +43,10 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => null)
   if (!body || typeof body.smsUpdates !== 'boolean' || typeof body.emailUpdates !== 'boolean')
     return json({ message: 'Specify both SMS and email preferences.' }, 400)
+  if (typeof body.announcementEmail !== 'boolean' || typeof body.announcementSms !== 'boolean')
+    return json({ message: 'Specify announcement email and SMS preferences too.' }, 400)
   try {
-    if (body.smsUpdates) {
+    if (body.smsUpdates || body.announcementSms) {
       const verification = await prisma.phoneVerification.findUnique({ where: { userId: user.id } })
       if (!user.phoneNumber || !/^\+639\d{9}$/.test(user.phoneNumber) ||
           !verification?.verifiedAt || verification.phoneNumber !== user.phoneNumber)
@@ -50,10 +54,13 @@ export async function POST(req: Request) {
     }
     await prisma.notificationPreference.upsert({
       where: { userId: user.id },
-      create: { userId: user.id, smsUpdates: body.smsUpdates, emailUpdates: body.emailUpdates },
-      update: { smsUpdates: body.smsUpdates, emailUpdates: body.emailUpdates },
+      create: { userId: user.id, smsUpdates: body.smsUpdates, emailUpdates: body.emailUpdates,
+        announcementEmail: body.announcementEmail, announcementSms: body.announcementSms },
+      update: { smsUpdates: body.smsUpdates, emailUpdates: body.emailUpdates,
+        announcementEmail: body.announcementEmail, announcementSms: body.announcementSms },
     })
-    return json({ saved: true, smsUpdates: body.smsUpdates, emailUpdates: body.emailUpdates })
+    return json({ saved: true, smsUpdates: body.smsUpdates, emailUpdates: body.emailUpdates,
+      announcementEmail: body.announcementEmail, announcementSms: body.announcementSms })
   } catch {
     return json({ message: 'Unable to save notification preferences.' }, 503)
   }

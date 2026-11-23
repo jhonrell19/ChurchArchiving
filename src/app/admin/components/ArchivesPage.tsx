@@ -359,33 +359,6 @@ const selectScannedFile = (selected: File | null) => {
   if (selected && runOcr) void previewOcr(selected)
 }
 
-const deleteDocument = async (id: number) => {
-  const confirmDelete = await confirmAction('Move this document to Recycle Bin?')
-
-  if (!confirmDelete) {
-    return
-  }
-
-  try {
-    const res = await fetch(`/api/backend/api/archive/documents/${id}/delete`, {
-      method: 'PATCH',
-    })
-
-    const data = await res.json()
-
-    if (!res.ok) {
-      toast.error(data.error || 'Failed to delete document.')
-      return
-    }
-
-    toast.success('Document moved to Recycle Bin.')
-    await loadDocuments()
-  } catch (err) {
-    console.warn('Delete document error:', err)
-    toast.error('Failed to delete document. The parish backend service is unavailable.')
-  }
-}
-
 const makeFilledTemplatePrimary = async (record: ArchiveDocument) => {
   if (!await confirmAction(`Convert ${record.personName}'s existing archive to use the filled IFI template PDF as its primary document? The scanned original will be preserved.`)) return
   try {
@@ -826,13 +799,6 @@ const records = documents
                         <i className="ti ti-download text-[14px]" />
                       </a>
 
-                    <button
-  onClick={() => deleteDocument(record.id)}
-  className="p-1.5 rounded-lg border border-red-200 text-red-500 bg-red-50"
-  title="Move to Recycle Bin"
->
-  <i className="ti ti-trash text-[14px]" />
-</button>
                     </div>
                   </td>
                 </tr>

@@ -40,7 +40,7 @@ function PublicNavigation({ pathname }: { pathname: string }) {
         const payload: { user?: { role?: string } } = await response.json()
         const href = payload.user?.role === 'ADMIN' ? '/admin'
           : ['STAFF', 'BURIAL_ADMIN'].includes(payload.user?.role || '') ? '/staff'
-          : payload.user?.role === 'USER' ? '/dashboard' : '/login'
+          : payload.user?.role === 'USER' ? '/dashboard' : '/#parish-access'
         if (active) setAccountLink({ href, label: href === '/#parish-access' ? 'Log in' : 'Dashboard' })
       } catch {
         if (active) setAccountLink({ href: '/#parish-access', label: 'Log in' })

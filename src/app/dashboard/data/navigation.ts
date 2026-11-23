@@ -1,10 +1,9 @@
 import type { Page } from '../types'
-
 export const USER_NAV: { id: Page; label: string; icon: string }[] = [
-  { id: 'home', label: 'Dashboard', icon: 'ti-layout-dashboard' },
-  { id: 'archives', label: 'Mass Archives', icon: 'ti-video' },
-  { id: 'transcriptions', label: 'Transcribed Mass', icon: 'ti-file-text' },
-  { id: 'requests', label: 'My Requests', icon: 'ti-file-plus' },
-  { id: 'announcements', label: 'Calendar and notices', icon: 'ti-bell' },
-  { id: 'profile', label: 'My Profile', icon: 'ti-user' },
+  { id: 'home', label: 'Home', icon: 'ti-home' },
+  { id: 'requests', label: 'My certificate requests', icon: 'ti-file-certificate' },
+  { id: 'announcements', label: 'Mass schedules & notices', icon: 'ti-calendar' },
+  { id: 'archives', label: 'Watch recorded Mass', icon: 'ti-video' },
+  { id: 'transcriptions', label: 'Read Mass transcripts', icon: 'ti-file-text' },
+  { id: 'profile', label: 'My account', icon: 'ti-user' },
 ]

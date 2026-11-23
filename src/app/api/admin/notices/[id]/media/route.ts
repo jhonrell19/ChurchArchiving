@@ -1,4 +1,5 @@
 import { NextRequest,NextResponse } from 'next/server'
+import sharp from 'sharp'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { isSupervisor } from '@/lib/portalConfig'
@@ -26,6 +27,16 @@ export async function POST(req:NextRequest,ctx:Context) {
   try{
     buffer=Buffer.from(await uploaded.arrayBuffer())
     result=inspectMedia(buffer,uploaded.type)
+    if(result.kind==='image'){
+      // Decode real pixels, strip EXIF/location metadata and compress for web.
+      buffer=await sharp(buffer,{limitInputPixels:24_000_000,failOn:'error'})
+        .rotate()
+        .resize({width:1920,height:1080,fit:'inside',withoutEnlargement:true})
+        .webp({quality:80,effort:4})
+        .toBuffer()
+      if(buffer.length>5*1024*1024)throw Error('Compressed image exceeds the 5 MB limit.')
+      result={...result,mime:'image/webp'}
+    }
   }catch(err){return json({message:err instanceof Error?err.message:'Invalid media content.'},400)}
   const seconds=Number(form.get('displaySeconds')||8)
   if(!Number.isSafeInteger(seconds)||seconds<5||seconds>30)

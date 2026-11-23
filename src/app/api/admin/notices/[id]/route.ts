@@ -2,8 +2,7 @@ import { NextRequest,NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { isSupervisor } from '@/lib/portalConfig'
-import { removeObject } from '@/lib/noticeStudio'
-import { parseNotice } from '../route'
+import { removeObject,parseNotice } from '@/lib/noticeStudio'
 
 export const runtime='nodejs'
 type Context={params:Promise<{id:string}>}

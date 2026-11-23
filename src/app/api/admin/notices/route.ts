@@ -2,6 +2,7 @@ import { NextRequest,NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { isSupervisor } from '@/lib/portalConfig'
+import {noticeMutationIsSameOrigin} from '@/lib/noticeStudio'
 import { formatNotices,parseNotice,studioConfigured,type MediaRow,type NoticeRow } from '@/lib/noticeStudio'
 
 export const runtime='nodejs'
@@ -34,6 +35,7 @@ export async function GET(){
 export async function POST(req:NextRequest){
   const actor=await getCurrentUser()
   if(!isSupervisor(actor))return json({message:'Super Admin required'},403)
+  if(!noticeMutationIsSameOrigin(req))return json({message:'Invalid request origin'},403)
   const parsed=parseNotice(await req.json().catch(()=>null))
   if(!parsed)return json({message:'Enter a title, body, publication start/end, and a valid event date. Maximum publication period: 366 days.'},400)
   try{

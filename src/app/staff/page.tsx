@@ -47,6 +47,7 @@ export default function StaffPage() {
           <button onClick={() => setSection('archives')} className="min-h-32 rounded-xl border bg-white p-5 text-left text-lg font-semibold hover:border-emerald-700">Browse all archives</button>
           <button onClick={() => setSection('requests')} className="min-h-32 rounded-xl border bg-white p-5 text-left text-lg font-semibold hover:border-emerald-700">Process certificate requests</button>
         </div>
+        <a href="/office-reports" className="inline-block rounded-lg border px-4 py-3 font-semibold text-emerald-900">Certificate reports</a>
         <p className="text-sm text-slate-600">Mass transcription, announcements, staff administration, system settings and fees belong to Super Admin.</p>
       </div>}
       {section === 'archives' && <ArchivesPage />}

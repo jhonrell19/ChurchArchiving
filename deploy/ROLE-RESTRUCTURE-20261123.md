@@ -1,6 +1,6 @@
 # Smart Parish — Super Admin / Church Staff / Parishioner role migration
 
-Status: DESIGN SPECIFICATION ONLY. Do not deploy or execute a database migration from this document alone.
+Status: CODE IMPLEMENTATION IN DRAFT PR. NOT DEPLOYED. Do not run migrations or merge without completing acceptance checks.
 Base: staging after PR #24 (ee100640be111e2088e06eba3e88042aff9f4cae).
 Objective: replace the legacy Burial Admin role with a general document-only Church Staff role, consolidate all document types and request workflows under Staff, and make Super Admin the site supervisor plus Mass/AI/announcement owner.
 
@@ -37,3 +37,31 @@ H. Rollout: apply tested additive migration before deploying compatible backend 
 
 ## Acceptance scenario
 Super Admin logs in with MFA, creates/activates Staff and changes settings. Staff logs in with MFA, opens a single Archives screen to find a baptismal and a burial document, receives a parishioner's certificate request, verifies the source, prepares/reviews a final document, and releases only after legitimate payment confirmation. Parishioner sees the timeline and authorized download. Super Admin can still manage Mass transcription, announcements and staff, while Staff is forbidden from those endpoints.
+
+## Implementation update on this draft branch
+
+The account and document-role code is implemented in this branch, but has **not been merged, deployed, or tested against the live database**. Existing deployed `staging` remains separate.
+
+- Prisma: `STAFF` enum value and `accountEnabled` status.
+- Super Admin: `/admin/staff` invitation / enable / disable. Requires `PARISH_SUPER_ADMIN_ID` and configured Resend. The invitation link uses the existing one-hour password-reset token; using it verifies the new STAFF email address. Authenticator MFA is required at first staff login. Disabling revokes staff sessions and pending MFA challenges.
+- Staff: `/staff` for all standard archive categories, a unified request queue, cash receipts (only when explicitly enabled), notification outbox for both historical scopes, document reporting, and read-only historical deceased records.
+- Next.js proxy and Flask: document mutations are staff-only; Super Admin has archive read/oversight and protected recovery actions. STAFF is blocked from Mass, announcement mutations, fee editing, staff management, and cemetery financial/slot operations.
+- Legacy `/burial-admin` bookmarks redirect to `/staff`. The old enum value stays temporarily for compatibility while its account is converted.
+
+### Required sequence (do not skip)
+
+1. Keep this PR unmerged while validation runs. Ensure PostgreSQL + four private Storage files are backed up. Stop live write traffic during cutover.
+2. In Supabase SQL Editor, review and run **`deploy/migrations/20261123_add_staff_role.sql`**. It is additive and does NOT convert any users. Verify the new `accountEnabled` column and enum value.
+3. On Render `ifimarag`, set **`PARISH_SUPER_ADMIN_ID`** to the existing, verified Main Admin numeric user ID (not an email): read it with a private, read-only SQL query like `SELECT id,email,role FROM parish_auth."User" WHERE role='ADMIN';`. Do not post account details publicly. Keep existing `STAFF_MFA_ENCRYPTION_KEY`, `RESEND_API_KEY`, and other secrets unchanged.
+4. After passing CI and functional tests, merge into `staging` and deploy the **same approved commit** to both `smart-parish-api` and `ifimarag`. Confirm `/api/ready` and successful Super Admin MFA login.
+5. After the compatible code is deployed, **review and run `deploy/migrations/20261123_convert_burial_admin_to_staff.sql`** once. It preserves IDs and MFA data, invalidates sessions, and changes the old Burial Admin to STAFF. Have the member sign back in with MFA.
+6. From `/admin/staff`, confirm the migrated STAFF user is active; invite a second fictional staff account through an email inbox you control, set password, enroll MFA. Confirm disable/enable revokes sessions.
+7. As Staff, retrieve a fictional baptismal and ownership record, submit a fictional archive scan, select a matching record for a certificate request, and demonstrate request status transitions with payment safeguards. Test legacy deceased records read-only. As Staff, attempt restricted API paths and confirm 403. As Super Admin, verify site editing, membership approvals, Mass transcription and announcements still work. As Parishioner, verify request ownership checks.
+8. Do not remove the legacy enum label or drop old cemetery tables in this release. After verified stable operation, plan separate cleanup and restore rehearsal.
+
+### Explicit limitations before evaluation
+
+- No true automatic cloud transcription: the local assistant is still used; a separate worker/queue project is required for browser-triggered transcription.
+- Historical deceased records are read-only for STAFF because creating a cemetery burial currently requires choosing a cemetery slot, which is outside the new document-only mandate. Historical data is preserved.
+- New `burial` archive uploads remain disallowed by existing safety rules; existing burial archives can be viewed. New document uploads should use the appropriate ownership or land agreement category.
+- Reports and notification delivery require their existing feature flags, database tables, and configured providers. A PayMongo sandbox payment must not bypass production certificate release restrictions.

@@ -5,11 +5,13 @@ import { useFeedback } from '@/components/ui/FeedbackProvider'
 import { useRefreshOnHistoryRestore } from '@/hooks/useRefreshOnHistoryRestore'
 import ArchivesPage from '../admin/components/ArchivesPage'
 import RequestsPage from '../admin/components/RequestsPage'
+import DeceasedRecords from './components/DeceasedRecords'
 
-type Section = 'dashboard' | 'archives' | 'requests'
+type Section = 'dashboard' | 'archives' | 'requests' | 'deceased'
 const links: { page: Section, label: string, icon: string }[] = [
   { page: 'dashboard', label: 'Staff Dashboard', icon: 'ti-layout-dashboard' },
   { page: 'archives', label: 'All Document Archives', icon: 'ti-archive' },
+  { page: 'deceased', label: 'Deceased Records', icon: 'ti-cross' },
   { page: 'requests', label: 'Certificate Requests', icon: 'ti-inbox' },
 ]
 
@@ -48,6 +50,7 @@ export default function StaffPage() {
         <p className="text-sm text-slate-600">Mass transcription, announcements, staff administration, system settings and fees belong to Super Admin.</p>
       </div>}
       {section === 'archives' && <ArchivesPage />}
+      {section === 'deceased' && <DeceasedRecords />}
       {section === 'requests' && <RequestsPage />}
     </main>
   </div>

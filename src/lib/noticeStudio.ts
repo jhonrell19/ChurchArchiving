@@ -181,3 +181,11 @@ export function parseNotice(data:any){
   if(endDate.getTime()-startDate.getTime()>366*86400000)return null
   return {title,body,category,starts,ends,date,priority}
 }
+
+/** Explicit origin protection for cookie-authenticated notice mutations. */
+export function noticeMutationIsSameOrigin(req:Request){
+  const origin=req.headers.get('origin')
+  const configured=process.env.APP_BASE_URL?.replace(/\/$/,'')
+  const expected=process.env.NODE_ENV==='production' ? configured : new URL(req.url).origin
+  return Boolean(origin&&expected&&origin===expected)
+}

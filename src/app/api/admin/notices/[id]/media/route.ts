@@ -2,7 +2,7 @@ import { NextRequest,NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { isSupervisor } from '@/lib/portalConfig'
-import { inspectMedia,newObjectPath,removeObject,studioConfigured,uploadObject } from '@/lib/noticeStudio'
+import {noticeMutationIsSameOrigin,inspectMedia,newObjectPath,removeObject,studioConfigured,uploadObject } from '@/lib/noticeStudio'
 
 export const runtime='nodejs'
 type Context={params:Promise<{id:string}>}
@@ -10,6 +10,7 @@ const json=(d:object,status=200)=>NextResponse.json(d,{status,headers:{'Cache-Co
 export async function POST(req:NextRequest,ctx:Context) {
   const actor=await getCurrentUser()
   if(!isSupervisor(actor))return json({message:'Super Admin required'},403)
+  if(!noticeMutationIsSameOrigin(req))return json({message:'Invalid request origin'},403)
   const id=Number((await ctx.params).id)
   if(!Number.isSafeInteger(id)||id<=0)return json({message:'Invalid announcement'},400)
   if(!studioConfigured())return json({message:'Configure the private announcement storage on the web service.'},503)

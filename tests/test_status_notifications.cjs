@@ -10,6 +10,9 @@ let phoneVerified = true
 let smsOptIn = true
 let emailOptIn = true
 let userApproved = true
+let announcementEmail = false
+let announcementSms = false
+let activeNotice = true
 let sentSms = 0
 let sentEmail = 0
 const user = () => ({
@@ -17,9 +20,11 @@ const user = () => ({
   membershipStatus: userApproved ? 'approved' : 'rejected',
   phoneNumber: '+639000000000',
   phoneVerification: { phoneNumber: '+639000000000', verifiedAt: phoneVerified ? new Date() : null },
-  notificationPreference: { smsUpdates: smsOptIn, emailUpdates: emailOptIn },
+  notificationPreference: { smsUpdates: smsOptIn, emailUpdates: emailOptIn,
+    announcementEmail, announcementSms },
 })
 const prisma = {
+  $queryRaw: async () => activeNotice ? [{ id: 7 }] : [],
   user: { findUnique: async () => ({ id: 7, role: 'USER', emailVerified: true, membershipStatus: userApproved ? 'approved' : 'rejected' }) },
   notificationEvent: {
     create: async ({ data }) => {
@@ -106,7 +111,7 @@ async function main() {
     assert.deepEqual(data.recipients, ['+639000000000'])
     assert.equal(data.deviceId, 'fixture-device')
     assert.equal(data.simSlotIndex, 0)
-    assert.match(data.message, /IFI-REQ-004[23]/)
+    assert.match(data.message, data.message.includes('announcement') ? /Parish calendar/ : /IFI-REQ-004[23]/)
     sentSms++
     return Response.json({ data: { smsBatchId: 'batch-fixture' } })
   }
@@ -153,6 +158,40 @@ async function main() {
   const skipped = await handlers.queueRequestNotification('status', rejectedMember)
   assert.equal(skipped.reason, 'inactive_member')
   assert.equal(events.length, 4)
+  // Announcements cannot inherit certificate request opt-in; they need independent consent.
+  userApproved = true; phoneVerified = true
+  announcementEmail = false; announcementSms = false
+  const firstAnnouncement = await prisma.notificationEvent.create({
+    data: { userId: 7, requestId: 0, office: 'public',
+      kind: 'announcement:7', eventKey: 'fictional-announcement-key-7',
+      message: 'Smart Parish: New parish announcement. See the Parish calendar.' },
+  })
+  await handlers.flushPendingNotifications('public')
+  assert.equal(events[4].emailState, 'skipped')
+  assert.equal(events[4].smsState, 'skipped')
+  assert.equal(sentSms, 2, 'No announcement SMS may inherit request SMS consent')
+  announcementEmail = true; announcementSms = true
+  const nextAnnouncement = await prisma.notificationEvent.create({
+    data: { userId: 7, requestId: 0, office: 'public',
+      kind: 'announcement:8', eventKey: 'fictional-announcement-key-8',
+      message: 'Smart Parish: New parish announcement. See the Parish calendar.' },
+  })
+  const broadcast = await handlers.flushPendingNotifications('public')
+  assert.deepEqual([broadcast.processed, broadcast.acceptedChannels], [1, 2])
+  assert.equal(events[5].smsState, 'accepted')
+  assert.equal(events[5].emailState, 'accepted')
+  assert.equal(sentSms, 3)
+  await handlers.flushPendingNotifications('public')
+  assert.equal(sentSms, 3, 'Accepted announcement must not send twice')
+  activeNotice = false
+  await prisma.notificationEvent.create({
+    data: { userId: 7, requestId: 0, office: 'public',
+      kind: 'announcement:9', eventKey: 'fictional-expired-announcement-key-9',
+      message: 'Smart Parish: Old parish announcement. See the Parish calendar.' },
+  })
+  await handlers.flushPendingNotifications('public')
+  assert.equal(events[6].smsState, 'skipped', 'An expired notice must not be sent')
+  assert.equal(events[6].emailState, 'skipped')
   assert.match(source, /uncertain/, 'unknown provider outcomes should never automatically retry')
   assert.match(fs.readFileSync('src/app/api/paymongo/webhook/route.ts', 'utf8'),
     /queueRequestNotification\('payment'/)

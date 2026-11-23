@@ -48,4 +48,12 @@ assert.match(service,/s\.ends_at >=/)
 const proxy=fs.readFileSync('src/app/api/notice-media/[mediaId]/route.ts','utf8')
 assert.match(proxy,/a\.active=TRUE/)
 assert.match(proxy,/s\.ends_at >=/)
+const localOrigin=new Request('http://localhost:3000/api/admin/notices',{
+  method:'POST',headers:{origin:'http://localhost:3000'},
+})
+const forgedOrigin=new Request('http://localhost:3000/api/admin/notices',{
+  method:'POST',headers:{origin:'https://attacker.example.test'},
+})
+assert.equal(lib.noticeMutationIsSameOrigin(localOrigin),true)
+assert.equal(lib.noticeMutationIsSameOrigin(forgedOrigin),false)
 console.log('PASS announcement MP4 duration limit, file signatures/sizes, schedule dates, storage key shapes, consent and public expiry guards')

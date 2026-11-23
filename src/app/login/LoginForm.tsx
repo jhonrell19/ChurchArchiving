@@ -85,8 +85,9 @@ export default function LoginForm() {
         case 'ADMIN':
           window.location.replace('/admin')
           break
+        case 'STAFF':
         case 'BURIAL_ADMIN':
-          window.location.replace('/burial-admin')
+          window.location.replace('/staff')
           break
         case 'USER':
           window.location.replace('/dashboard')

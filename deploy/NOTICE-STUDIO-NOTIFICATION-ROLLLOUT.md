@@ -9,8 +9,9 @@ and the real SMS/email smoke tests have been performed.
   priority, uploaded visuals and manual announcement notification queue.
 - Media: max 4 JPG/PNG/WebP pictures under 5 MB each + 1 MP4 under 18 MB,
   maximum MP4 declared duration 30 seconds, and 24 MB combined per announcement.
-  Server verifies MIME signatures and MP4 movie-header duration. Uploaded video
-  is not transcoded; prepare a web-compatible H.264 MP4.
+  Server verifies MIME signatures and MP4 movie-header duration. Uploaded pictures
+  are decoded, resized to at most 1920×1080, converted to WebP and stripped of
+  EXIF/location metadata. Uploaded video is not transcoded; prepare a web-compatible H.264 MP4.
 - Photo slideshow duration: configurable from 5 to 30 seconds; video is played
   muted as a background slideshow clip with playback controls. User may pause.
 - Public homepage slideshow and notice previews; parishioner notices and calendar
@@ -113,8 +114,8 @@ J. Confirm Church Staff and Parishioner cannot POST to any Admin notice API.
   expiry, but physical file deletion needs the manual Admin cleanup.
 
 ## Honest remaining features
-- Announcement image compression/transcoding or a streaming CDN is not supplied;
-  upload an already compressed MP4 and images.
+- MP4 video transcoding, a streaming CDN and automatic video bitrate reduction
+  are not supplied; upload an already compressed web-compatible MP4.
 - No bulk SMS campaign system or emergency broadcast (needs separate
   explicit opt-in, budget, throttling, consent and delivery monitoring).
 - No automatic retry of ambiguous external provider outcomes. Review rejected

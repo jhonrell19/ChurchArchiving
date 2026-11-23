@@ -2,7 +2,7 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { getCurrentUser, getRoleHome, isUserProfileComplete } from '@/lib/auth'
 import { findValidStaffChallenge, MFA_PENDING_COOKIE } from '@/lib/staffMfa'
-import LoginForm from './LoginForm'
+
 
 // Check the real database-backed session before rendering a login form.
 // A pending staff MFA challenge is not an authenticated session.
@@ -20,5 +20,5 @@ export default async function LoginPage() {
     redirect('/staff-mfa')
   }
 
-  return <LoginForm />
+  redirect('/?auth=login#parish-access')
 }

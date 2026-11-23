@@ -5112,9 +5112,16 @@ def api_cemetery_payments():
 
 @app.route("/api/cemetery/burials", methods=["GET", "POST"])
 def api_cemetery_burials():
-    denied = _cemetery_only()
-    if denied:
-        return denied
+    # STAFF may inspect historical burial documents, not create cemetery
+    # records or manage slots, reservations and financial accounts.
+    if request.method == "GET":
+        denied = require_roles("STAFF", "BURIAL_ADMIN")
+        if denied:
+            return denied
+    else:
+        denied = _cemetery_only()
+        if denied:
+            return denied
 
     if request.method == "GET":
         q = (request.args.get("q") or "").strip()
@@ -5195,7 +5202,7 @@ def api_cemetery_burials():
 
 @app.route("/api/cemetery/files/<path:filepath>", methods=["GET"])
 def api_cemetery_file(filepath):
-    denied = _cemetery_only()
+    denied = require_roles("STAFF", "BURIAL_ADMIN")
     if denied:
         return denied
     normalized = normalize_path(filepath)

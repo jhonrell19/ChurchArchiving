@@ -11,7 +11,7 @@ export async function DELETE(_:NextRequest,{params}:{params:Promise<{id:string;m
   const noticeId=Number(id)
   let mediaKey:bigint
   try{mediaKey=BigInt(mediaId)}catch{return NextResponse.json({message:'Invalid media item'},{status:400})}
-  if(!Number.isSafeInteger(noticeId)||noticeId<=0||mediaKey<=0n)return NextResponse.json({message:'Invalid media item'},{status:400})
+  if(!Number.isSafeInteger(noticeId)||noticeId<=0||mediaKey<=BigInt(0))return NextResponse.json({message:'Invalid media item'},{status:400})
   try{
     const [item]=await prisma.$queryRaw<{path:string}[]>`
       SELECT object_path AS path FROM parish_private.announcement_media

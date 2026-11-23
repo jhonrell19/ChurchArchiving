@@ -7,7 +7,7 @@ export const dynamic='force-dynamic'
 export async function GET(req:NextRequest,{params}:{params:Promise<{mediaId:string}>}){
   let key:bigint
   try{key=BigInt((await params).mediaId)}catch{return new NextResponse(null,{status:404})}
-  if(key<=0n)return new NextResponse(null,{status:404})
+  if(key<=BigInt(0))return new NextResponse(null,{status:404})
   try{
     const [row]=await prisma.$queryRaw<{path:string;mime:string}[]>`
       SELECT m.object_path AS path,m.mime_type AS mime

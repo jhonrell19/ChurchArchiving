@@ -3,13 +3,19 @@ import Image from 'next/image'
 import {useEffect,useMemo,useRef,useState} from 'react'
 
 type Media={id:string;type:'image'|'video';url:string;displaySeconds:number;durationSeconds:number|null}
-type Notice={id:number;title:string;media:Media[]}
+type Notice={id:number;title:string;starts:string|null;ends:string|null;media:Media[]}
 type Slide={key:string;src:string;type:'image'|'video';title:string;seconds:number}
 
 export default function ParishSlideshow({photos}:{photos:string[]}){
   const [announcements,setAnnouncements]=useState<Notice[]>([])
   const [current,setCurrent]=useState(0)
   const [playing,setPlaying]=useState(true)
+  const [now,setNow]=useState('')
+  useEffect(()=>{
+    const update=()=>setNow(new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()))
+    update();const timer=window.setInterval(update,60000)
+    return ()=>window.clearInterval(timer)
+  },[])
   const videoRef=useRef<HTMLVideoElement|null>(null)
   useEffect(()=>{
     const controller=new AbortController()
@@ -22,13 +28,13 @@ export default function ParishSlideshow({photos}:{photos:string[]}){
   const slides=useMemo<Slide[]>(()=>{
     const parish=photos.map((src,i)=>({key:'parish-'+i,src,type:'image' as const,
       title:'Our parish community',seconds:7}))
-    const posted=announcements.flatMap(n=>n.media.slice(0,5).map(m=>({
+    const posted=announcements.filter(n=>!now||( (!n.starts||n.starts<=now)&&(!n.ends||n.ends>=now) )).flatMap(n=>n.media.slice(0,5).map(m=>({
       key:'notice-'+m.id,src:m.url,type:m.type,title:n.title,
       seconds:m.type==='video'?Math.min(30,Math.ceil(m.durationSeconds||30)):Math.max(5,Math.min(30,m.displaySeconds||8)),
     })))
     // Announcement visuals are deliberately first so visitors see fresh notices.
     return [...posted,...parish]
-  },[announcements,photos])
+  },[announcements,photos,now])
   const index=current%Math.max(1,slides.length)
   const slide=slides[index]
   const advance=()=>setCurrent(v=>(v+1)%slides.length)

@@ -89,7 +89,8 @@ export async function queueRequestNotification(action: NotificationAction, req: 
   }
 }
 type Channel = 'email' | 'sms'
-async function dispatchChannel(id: number, office: string, channel: Channel) {
+type Office = 'main' | 'burial' | 'public'
+async function dispatchChannel(id: number, office: Office, channel: Channel) {
   // Claim atomically across concurrent requests to avoid provider duplicates.
   const claimed = await prisma.notificationEvent.updateMany({
     where: channel === 'email' ? { id, office, emailState: 'pending' } :
@@ -107,7 +108,7 @@ async function dispatchChannel(id: number, office: string, channel: Channel) {
             email: true, emailVerified: true, role: true, membershipStatus: true,
             phoneNumber: true,
             phoneVerification: { select: { phoneNumber: true, verifiedAt: true } },
-            notificationPreference: { select: { smsUpdates: true, emailUpdates: true } },
+            notificationPreference: { select: { smsUpdates: true, emailUpdates: true, announcementEmail: true, announcementSms: true } },
           },
         },
       },
@@ -118,9 +119,31 @@ async function dispatchChannel(id: number, office: string, channel: Channel) {
         data: channel === 'email' ? { emailState: 'skipped' } : { smsState: 'skipped' } })
       return false
     }
+    const announcement = record.kind.startsWith('announcement:')
+    if (announcement) {
+      const announcementId = Number(record.kind.slice('announcement:'.length))
+      if (!Number.isSafeInteger(announcementId) || announcementId <= 0) {
+        await prisma.notificationEvent.update({where:{id},data:channel==='email'?{emailState:'skipped'}:{smsState:'skipped'}})
+        return false
+      }
+      // Never send announcements that have passed their publication deadline.
+      const available = await prisma.$queryRaw<{id:number}[]>`
+        SELECT a.id FROM parish_private.announcement a
+        JOIN parish_private.announcement_slide s ON s.announcement_id=a.id
+        WHERE a.id=${announcementId} AND a.active=TRUE
+          AND s.starts_at <= (now() AT TIME ZONE 'Asia/Manila')::date
+          AND s.ends_at >= (now() AT TIME ZONE 'Asia/Manila')::date
+      `
+      if(!available.length){
+        await prisma.notificationEvent.update({where:{id},data:channel==='email'?{emailState:'skipped'}:{smsState:'skipped'}})
+        return false
+      }
+    }
     if (channel === 'email') {
       if (process.env.PARISH_NOTIFICATION_EMAIL !== 'enabled' ||
-          record.user.notificationPreference?.emailUpdates === false) {
+          (announcement
+            ? record.user.notificationPreference?.announcementEmail !== true
+            : record.user.notificationPreference?.emailUpdates === false)) {
         await prisma.notificationEvent.update({ where: { id }, data: { emailState: 'skipped' } })
         return false
       }
@@ -129,10 +152,13 @@ async function dispatchChannel(id: number, office: string, channel: Channel) {
         return false
       }
       const messageHtml = record.message.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      const html = '<p>' + messageHtml + '</p><p>For details sign in to <a href="' +
-        appBaseUrl() + '/dashboard">Smart Parish</a>. Never share OTP codes.</p>'
+      const destination = announcement ? '/' : '/dashboard'
+      const html = '<p>' + messageHtml + '</p><p>For details visit <a href="' +
+        appBaseUrl() + destination + '">Smart Parish</a>. Never share OTP codes.</p>' +
+        (announcement ? '<p>To stop parish announcement emails, update your notification preferences in My Account.</p>' : '')
       const sent = await sendTransactionalEmail({
-        to: record.user.email, subject: 'Smart Parish request update', html,
+        to: record.user.email,
+        subject: announcement ? 'Smart Parish announcement' : 'Smart Parish request update', html,
       })
       // Unknown provider failures may be accepted remotely; do not auto-retry.
       await prisma.notificationEvent.update({ where: { id },
@@ -145,7 +171,9 @@ async function dispatchChannel(id: number, office: string, channel: Channel) {
       record.user.phoneVerification.phoneNumber === phone)
     if (process.env.PARISH_NOTIFICATION_SMS !== 'enabled' ||
         process.env.PHONE_OTP_PROVIDER !== 'textbee' ||
-        !record.user.notificationPreference?.smsUpdates || !phoneVerified) {
+        !(announcement
+          ? record.user.notificationPreference?.announcementSms
+          : record.user.notificationPreference?.smsUpdates) || !phoneVerified) {
       await prisma.notificationEvent.update({ where: { id }, data: { smsState: 'skipped' } })
       return false
     }
@@ -186,7 +214,7 @@ async function dispatchChannel(id: number, office: string, channel: Channel) {
     return false
   }
 }
-export async function dispatchNotification(id: number, office: 'main' | 'burial') {
+export async function dispatchNotification(id: number, office: Office) {
   if (!notificationFeatureEnabled()) return { processed: false, acceptedChannels: 0 }
   const result = await Promise.allSettled([
     dispatchChannel(id, office, 'email'),
@@ -194,7 +222,7 @@ export async function dispatchNotification(id: number, office: 'main' | 'burial'
   ])
   return { processed: true, acceptedChannels: result.filter(r => r.status === 'fulfilled' && r.value).length }
 }
-export async function flushPendingNotifications(office: 'main' | 'burial', limit = 5) {
+export async function flushPendingNotifications(office: Office, limit = 5) {
   if (!notificationFeatureEnabled()) return { processed: 0, enabled: false, acceptedChannels: 0 }
   const pending = await prisma.notificationEvent.findMany({
     where: { office, OR: [{ emailState: 'pending' }, { smsState: 'pending' }] },

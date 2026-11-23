@@ -222,7 +222,6 @@ export default function RequestsPage() {
   const [slotsError, setSlotsError] = useState('')
   const [selectedSlotId, setSelectedSlotId] = useState<number | null>(null)
   const [parishFees, setParishFees] = useState(INITIAL_FEES)
-  const [urgentFee, setUrgentFee] = useState(0)
   const [pricingReady, setPricingReady] = useState(false)
   const [paymentMode, setPaymentMode] = useState('test')
   const [serviceFees, setServiceFees] = useState<Record<string, number>>({})
@@ -241,7 +240,6 @@ export default function RequestsPage() {
           'Certificate of Ownership': Number(f.ownership) || 0,
           'Land Agreement': Number(f.land_agreement) || 0,
         })
-        setUrgentFee(Number(data.urgentFee) || 0)
         setPaymentMode(data.onlinePaymentMode === 'live' ? 'live' : 'test')
         setServiceFees(data.serviceFees || {})
         setCemeteryFees(data.cemeteryFees || {})
@@ -439,7 +437,7 @@ if (
           purpose: formData.notes.trim()
             ? `${formData.purpose.trim()} | Notes: ${formData.notes.trim()}`
             : formData.purpose.trim(),
-          isUrgent: formData.isUrgent,
+          isUrgent: false,
           recordDateHint: formData.recordDateHint.trim(),
           recordDetails: activeType === 'Certificate of Ownership' ? formData.recordDetails.trim() : '',
           cemeterySlotId: activeType === 'Land Agreement' ? selectedSlotId : undefined,
@@ -493,7 +491,7 @@ if (
   }
 
   const previewBaseFee = parishFees[activeType]
-  const previewUrgentFee = formData.isUrgent ? urgentFee : 0
+  const previewUrgentFee = 0
   const previewTotal = previewBaseFee + previewUrgentFee
 
   return (
@@ -667,31 +665,6 @@ if (
                   </div>
                 )}
               </div>
-
-              {urgentFee > 0 && <div className="md:col-span-2">
-                <label className="flex items-start gap-3 rounded-xl border border-orange-200 bg-orange-50 p-4 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.isUrgent}
-                    onChange={e =>
-                      setFormData(prev => ({
-                        ...prev,
-                        isUrgent: e.target.checked,
-                      }))
-                    }
-                    className="mt-1"
-                  />
-
-                  <div>
-                    <p className="font-display text-orange-800 text-[12px] font-semibold">
-                      Urgent Request
-                    </p>
-                    <p className="font-body text-orange-700 text-[12px] mt-1">
-                      Urgent processing adds {formatPeso(urgentFee)} according to the parish fee schedule.
-                    </p>
-                  </div>
-                </label>
-              </div>}
 
               <div className="md:col-span-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
                 {!pricingReady && <p className="text-sm text-amber-700">Parish fees are unavailable. The final amount must be confirmed by staff before payment.</p>}

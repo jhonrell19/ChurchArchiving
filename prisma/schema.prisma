@@ -162,6 +162,8 @@ model NotificationPreference {
   userId       Int      @id
   smsUpdates   Boolean  @default(false)
   emailUpdates Boolean  @default(true)
+  announcementEmail Boolean @default(false)
+  announcementSms   Boolean @default(false)
   updatedAt    DateTime @updatedAt @default(now())
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 

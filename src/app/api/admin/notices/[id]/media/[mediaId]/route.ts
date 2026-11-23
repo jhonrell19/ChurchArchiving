@@ -2,11 +2,12 @@ import {NextRequest,NextResponse} from 'next/server'
 import {prisma} from '@/lib/prisma'
 import {getCurrentUser} from '@/lib/auth'
 import {isSupervisor} from '@/lib/portalConfig'
-import {removeObject} from '@/lib/noticeStudio'
+import {noticeMutationIsSameOrigin,removeObject} from '@/lib/noticeStudio'
 export const runtime='nodejs'
-export async function DELETE(_:NextRequest,{params}:{params:Promise<{id:string;mediaId:string}>}){
+export async function DELETE(req:NextRequest,{params}:{params:Promise<{id:string;mediaId:string}>}){
   const actor=await getCurrentUser()
   if(!isSupervisor(actor))return NextResponse.json({message:'Super Admin required'},{status:403})
+  if(!noticeMutationIsSameOrigin(req))return NextResponse.json({message:'Invalid request origin'},{status:403})
   const {id,mediaId}=await params
   const noticeId=Number(id)
   let mediaKey:bigint

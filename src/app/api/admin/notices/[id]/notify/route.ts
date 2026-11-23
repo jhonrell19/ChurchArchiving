@@ -3,13 +3,15 @@ import {NextRequest,NextResponse} from 'next/server'
 import {getCurrentUser} from '@/lib/auth'
 import {prisma} from '@/lib/prisma'
 import {isSupervisor} from '@/lib/portalConfig'
+import {noticeMutationIsSameOrigin} from '@/lib/noticeStudio'
 import {notificationFeatureEnabled} from '@/lib/statusNotifications'
 
 export const runtime='nodejs'
 const json=(d:object,status=200)=>NextResponse.json(d,{status,headers:{'Cache-Control':'no-store'}})
-export async function POST(_:NextRequest,{params}:{params:Promise<{id:string}>}){
+export async function POST(req:NextRequest,{params}:{params:Promise<{id:string}>}){
   const actor=await getCurrentUser()
   if(!isSupervisor(actor))return json({message:'Super Admin required'},403)
+  if(!noticeMutationIsSameOrigin(req))return json({message:'Invalid request origin'},403)
   if(!notificationFeatureEnabled())return json({message:'Configure PARISH_STATUS_NOTIFICATIONS first.'},503)
   const id=Number((await params).id)
   if(!Number.isSafeInteger(id)||id<=0)return json({message:'Invalid notice'},400)

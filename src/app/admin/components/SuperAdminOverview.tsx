@@ -7,8 +7,11 @@ type ArchiveStats = {
 }
 type Request = { id: number; status: string; sacramentType: string; requesterName: string; createdAt?: string }
 type RequestList = { requests: Request[]; counts?: Record<string, number> }
-type Mass = { id: number; title: string; createdAt?: string }
-type Overview = { parishioners: number; staff: number; disabledStaff: number }
+type MonthPoint = {month:string;total:number}
+type Overview = {
+  parishioners:number;staff:number;disabledStaff:number;newUploads:number|null;
+  requestsByMonth:MonthPoint[];burialsByMonth:MonthPoint[];burialsAvailable:boolean
+}
 type Audit = { id: number; action: string; user: string }
 
 async function read<T>(url: string): Promise<T> {
@@ -19,6 +22,25 @@ async function read<T>(url: string): Promise<T> {
 function Tile({ label, value, note }: { label: string; value: string | number; note?: string }) {
   return <div className="role-card role-metric"><strong>{value}</strong><p>{label}</p>{note && <small className="text-slate-600">{note}</small>}</div>
 }
+function MonthlyChart({title,points,loading,available=true,note}:{
+  title:string;points?:MonthPoint[];loading:boolean;available?:boolean;note:string
+}) {
+  const max=Math.max(1,...(points??[]).map(x=>x.total))
+  return <div className="role-card">
+    <h4 className="text-lg font-bold mb-1">{title}</h4>
+    <p className="text-sm text-slate-600 mb-4">{note}</p>
+    {!available?<p className="text-slate-600">Burial reporting is not available on this deployment.</p>
+      :loading?<p>Loading activity…</p>
+      :!points?.length?<p className="text-slate-600">No entries in this period.</p>
+      :<div className="space-y-2">{points.map(x=><div key={x.month}>
+        <div className="flex justify-between text-sm font-semibold"><span>{x.month}</span><span>{x.total}</span></div>
+        <div className="mt-1 h-3 rounded-full bg-slate-100 overflow-hidden">
+          <div className="h-full rounded-full" style={{width:`${100*x.total/max}%`,backgroundColor:'var(--portal-accent)'}}/>
+        </div>
+      </div>)}</div>}
+  </div>
+}
+
 export default function SuperAdminOverview({
   manageStaff, manageWebsite, onOpenMasses, onOpenNotices, onOpenSettings,
 }: {
@@ -28,7 +50,6 @@ export default function SuperAdminOverview({
   const [overview,setOverview] = useState<Overview|null>(null)
   const [archives,setArchives] = useState<ArchiveStats|null>(null)
   const [requests,setRequests] = useState<RequestList|null>(null)
-  const [masses,setMasses] = useState<Mass[]>([])
   const [audit,setAudit] = useState<Audit[]>([])
   const [error,setError] = useState(false)
   const [loading,setLoading] = useState(true)
@@ -38,24 +59,21 @@ export default function SuperAdminOverview({
       read<Overview>('/api/admin/overview'),
       read<ArchiveStats>('/api/backend/api/archive/stats'),
       read<RequestList>('/api/backend/api/requests?page=1'),
-      read<{masses:Mass[]}>('/api/backend/api/masses'),
       read<{logs:Audit[]}>('/api/backend/api/archive/audit-logs'),
     ])
-    const [users,records,reqs,massList,auditList] = results
+    const [users,records,reqs,auditList] = results
     setOverview(users.status==='fulfilled'?users.value:null)
     setArchives(records.status==='fulfilled'?records.value:null)
     setRequests(reqs.status==='fulfilled'?reqs.value:null)
-    setMasses(massList.status==='fulfilled'&&Array.isArray(massList.value.masses)?massList.value.masses:[])
     setAudit(auditList.status==='fulfilled'&&Array.isArray(auditList.value.logs)?auditList.value.logs:[])
     setError(results.some(x=>x.status==='rejected'))
     setLoading(false)
   },[])
   useEffect(()=>{void load()},[load])
-  const currentMonth = new Intl.DateTimeFormat('en-CA',{ timeZone:'Asia/Manila', year:'numeric', month:'2-digit' }).format(new Date()).slice(0,7)
-  const massUploads = masses.filter(m=>m.createdAt?.slice(0,7)===currentMonth).length
   const categoryCounts = archives ? [
     ['Baptism',archives.baptismal],['Confirmation',archives.confirmation],
     ['Marriage',archives.marriage],['Burial',archives.burial],['Land agreements',archives.landAgreement],
+    ['Other archives incl. ownership',Math.max(0,archives.totalRecords-archives.baptismal-archives.confirmation-archives.marriage-archives.burial-archives.landAgreement)],
   ] as const : []
   const maxCategory=Math.max(1,...categoryCounts.map(([,n])=>n))
   const pending=requests?.counts?.Pending
@@ -76,7 +94,7 @@ export default function SuperAdminOverview({
         <Tile label="Archived records" value={archives?.totalRecords ?? (loading?'…':'—')}/>
         <Tile label="Pending certificate requests" value={pending ?? (loading?'…':'—')} note="Across all document categories"/>
         <Tile label="Registered parishioners" value={overview?.parishioners ?? (loading?'…':'—')}/>
-        <Tile label="Mass uploads this month" value={loading?'…':massUploads} note="Counts Mass records, not document scans"/>
+        <Tile label="New document uploads this month" value={overview?.newUploads ?? (loading?'…':'—')} note="Active archive documents added this month"/>
       </div>
     </section>
     <section>
@@ -89,6 +107,14 @@ export default function SuperAdminOverview({
         <a href="/office-reports" className="role-action"><span>Reports and exports</span><i className="ti ti-chart-bar"/></a>
         {manageWebsite && <a href="/admin/site-content" className="role-action"><span>Edit public website</span><i className="ti ti-world"/></a>}
         <button onClick={onOpenSettings} className="role-action"><span>Parish settings and fees</span><i className="ti ti-settings"/></button>
+      </div>
+    </section>
+    <section>
+      <h3 className="role-subtitle mb-3">Monthly activity</h3>
+      <div className="grid gap-4 xl:grid-cols-2">
+        <MonthlyChart title="Certificate requests by month" points={overview?.requestsByMonth} loading={loading} note="Requests submitted in the last six months"/>
+        <MonthlyChart title="Burial records added by month" points={overview?.burialsByMonth} loading={loading}
+          available={overview?.burialsAvailable} note="Records entered, not necessarily burial service dates"/>
       </div>
     </section>
     <div className="grid gap-5 xl:grid-cols-2">

@@ -252,8 +252,10 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
         Manage Mass video links and locally reviewed transcription drafts.
       </p>
 
-      <p role="status" className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-        Choose Prepare transcript beside a Mass to create and review a draft on the parish computer.
+      <p role="status" className="mb-4 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-950">
+        Original-language AI transcription: preserve exactly the speech recognized in Tagalog, English, or both;
+        never translate the homily into English. Choose <strong>Prepare transcript</strong>, run the local assistant,
+        review the generated full transcript against the audio, then save. The summary is separate and editable.
       </p>
       {showForm && (
         <form
@@ -348,7 +350,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
               >
                 <option value="Pending">Pending</option>
                 <option value="In Progress">In Progress</option>
-                <option value="Transcribed">Transcribed</option>
+                {/* Full transcription is assigned only after staff saves actual speech text. */}
               </select>
             </div>
 
@@ -490,17 +492,12 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
 
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-1 flex-wrap">
-                      {m.status !== 'Transcribed' && (
+                      {m.status === 'Pending' && (
                         <button
-                          onClick={() =>
-                            updateStatus(
-                              m.id,
-                              m.status === 'Pending' ? 'In Progress' : 'Transcribed'
-                            )
-                          }
+                          onClick={() => updateStatus(m.id, 'In Progress')}
                           className="font-display text-xs tracking-wider text-emerald-800 border border-emerald-300 px-2.5 py-1 rounded-lg bg-emerald-50"
                         >
-                          {m.status === 'Pending' ? 'Start' : 'Mark Done'}
+                          Start review
                         </button>
                       )}
 
@@ -528,8 +525,29 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
 
                     {expanded === m.id && (
                       <div className="mt-4 bg-emerald-50 border border-emerald-100 rounded-xl p-4">
-                        <p className="mb-3">On the parish PC, open the transcription assistant, choose your audio or video, then import the JSON draft here. Review the text before saving.</p>
-                        <a className="underline" href="/mass_transcription_assistant.py" download>Download transcription assistant for the parish PC</a>
+                        <p className="mb-3 text-sm text-emerald-950">
+                          Run the <strong>original-language transcription assistant</strong> on the parish PC.
+                          Select <strong>Auto - Tagalog + English</strong> for mixed-language sermons, or
+                          <strong> Tagalog-dominant</strong> if the homily is mostly Tagalog.
+                          It produces a full speech transcript (NOT an English translation) and a separate extractive summary.
+                        </p>
+                        <p className="mb-3 text-sm text-slate-700">
+                          Choose a local MP4, MP3, WAV, or recorded mixer audio file, not a YouTube URL.
+                          A YouTube Mass link can be displayed on the website, but the local assistant needs
+                          a recording file that you are authorized to process.
+                        </p>
+                        <a className="underline font-semibold text-emerald-900"
+                          href="/mass_transcription_assistant.py" download>
+                          Download updated parish PC transcription assistant (.py)
+                        </a>
+                        <p className="mt-3 text-sm text-slate-700">
+                          First-time Windows setup (Python 3.11):
+                          <code className="mt-1 block rounded-lg bg-white p-3 text-xs break-all select-all">
+                            py -3.11 -m pip install faster-whisper==1.2.1 av==14.2.0
+                          </code>
+                          Then run the downloaded .py file, select the recording and language,
+                          import its JSON draft here, verify words against the source, and save.
+                        </p>
                         <label className="my-4 block font-semibold">Import local transcription draft
                           <input type="file" accept=".json,application/json" className="block" onChange={async event=>{
                             const file=event.target.files?.[0]; event.target.value=''

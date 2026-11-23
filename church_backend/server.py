@@ -3552,8 +3552,9 @@ def api_create_mass():
         duration = request.form.get("duration")
 
         status = request.form.get("status") or "Pending"
-
-
+        # A newly created Mass does not have a reviewed transcript yet.
+        if status not in {"Pending", "In Progress"}:
+            return {"error": "Add and review a full transcript before marking this Mass transcribed."}, 409
 
         file = request.files.get("file")
         raw_video_url = (request.form.get("videoUrl") or "").strip()
@@ -3752,8 +3753,8 @@ def api_update_mass_status(mass_id):
         if status not in allowed_statuses:
 
             return {"error": "Invalid status"}, 400
-
-
+        if status == "Transcribed" and not (getattr(mass, "transcript_text", None) or "").strip():
+            return {"error": "Save and review a full speech transcript before marking this Mass transcribed."}, 409
 
         mass.status = status
 

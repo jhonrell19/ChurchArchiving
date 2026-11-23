@@ -249,7 +249,9 @@ export default function ArchivesPage({initialTab='baptismal'}:{initialTab?:strin
         return
       }
 
-      toast.success('Archive saved: the filled official-template DRAFT PDF is the primary document. The original scan is retained separately.')
+      toast.success(['baptismal', 'confirmation', 'marriage'].includes(form.sacrament_type)
+        ? 'Archive saved. The reviewed official-template DRAFT PDF is primary; the original scan is retained.'
+        : 'Archive saved privately. Ownership and land agreement scans are retained without automatic official-form generation.')
 
       setForm({
   person_name: '',

@@ -2320,7 +2320,7 @@ def api_archive_documents():
 
 def api_archive_documents_by_type(sacrament_type):
 
-    denied = require_roles("STAFF", "BURIAL_ADMIN")
+    denied = require_roles("ADMIN", "STAFF", "BURIAL_ADMIN")
 
     if denied:
 
@@ -2886,6 +2886,8 @@ def api_get_requests():
             "ADMIN",
 
             "BURIAL_ADMIN",
+
+            "STAFF",
 
         }:
 

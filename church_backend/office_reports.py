@@ -127,7 +127,7 @@ def member_activity():
             FROM parish_auth."User" WHERE role='USER' AND "createdAt">=now()-interval '1 year' GROUP BY 1 ORDER BY 1'''),
         'cemetery':rows('SELECT status AS label,count(*) AS value FROM cemetery_slot WHERE active GROUP BY 1 ORDER BY 1'),
         'staff':rows('''SELECT a."user" AS label,count(*) AS value FROM audit_log a JOIN parish_auth."User" u ON u.email=a."user"
-            WHERE u.role IN ('ADMIN','BURIAL_ADMIN') AND a.created_at >=now()-interval '30 days'
+            WHERE u.role IN ('ADMIN','STAFF','BURIAL_ADMIN') AND a.created_at >=now()-interval '30 days'
             AND (:actor='' OR a."user"=:actor) GROUP BY 1 ORDER BY 2 DESC LIMIT 30''',{'actor':actor}),
         'appointments':rows('''SELECT office AS label,coalesce(sum(capacity),0) AS capacity,
             coalesce(sum((SELECT count(*) FROM appointment_booking b WHERE b.slot_id=s.id)),0) AS value

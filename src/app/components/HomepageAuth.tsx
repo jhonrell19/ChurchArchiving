@@ -171,7 +171,7 @@ export default function HomepageAuth() {
       </label>
       <button type="submit" className="portal-primary-btn" disabled={busy || !consent}>{busy ? 'Creating account…' : 'Create my account'}</button>
       <div className="portal-auth-divider">Or register with Google</div>
-      <GoogleAuthButton intent="register"/>
+      {consent ? <GoogleAuthButton intent="register" privacyConsent={consent} policyVersion={policyVersion}/> : <p className="portal-form-help">Please accept the Privacy Notice to register with Google.</p>}
       {verificationEmail && <button type="button" disabled={busy} className="portal-secondary-btn" onClick={() => void resendEmail()}>Resend verification email</button>}
     </form>}
     <p className="portal-auth-footnote">Church Staff and Super Admin use their assigned parish credentials. Membership approval may be required for new parishioners.</p>

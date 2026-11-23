@@ -491,8 +491,7 @@ if (
   }
 
   const previewBaseFee = parishFees[activeType]
-  const previewUrgentFee = 0
-  const previewTotal = previewBaseFee + previewUrgentFee
+  const previewTotal = previewBaseFee
 
   return (
     <div>
@@ -672,13 +671,6 @@ if (
                   <span className="text-emerald-900">Document Fee</span>
                   <span className="font-semibold text-emerald-900">
                     {previewBaseFee > 0 ? formatPeso(previewBaseFee) : 'Parish confirmation required'}
-                  </span>
-                </div>
-
-                <div className="flex justify-between text-[13px] mb-2">
-                  <span className="text-emerald-900">Urgent Fee</span>
-                  <span className="font-semibold text-emerald-900">
-                    {formatPeso(previewUrgentFee)}
                   </span>
                 </div>
 

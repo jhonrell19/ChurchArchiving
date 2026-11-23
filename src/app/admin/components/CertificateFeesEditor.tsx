@@ -146,7 +146,7 @@ export default function CertificateFeesEditor() {
 
       {values && (
         <div className="space-y-4">
-          {FEE_FIELDS.map(field => (
+          {FEE_FIELDS.filter(field => field.code !== 'urgent').map(field => (
             <div
               key={field.code}
               className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3"

@@ -3,7 +3,7 @@ import {createHash,timingSafeEqual} from 'node:crypto'
 import {prisma} from '@/lib/prisma'
 import {getCurrentUser} from '@/lib/auth'
 import {isSupervisor} from '@/lib/portalConfig'
-import {removeObject} from '@/lib/noticeStudio'
+import {noticeMutationIsSameOrigin,removeObject} from '@/lib/noticeStudio'
 
 export const runtime='nodejs'
 export const dynamic='force-dynamic'
@@ -16,7 +16,7 @@ function tokenValid(authorization:string|null) {
 }
 export async function POST(req:NextRequest){
   const actor=await getCurrentUser()
-  if(!isSupervisor(actor)&&!tokenValid(req.headers.get('authorization')))
+  if(!(isSupervisor(actor)&&noticeMutationIsSameOrigin(req))&&!tokenValid(req.headers.get('authorization')))
     return NextResponse.json({message:'Unauthorized'},{status:403})
   try{
     // Hide first, regardless of Storage health. Cleanup can be retried.

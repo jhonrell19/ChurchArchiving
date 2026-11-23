@@ -135,7 +135,8 @@ BURIAL_ADMIN_TYPES = ["burial", "land_agreement", "ownership"]
 from relationship_claims import claims, enabled as relative_claims_enabled
 from appointments import appointments
 from office_reports import reports
-app.config["PARISH_REPORT_SCOPE"] = {"ADMIN": MAIN_ADMIN_TYPES, "BURIAL_ADMIN": BURIAL_ADMIN_TYPES}
+app.config["PARISH_REPORT_SCOPE"] = {"ADMIN": MAIN_ADMIN_TYPES + BURIAL_ADMIN_TYPES,
+    "STAFF": MAIN_ADMIN_TYPES + BURIAL_ADMIN_TYPES, "BURIAL_ADMIN": BURIAL_ADMIN_TYPES}
 app.register_blueprint(reports)
 app.register_blueprint(claims)
 app.register_blueprint(appointments)

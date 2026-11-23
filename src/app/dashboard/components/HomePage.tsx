@@ -22,7 +22,9 @@ export default function HomePage({setPage}:{setPage:(p:Page)=>void}) {
       const response=await fetch('/api/backend/api/user/dashboard-summary',{cache:'no-store'})
       if (!response.ok)throw Error()
       const result:Summary=await response.json()
-      setData(result)
+      const noticesResponse=await fetch('/api/public-notices',{cache:'no-store'})
+      const noticeData=noticesResponse.ok?await noticesResponse.json().catch(()=>({notices:[]})):{notices:[]}
+      setData({...result,announcements:Array.isArray(noticeData.notices)?noticeData.notices:[]})
     } catch {setUnavailable(true);setData(null)}
     finally {setLoading(false)}
   },[])

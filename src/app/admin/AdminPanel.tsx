@@ -9,11 +9,8 @@ import { useEffect, useState } from 'react'
 import { useRefreshOnHistoryRestore } from '@/hooks/useRefreshOnHistoryRestore'
 import { ADMIN_NAV } from './data/navigation'
 import type { AdminPage } from './types.ts'
-import DashboardHome from './components/DashboardHome'
-import ArchivesPage from './components/ArchivesPage'
 import MassesPage from './components/MassesPage'
 import TranscriptionsPage from './components/TranscriptionsPage'
-import RequestsPage from './components/RequestsPage'
 import AnnouncementsPage from './components/AnnouncementsPage'
 import SettingsPage from './components/SettingsPage'
 
@@ -21,33 +18,12 @@ type ExtendedAdminPage = AdminPage
 
 const MAIN_NAV = ADMIN_NAV
 
-export default function AdminPanel({managePolicy=false,manageWebsite=false}:{managePolicy?:boolean;manageWebsite?:boolean}) {
+export default function AdminPanel({managePolicy=false,manageWebsite=false,manageStaff=false}:{managePolicy?:boolean;manageWebsite?:boolean;manageStaff?:boolean}) {
   const { toast } = useFeedback()
   useRefreshOnHistoryRestore()
   const [page, setPage] = useState<ExtendedAdminPage>('dashboard')
   const [transcriptId, setTranscriptId] = useState<number | null>(null)
-  const [archiveTab,setArchiveTab]=useState('baptismal')
   const [sidebarOpen, setSidebar] = useState(false)
-  const [pendingCount, setPendingCount] = useState(0)
-
-  const loadRequestCounts = async () => {
-    try {
-      const res = await fetch('/api/backend/api/requests?summary=counts', { cache: 'no-store' })
-      if (!res.ok) throw new Error('Failed to load request counts')
-
-      const data = await res.json()
-      setPendingCount(data.pending)
-    } catch {
-      setPendingCount(0)
-    }
-  }
-
-  useEffect(() => {
-    queueMicrotask(() => void loadRequestCounts())
-    const interval = window.setInterval(() => void loadRequestCounts(), 10000)
-    return () => window.clearInterval(interval)
-  }, [])
-
   const logout = async () => {
     try {
       const response = await fetch('/api/auth/logout', { method: 'POST' })
@@ -65,9 +41,6 @@ export default function AdminPanel({managePolicy=false,manageWebsite=false}:{man
   const navigate = (id: ExtendedAdminPage) => {
     setPage(id)
     setSidebar(false)
-    if (id === 'requests') {
-      void loadRequestCounts()
-    }
   }
 
   return (
@@ -84,7 +57,7 @@ export default function AdminPanel({managePolicy=false,manageWebsite=false}:{man
               <p className="font-display text-navy-mid text-[12px] tracking-wide leading-tight font-semibold">
                 Smart Parish System
               </p>
-              <p className="font-body text-slate-500 text-[11px]">Main Admin</p>
+              <p className="font-body text-slate-500 text-[11px]">Super Admin</p>
             </div>
           </div>
         </div>
@@ -104,13 +77,9 @@ export default function AdminPanel({managePolicy=false,manageWebsite=false}:{man
               <i className={`ti ${icon} text-[17px] ${page === id ? 'text-gold' : ''}`} />
               <span className="font-display text-[11px] tracking-wide flex-1">{label}</span>
 
-              {id === 'requests' && pendingCount > 0 && (
-                <span className="bg-navy text-white font-display text-[9px] px-1.5 py-0.5 rounded-full">
-                  {pendingCount}
-                </span>
-              )}
             </button>
           ))}
+          {manageStaff && <a className="parish-report-link" href="/admin/staff">Manage Church Staff Accounts</a>}
           <a href="/admin/member-approvals"
             className="mt-3 block rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-[12px] font-semibold text-[#14264b] hover:bg-amber-100">
             Parish Membership Approvals
@@ -158,11 +127,18 @@ export default function AdminPanel({managePolicy=false,manageWebsite=false}:{man
         </header>
 
         <main className="flex-1 p-4 md:p-6 overflow-auto">
-          {page === 'dashboard' && <DashboardHome manageWebsite={manageWebsite} openArchive={tab=>{setArchiveTab(tab);setPage('archives')}} setPage={setPage}/>}
-          {page === 'archives' && <ArchivesPage initialTab={archiveTab}/>}
+          {page === 'dashboard' && <section className="space-y-6">
+            <h2 className="text-2xl font-semibold text-slate-900">Super Admin Dashboard</h2>
+            <p className="text-base text-slate-600">Manage parish accounts, Mass recordings, transcription, announcements, reports and website settings. Church Staff processes archive records and document requests.</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {manageStaff && <a href="/admin/staff" className="rounded-xl border bg-white p-5 text-base font-semibold text-emerald-900">Church Staff Accounts</a>}
+              <a href="/admin/member-approvals" className="rounded-xl border bg-white p-5 text-base font-semibold text-emerald-900">Membership Approvals</a>
+              <a href="/office-reports" className="rounded-xl border bg-white p-5 text-base font-semibold text-emerald-900">Reports and Oversight</a>
+              {manageWebsite && <a href="/admin/site-content" className="rounded-xl border bg-white p-5 text-base font-semibold text-emerald-900">Website Editor</a>}
+            </div>
+          </section>}
           {page === 'masses' && <MassesPage initialTranscript={transcriptId} />}
           {page === 'transcriptions' && <TranscriptionsPage openMass={id => { setTranscriptId(id); setPage('masses') }} />}
-          {page === 'requests' && <RequestsPage />}
           {page === 'announcements' && <AnnouncementsPage />}
           {page === 'settings' && <SettingsPage />}
         </main>

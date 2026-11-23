@@ -2,7 +2,7 @@ import { NextRequest,NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { isSupervisor } from '@/lib/portalConfig'
-import { removeObject,parseNotice } from '@/lib/noticeStudio'
+import { noticeMutationIsSameOrigin,removeObject,parseNotice } from '@/lib/noticeStudio'
 
 export const runtime='nodejs'
 type Context={params:Promise<{id:string}>}
@@ -11,6 +11,7 @@ async function valid(reqContext:Context){const {id}=await reqContext.params;cons
 export async function PUT(req:NextRequest,ctx:Context){
   const actor=await getCurrentUser()
   if(!isSupervisor(actor))return json({message:'Super Admin required'},403)
+  if(!noticeMutationIsSameOrigin(req))return json({message:'Invalid request origin'},403)
   const id=await valid(ctx)
   const parsed=parseNotice(await req.json().catch(()=>null))
   if(!id||!parsed)return json({message:'Invalid announcement or scheduling details.'},400)
@@ -37,9 +38,10 @@ export async function PUT(req:NextRequest,ctx:Context){
     return count?json({updated:true}):json({message:'Announcement not found'},404)
   }catch{return json({message:'Unable to save announcement changes.'},503)}
 }
-export async function DELETE(_:NextRequest,ctx:Context){
+export async function DELETE(req:NextRequest,ctx:Context){
   const actor=await getCurrentUser()
   if(!isSupervisor(actor))return json({message:'Super Admin required'},403)
+  if(!noticeMutationIsSameOrigin(req))return json({message:'Invalid request origin'},403)
   const id=await valid(ctx)
   if(!id)return json({message:'Invalid announcement'},400)
   try{

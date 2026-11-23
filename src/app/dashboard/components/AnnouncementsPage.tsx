@@ -10,6 +10,12 @@ export default function AnnouncementsPage({services}:{services:Service[]}){
   const [notices,setNotices]=useState<Notice[]>([])
   const [loading,setLoading]=useState(true)
   const [error,setError]=useState(false)
+  const [now,setNow]=useState('')
+  useEffect(()=>{
+    const update=()=>setNow(new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()))
+    update();const t=window.setInterval(update,60000);return ()=>window.clearInterval(t)
+  },[])
+  const active=notices.filter(n=>!now||((!n.starts||n.starts<=now)&&(!n.ends||n.ends>=now)))
   const load=useCallback(async()=>{
     setLoading(true);setError(false)
     try{
@@ -27,18 +33,18 @@ export default function AnnouncementsPage({services}:{services:Service[]}){
       <h2>Mass schedules and announcements</h2>
       <p>View upcoming services and official notices from the parish. Expired notices are removed automatically.</p>
     </div>
-    {!error&&<ParishCalendar services={services} notices={notices.map(n=>({
+    {!error&&<ParishCalendar services={services} notices={active.map(n=>({
       id:n.id,title:n.title,body:n.body,date:n.date,starts:n.starts,ends:n.ends,
     }))}/>}
     {error?<section className="role-card">
       <p role="alert">The parish notices could not be loaded right now.</p>
       <button className="portal-secondary-btn mt-3" onClick={()=>void load()}>Try again</button>
     </section>:loading?<p role="status">Loading parish announcements…</p>
-      :notices.length===0?<section className="role-card"><h3 className="text-xl font-bold">No public notices at the moment</h3><p className="mt-2 text-slate-600">The parish office will publish new announcements here.</p></section>
+      :active.length===0?<section className="role-card"><h3 className="text-xl font-bold">No public notices at the moment</h3><p className="mt-2 text-slate-600">The parish office will publish new announcements here.</p></section>
       :<section aria-labelledby="notices-heading">
         <h3 id="notices-heading" className="role-subtitle mb-3">Current parish notices</h3>
         <div className="grid gap-4 md:grid-cols-2">
-          {notices.map(n=><article key={n.id} className="role-card space-y-3">
+          {active.map(n=><article key={n.id} className="role-card space-y-3">
             <div><p className="portal-eyebrow">{n.category||'General'}</p>
               <h4 className="text-xl font-bold">{n.title}</h4></div>
             {n.media.length>0&&<div className="grid gap-2">

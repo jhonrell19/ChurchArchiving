@@ -5,7 +5,7 @@ import { useFeedback } from '@/components/ui/FeedbackProvider'
 import ParishLogo from '../components/ParishLogo'
 
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useRefreshOnHistoryRestore } from '@/hooks/useRefreshOnHistoryRestore'
 import { ADMIN_NAV } from './data/navigation'
 import type { AdminPage } from './types.ts'

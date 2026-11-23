@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-type Notice = {id:number;title:string;body:string;date?:string|null;category?:string|null}
+type Notice = {id:number;title:string;body:string;date?:string|null;category?:string|null;media?:{id:string;type:'image'|'video';url:string}[]}
 export default function ParishNoticesPreview() {
   const [items,setItems]=useState<Notice[]>([])
   const [loading,setLoading]=useState(true)
@@ -24,7 +24,10 @@ export default function ParishNoticesPreview() {
       :error?<p>Announcements could not be loaded. Check the calendar or contact the parish office.</p>
       :items.length?<div className="portal-notice-list">
         {items.slice(0,3).map(notice=><article key={notice.id}>
-          <small>{notice.date||notice.category||'Parish announcement'}</small><h3>{notice.title}</h3><p>{notice.body}</p>
+          <small>{notice.date||notice.category||'Parish announcement'}</small>
+          {notice.media?.[0]?.type==='image' && <img src={notice.media[0].url} alt="" loading="lazy" className="mb-3 mt-2 h-44 w-full rounded-lg object-cover"/>}
+          {notice.media?.[0]?.type==='video' && <video src={notice.media[0].url} controls preload="metadata" className="mb-3 mt-2 h-44 w-full rounded-lg object-cover"/>}
+          <h3>{notice.title}</h3><p>{notice.body}</p>
         </article>)}
       </div>:<p>No public announcements have been posted yet. Check the calendar for Mass schedules and events.</p>}
   </section>

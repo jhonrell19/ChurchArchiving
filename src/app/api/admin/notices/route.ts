@@ -7,7 +7,6 @@ import { formatNotices,parseNotice,studioConfigured,type MediaRow,type NoticeRow
 export const runtime='nodejs'
 export const dynamic='force-dynamic'
 const json=(data:object,status=200)=>NextResponse.json(data,{status,headers:{'Cache-Control':'no-store'}})
-const categories=['Event','Schedule','Ministry','Sacrament','Public calendar notice','General']
 export async function GET(){
   const actor=await getCurrentUser()
   if(!isSupervisor(actor))return json({message:'Super Admin required'},403)

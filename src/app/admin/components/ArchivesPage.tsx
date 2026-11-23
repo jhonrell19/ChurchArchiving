@@ -28,6 +28,9 @@ const ARCHIVE_TYPES = [
   { label: 'Baptismal', value: 'baptismal', icon: 'ti-droplet' },
   { label: 'Confirmation', value: 'confirmation', icon: 'ti-shield-check' },
   { label: 'Marriage', value: 'marriage', icon: 'ti-rings' },
+  { label: 'Burial Records (existing)', value: 'burial', icon: 'ti-cross' },
+  { label: 'Ownership', value: 'ownership', icon: 'ti-certificate' },
+  { label: 'Land Agreement', value: 'land_agreement', icon: 'ti-file-contract' },
 ]
 
 export default function ArchivesPage({initialTab='baptismal'}:{initialTab?:string}) {
@@ -391,7 +394,7 @@ const records = documents
           Digital Church Archives
         </h2>
 
-        <button
+        {activeTab !== 'burial' && <button
           onClick={() => {
             discardTemplatePreview()
             setForm(prev => ({
@@ -405,7 +408,7 @@ const records = documents
         >
           <i className="ti ti-plus text-[13px]" />
           Add Archive Record
-        </button>
+        </button>}
       </div>
 
       <p className="font-body text-[#6b8caa] text-[14px] mb-5">
@@ -464,6 +467,8 @@ const records = documents
   <option value="baptismal">Baptismal Certificate</option>
   <option value="confirmation">Confirmation Certificate</option>
   <option value="marriage">Marriage Certificate</option>
+  <option value="ownership">Certificate of Ownership</option>
+  <option value="land_agreement">Land Agreement</option>
 </select>
             </div>
 
@@ -529,7 +534,7 @@ const records = documents
   </div>
 </div>
 
-            <TemplateDataFields
+            {['baptismal', 'confirmation', 'marriage'].includes(form.sacrament_type) && <TemplateDataFields
               sacramentType={form.sacrament_type}
               value={recordData}
               onChange={next => {
@@ -537,7 +542,7 @@ const records = documents
                 setOcrReviewed(false)
                 setRecordData(next)
               }}
-            />
+            />}
 
             <div className="md:col-span-3">
               <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1">
@@ -563,14 +568,14 @@ const records = documents
                 >
                   {ocrLoading ? 'Reading scan...' : 'Preview OCR'}
                 </button>
-                <button
+                {['baptismal', 'confirmation', 'marriage'].includes(form.sacrament_type) && <button
                   type="button"
                   onClick={() => void previewFilledTemplate()}
                   disabled={templatePreviewLoading || ocrLoading}
                   className="font-display text-[10px] tracking-wider border border-emerald-300 text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-lg disabled:opacity-50"
                 >
                   {templatePreviewLoading ? 'Generating template...' : 'Preview Filled Official Template'}
-                </button>
+                </button>}
               </div>
               {templatePreviewError && (
                 <p role="alert" className="font-body text-[12px] text-red-700 mt-2">{templatePreviewError}</p>

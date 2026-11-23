@@ -1,13 +1,10 @@
 'use client'
-
-import { useFeedback } from '@/components/ui/FeedbackProvider'
-
-import ParishLogo from '../components/ParishLogo'
-
-
 import { useState } from 'react'
+import { useFeedback } from '@/components/ui/FeedbackProvider'
 import { useRefreshOnHistoryRestore } from '@/hooks/useRefreshOnHistoryRestore'
 import type { Page } from './types'
+import type { Service } from '@/lib/siteContent'
+import ParishLogo from '../components/ParishLogo'
 import { USER_NAV } from './data/navigation'
 import HomePage from './components/HomePage'
 import ArchivesPage from './components/ArchivesPage'
@@ -16,110 +13,58 @@ import RequestsPage from './components/RequestsPage'
 import AnnouncementsPage from './components/AnnouncementsPage'
 import ProfilePage from './components/ProfilePage'
 
-import type {Service} from '@/lib/siteContent'
 export default function UserDashboard({services}:{services:Service[]}) {
-  const { toast } = useFeedback()
   useRefreshOnHistoryRestore()
-  const [page, setPage] = useState<Page>('home')
-  const [sidebarOpen, setSidebar] = useState(false)
-
-  const logout = async () => {
+  const {toast}=useFeedback()
+  const [page,setPage]=useState<Page>('home')
+  const [navOpen,setNavOpen]=useState(false)
+  const navigate=(value:Page)=>{setPage(value);setNavOpen(false)}
+  async function logout(){
     try {
-      const response = await fetch('/api/auth/logout', { method: 'POST' })
-      if (!response.ok) throw new Error('Could not sign out')
-      // Full navigation removes the old authenticated React/router state.
-      window.location.replace('/login')
-    } catch {
-      toast.error('Logout failed. Please try again.')
-    }
+      const response=await fetch('/api/auth/logout',{method:'POST'})
+      if (!response.ok) throw Error()
+      window.location.replace('/')
+    } catch {toast.error('Sign out failed. Please try again.')}
   }
-
-  return (
-    <div className="parish-shell min-h-screen bg-[#f8fafc] flex">
-      <aside
-        className={`fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-slate-200 flex flex-col transform transition-transform duration-300 shadow-sm ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } lg:translate-x-0 lg:static lg:flex`}
-      >
-        <div className="px-6 py-6 border-b border-slate-100 bg-gradient-to-br from-amber-50 to-white">
-          <div className="flex items-center gap-3">
-            <ParishLogo height={48} />
-            <div>
-              <p className="font-display text-navy-mid text-[12px] tracking-wide leading-tight font-semibold">
-                Smart Parish System
-              </p>
-              <p className="font-body text-slate-500 text-[11px]">Maragondon, Cavite</p>
-            </div>
-          </div>
-        </div>
-
-        <nav className="flex-1 px-3 py-4 space-y-1">
-          {USER_NAV.map(({ id, label, icon }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => {
-                setPage(id)
-                setSidebar(false)
-              }}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-left transition-all duration-150 border ${
-                page === id
-                  ? 'bg-amber-50 text-navy-mid border-amber-200'
-                  : 'text-slate-600 border-transparent hover:bg-slate-50 hover:text-navy-mid'
-              }`}
-            >
-              <i className={`ti ${icon} text-[17px] ${page === id ? 'text-gold' : ''}`} />
-              <span className="font-display text-[11px] tracking-wide">{label}</span>
-            </button>
-          ))}
-          {process.env.NEXT_PUBLIC_PARISH_RELATIVE_CLAIMS === 'enabled' && <a className="parish-report-link" href="/claims">Relationship claims</a>}
-          {process.env.NEXT_PUBLIC_PARISH_APPOINTMENTS === 'enabled' && <a className="parish-report-link" href="/appointments">Office appointments</a>}
-        </nav>
-
-        <div className="px-3 pb-4">
-          <button
-            type="button"
-            onClick={logout}
-            className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-left border border-red-100 text-red-600 hover:bg-red-50 transition-colors"
-          >
-            <i className="ti ti-logout text-[16px]" />
-            <span className="font-display text-[11px] tracking-wide">Logout</span>
-          </button>
-        </div>
-      </aside>
-
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-30 bg-black/30 lg:hidden"
-          onClick={() => setSidebar(false)}
-        />
-      )}
-
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-20">
-          <div className="flex items-center gap-3">
-            <button
-              className="lg:hidden p-1"
-              onClick={() => setSidebar(true)}
-              aria-label="Open navigation" aria-expanded={sidebarOpen}
-            >
-              <i className="ti ti-menu-2 text-navy-mid text-[20px]" /><span className="ml-1">Menu</span>
-            </button>
-            <h1 className="font-display text-navy-mid text-[15px] font-semibold tracking-wide">
-              {USER_NAV.find(n => n.id === page)?.label}
-            </h1>
-          </div>
-        </header>
-
-        <main className="flex-1 p-4 md:p-6 overflow-auto">
-          {page === 'home' && <HomePage setPage={setPage} />}
-          {page === 'archives' && <ArchivesPage />}
-          {page === 'transcriptions' && <TranscriptionsPage />}
-          {page === 'requests' && <RequestsPage />}
-          {page === 'announcements' && <AnnouncementsPage services={services}/>}
-          {page === 'profile' && <ProfilePage />}
-        </main>
+  return <div className="portal-workspace-shell parish-shell min-h-screen lg:flex">
+    <aside className={`fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-r border-slate-200 bg-white transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${navOpen?'translate-x-0':'-translate-x-full'}`}>
+      <div className="flex items-center gap-3 border-b border-slate-200 p-5">
+        <ParishLogo height={54}/>
+        <div><p className="text-lg font-bold leading-tight">Smart Parish System</p><p className="text-slate-600">Maragondon, Cavite</p></div>
+        <button type="button" className="ml-auto lg:hidden" onClick={()=>setNavOpen(false)} aria-label="Close navigation">✕</button>
       </div>
+      <div className="flex-1 overflow-y-auto p-3">
+        <p className="px-3 py-2 text-sm font-bold uppercase text-slate-500">My parish services</p>
+        <nav className="role-nav" aria-label="Parishioner navigation">
+          {USER_NAV.map(link=><button type="button" key={link.id} onClick={()=>navigate(link.id)}
+            aria-current={page===link.id?'page':undefined}>
+            <i className={`ti ${link.icon}`} aria-hidden="true"/>{link.label}
+          </button>)}
+          {process.env.NEXT_PUBLIC_PARISH_RELATIVE_CLAIMS==='enabled' && <a href="/claims"><i className="ti ti-users" aria-hidden="true"/>Request for a relative</a>}
+          {process.env.NEXT_PUBLIC_PARISH_APPOINTMENTS==='enabled' && <a href="/appointments"><i className="ti ti-calendar-plus" aria-hidden="true"/>Office appointments</a>}
+        </nav>
+      </div>
+      <div className="border-t border-slate-200 p-3">
+        <button onClick={()=>void logout()} className="role-signout w-full"><i className="ti ti-logout" aria-hidden="true"/> Sign out</button>
+      </div>
+    </aside>
+    {navOpen && <button className="fixed inset-0 z-30 bg-black/40 lg:hidden" aria-label="Close navigation" onClick={()=>setNavOpen(false)}/>}
+    <div className="flex min-w-0 flex-1 flex-col">
+      <header className="role-head sticky top-0 z-20 flex min-h-20 items-center gap-3 px-4 sm:px-7">
+        <button type="button" onClick={()=>setNavOpen(true)} aria-label="Open navigation" aria-expanded={navOpen} className="rounded-lg border p-3 lg:hidden">
+          <i className="ti ti-menu-2 text-xl" aria-hidden="true"/> Menu
+        </button>
+        <h1>{USER_NAV.find(item=>item.id===page)?.label || 'Smart Parish'}</h1>
+        <span className="ml-auto hidden text-sm text-slate-600 sm:inline">Parishioner portal</span>
+      </header>
+      <main className="role-content flex-1">
+        {page==='home' && <HomePage setPage={navigate}/>}
+        {page==='requests' && <RequestsPage/>}
+        {page==='announcements' && <AnnouncementsPage services={services}/>}
+        {page==='archives' && <ArchivesPage/>}
+        {page==='transcriptions' && <TranscriptionsPage/>}
+        {page==='profile' && <ProfilePage/>}
+      </main>
     </div>
-  )
+  </div>
 }

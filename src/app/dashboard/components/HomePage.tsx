@@ -1,315 +1,82 @@
 'use client'
-
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { Page } from '../types'
 import MassMediaPlayer from '../../components/MassMediaPlayer'
 import TrackingDashboardCard from './TrackingDashboardCard'
 import StatusNotificationInbox from './StatusNotificationInbox'
 
-type MassRecord = {
-  id: number
-  title: string
-  priest: string
-  category: string
-  date: string
-  duration: string
-  status: string
-  filepath: string | null
-  hasTranscript: boolean
+type Mass = {id:number;title:string;priest:string;filepath:string|null}
+type Notice = {id:number;title:string;body:string;date:string}
+type Summary = {
+  recentMasses:Mass[]; announcements:Notice[]
 }
 
-type Announcement = {
-  id: number
-  title: string
-  category: string
-  date: string
-  body: string
-}
-
-type LatestTranscription = {
-  id: number
-  massTitle: string
-  summaryText: string
-} | null
-
-type DashboardSummary = {
-  stats: {
-    totalArchivedMasses: number
-    aiTranscriptions: number
-    sermonSummaries: number
-    thisMonthUploads: number
-  }
-  recentMasses: MassRecord[]
-  announcements: Announcement[]
-  latestTranscription: LatestTranscription
-}
-
-export default function HomePage({ setPage }: { setPage: (p: Page) => void }) {
-  const [playing, setPlaying] = useState<{ title: string; filepath: string } | null>(null)
-  const [data, setData] = useState<DashboardSummary | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-
-  const loadDashboard = async () => {
+export default function HomePage({setPage}:{setPage:(p:Page)=>void}) {
+  const [data,setData]=useState<Summary|null>(null)
+  const [loading,setLoading]=useState(true)
+  const [unavailable,setUnavailable]=useState(false)
+  const [playing,setPlaying]=useState<{title:string;filepath:string}|null>(null)
+  const load=useCallback(async()=>{
+    setLoading(true);setUnavailable(false)
     try {
-      setLoading(true)
-      setError('')
-
-      const res = await fetch('/api/backend/api/user/dashboard-summary')
-
-      const result = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        throw new Error(result.error || result.message || 'Failed to load dashboard')
-      }
+      const response=await fetch('/api/backend/api/user/dashboard-summary',{cache:'no-store'})
+      if (!response.ok)throw Error()
+      const result:Summary=await response.json()
       setData(result)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load dashboard')
-      setData(null)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    queueMicrotask(() => void loadDashboard())
-  }, [])
-
-  const stats = [
-    {
-      label: 'Total Archived Masses',
-      open: () => setPage('archives'),
-      value: data?.stats.totalArchivedMasses ?? 0,
-      icon: 'ti-video',
-    },
-    {
-      label: 'AI Transcriptions',
-      open: () => setPage('transcriptions'),
-      value: data?.stats.aiTranscriptions ?? 0,
-      icon: 'ti-file-text',
-    },
-    {
-      label: 'Sermon Summaries',
-      open: () => setPage('transcriptions'),
-      value: data?.stats.sermonSummaries ?? 0,
-      icon: 'ti-sparkles',
-    },
-    {
-      label: "This Month's Uploads",
-      open: () => setPage('archives'),
-      value: data?.stats.thisMonthUploads ?? 0,
-      icon: 'ti-calendar-month',
-    },
-  ]
-
-  const desk=(
-    <>
-      <section className="portal-start">
-        <h2>Parishioner desk</h2>
-        <div className="portal-actions">
-          <button onClick={()=>setPage('requests')}>Request a certificate <span aria-hidden="true">→</span></button>
-          <button onClick={()=>setPage('announcements')}>Calendar and notices <span aria-hidden="true">→</span></button>
-          <button onClick={()=>setPage('archives')}>Watch a Mass <span aria-hidden="true">→</span></button>
-        </div>
-      </section>
-      <TrackingDashboardCard onOpen={() => setPage('requests')} />
-      <StatusNotificationInbox />
-    </>
-  )
-
-  if (loading) {
-    return (
-      <div>{desk}
-        <p className="font-body text-[#9ab0c4] text-[14px]">
-          Loading dashboard content...
-        </p>
+    } catch {setUnavailable(true);setData(null)}
+    finally {setLoading(false)}
+  },[])
+  useEffect(()=>{void load()},[load])
+  const mass=data?.recentMasses?.[0]
+  const notice=data?.announcements?.[0]
+  return <div className="space-y-6">
+    <section className="role-banner">
+      <p className="portal-eyebrow">Your parish portal</p>
+      <h2>Welcome to Smart Parish</h2>
+      <p>Request a church certificate, check your request status, or read the latest parish updates. Choose what you need below.</p>
+    </section>
+    <section aria-label="Common parish actions">
+      <h3 className="role-subtitle mb-3">What would you like to do?</h3>
+      <div className="grid gap-3 md:grid-cols-3">
+        <button type="button" className="role-action" onClick={()=>setPage('requests')}>
+          <span>Request a certificate <small className="block text-sm font-normal text-slate-600">Baptismal, marriage, confirmation and more</small></span>
+          <i className="ti ti-file-plus" aria-hidden="true"/>
+        </button>
+        <button type="button" className="role-action" onClick={()=>setPage('announcements')}>
+          <span>Mass schedule and notices</span><i className="ti ti-calendar" aria-hidden="true"/>
+        </button>
+        <button type="button" className="role-action" onClick={()=>setPage('archives')}>
+          <span>Watch recorded Mass</span><i className="ti ti-video" aria-hidden="true"/>
+        </button>
       </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div>{desk}<div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
-        <p className="font-display text-amber-800 text-[13px] font-semibold">Dashboard temporarily unavailable</p>
-        <p className="font-body text-amber-700 text-[12px] mt-1">{error}</p>
-        <button onClick={() => void loadDashboard()} className="mt-3 font-display text-[10px] tracking-wider bg-navy text-white px-3 py-2 rounded-lg">Retry</button>
-      </div></div>
-    )
-  }
-
-  return (
-    <div>
-      {desk}
-      {playing && <MassMediaPlayer title={playing.title} filepath={playing.filepath} onClose={() => setPlaying(null)} />}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {stats.map(({ label, value, icon, open }) => (
-          <button type="button" key={label} aria-label={'Open '+label} onClick={open} className="metric-link text-left bg-white border border-gold/20 rounded-xl p-5">
-            <div className="w-9 h-9 rounded-lg bg-gold/10 border border-gold/20 flex items-center justify-center mb-3">
-              <i className={`ti ${icon} text-gold text-[17px]`} />
-            </div>
-
-            <p className="font-display text-[22px] font-semibold text-navy-mid leading-none mb-1">
-              {value}
-            </p>
-
-            <p className="font-body text-[12px] text-[#6b8caa] leading-tight">
-              {label}
-            </p>
-          </button>
-        ))}
+    </section>
+    <TrackingDashboardCard onOpen={()=>setPage('requests')}/>
+    <details className="role-detail">
+      <summary>My parish notifications</summary>
+      <StatusNotificationInbox/>
+    </details>
+    <section>
+      <h3 className="role-subtitle mb-3">Latest parish updates</h3>
+      {unavailable && <div role="status" className="role-card flex flex-wrap gap-3 items-center justify-between">
+        <p>Latest updates are temporarily unavailable. Your account and requests are unaffected.</p>
+        <button type="button" className="portal-secondary-btn" onClick={()=>void load()}>Try again</button>
+      </div>}
+      <div className="grid gap-4 md:grid-cols-2">
+        <article className="role-card">
+          <p className="portal-eyebrow">Announcement</p>
+          <h4 className="text-xl font-bold">{notice?.title||'Parish announcements'}</h4>
+          <p className="my-3 text-slate-600">{notice?.body?.slice(0,240) || (loading?'Loading…':'See the calendar for the latest Mass schedules and announcements.')}</p>
+          <button className="portal-secondary-btn" onClick={()=>setPage('announcements')}>View notices and calendar</button>
+        </article>
+        <article className="role-card">
+          <p className="portal-eyebrow">Latest Mass</p>
+          <h4 className="text-xl font-bold">{mass?.title||'Recorded Masses'}</h4>
+          <p className="my-3 text-slate-600">{mass?.priest|| (loading?'Loading…':'Watch published Mass recordings and read available homily transcripts.')}</p>
+          {mass?.filepath ? <button className="portal-secondary-btn" onClick={()=>setPlaying({title:mass.title,filepath:mass.filepath!})}>Play recording</button>
+            : <button className="portal-secondary-btn" onClick={()=>setPage('archives')}>Browse Mass recordings</button>}
+        </article>
       </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-display text-navy-mid text-[15px] font-semibold">
-              Recent Masses
-            </h3>
-
-            <button
-              onClick={() => setPage('archives')}
-              className="font-display text-[11px] tracking-wider text-gold border border-gold/30 px-3 py-1 rounded-lg"
-            >
-              View All
-            </button>
-          </div>
-
-          {!data || data.recentMasses.length === 0 ? (
-            <div className="bg-white border border-gold/20 rounded-xl p-10 text-center">
-              <i className="ti ti-video-off text-gold/30 text-4xl mb-3 block" />
-              <p className="font-display text-navy-mid text-[14px] font-semibold mb-1">
-                No masses uploaded yet
-              </p>
-              <p className="font-body text-[#9ab0c4] text-[13px]">
-                Mass records will appear here after the admin uploads or adds them.
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {data.recentMasses.map(m => (
-                <div key={m.id} className="bg-white border border-gold/20 rounded-xl overflow-hidden">
-                  <div className="h-28 bg-navy flex items-center justify-center relative">
-                    {m.filepath ? <button type="button" aria-label={`Play ${m.title}`} onClick={() => setPlaying({ title: m.title, filepath: m.filepath! })} className="text-gold"><i className="ti ti-player-play text-3xl" /></button> : <i className="ti ti-video-off text-gold text-3xl" />}
-
-                    {m.hasTranscript && (
-                      <span className="absolute top-3 right-3 font-display text-[10px] tracking-wider bg-gold text-navy px-2 py-1 rounded-full">
-                        AI Transcript
-                      </span>
-                    )}
-
-                    <span className="absolute bottom-3 right-3 font-body text-[10px] text-gold/70">
-                      {m.duration || 'No duration'}
-                    </span>
-                  </div>
-
-                  <div className="p-4">
-                    <p className="font-display text-navy-mid text-[13px] font-semibold mb-1">
-                      {m.title}
-                    </p>
-
-                    <p className="font-body text-[#6b8caa] text-[12px] mb-3">
-                      {m.priest || 'No priest assigned'}
-                    </p>
-
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-display text-[10px] tracking-wider border border-gold/25 text-gold bg-gold/10 px-2 py-0.5 rounded-full">
-                        {m.category || 'General'}
-                      </span>
-
-                      <span className="font-body text-[11px] text-[#9ab0c4]">
-                        {m.date || 'No date'}
-                      </span>
-                    </div>
-
-                    {m.filepath && (
-                      <button type="button" onClick={() => setPlaying({ title: m.title, filepath: m.filepath! })}
-                        className="inline-flex items-center gap-1.5 mt-3 font-display text-[10px] tracking-wider text-gold border border-gold/30 px-3 py-1.5 rounded-lg bg-gold/5"
-                      >
-                        <i className="ti ti-player-play text-[13px]" />
-                        View Recording
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="space-y-6">
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-display text-navy-mid text-[15px] font-semibold">
-                Announcements
-              </h3>
-
-              <button
-                onClick={() => setPage('announcements')}
-                className="font-display text-[11px] tracking-wider text-gold"
-              >
-                See all
-              </button>
-            </div>
-
-            {!data || data.announcements.length === 0 ? (
-              <div className="bg-white border border-gold/20 rounded-xl p-5">
-                <p className="font-body text-[#9ab0c4] text-[13px]">
-                  No announcements posted yet.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {data.announcements.map(a => (
-                  <div key={a.id} className="bg-white border border-gold/20 rounded-xl p-4">
-                    <p className="font-display text-navy-mid text-[12px] font-semibold leading-snug mb-1">
-                      {a.title}
-                    </p>
-
-                    <p className="font-body text-[11px] text-[#9ab0c4]">
-                      {a.date || 'No date'}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-display text-navy-mid text-[15px] font-semibold">
-                Latest Transcription
-              </h3>
-
-              <button
-                onClick={() => setPage('transcriptions')}
-                className="font-display text-[11px] tracking-wider text-gold"
-              >
-                See all
-              </button>
-            </div>
-
-            {!data?.latestTranscription ? (
-              <div className="bg-white border border-gold/20 rounded-xl p-4">
-                <p className="font-body text-[#9ab0c4] text-[13px]">
-                  No transcriptions available yet.
-                </p>
-              </div>
-            ) : (
-              <div className="bg-white border border-gold/20 rounded-xl p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <i className="ti ti-sparkles text-gold text-[15px]" />
-                  <p className="font-display text-navy-mid text-[12px] font-semibold">
-                    {data.latestTranscription.massTitle}
-                  </p>
-                </div>
-
-                <p className="font-body text-[12px] text-[#6b8caa] italic leading-relaxed line-clamp-3">
-                  {'“'}{data.latestTranscription.summaryText || 'No summary available.'}{'”'}
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
+    </section>
+    {playing && <MassMediaPlayer title={playing.title} filepath={playing.filepath} onClose={()=>setPlaying(null)}/>}
+  </div>
 }

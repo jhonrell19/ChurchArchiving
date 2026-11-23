@@ -21,7 +21,7 @@ export default function Navbar() {
 
 function PublicNavigation({ pathname }: { pathname: string }) {
   const [open, setOpen] = useState(false)
-  const [accountLink, setAccountLink] = useState({ href: '/login', label: 'Log in' })
+  const [accountLink, setAccountLink] = useState({ href: '/#parish-access', label: 'Log in' })
 
   useEffect(() => {
     queueMicrotask(() => setOpen(false))
@@ -34,16 +34,16 @@ function PublicNavigation({ pathname }: { pathname: string }) {
       try {
         const response = await fetch('/api/auth/me', { cache: 'no-store', credentials: 'same-origin' })
         if (!response.ok) {
-          if (active) setAccountLink({ href: '/login', label: 'Log in' })
+          if (active) setAccountLink({ href: '/#parish-access', label: 'Log in' })
           return
         }
         const payload: { user?: { role?: string } } = await response.json()
         const href = payload.user?.role === 'ADMIN' ? '/admin'
-          : payload.user?.role === 'BURIAL_ADMIN' ? '/burial-admin'
-          : payload.user?.role === 'USER' ? '/dashboard' : '/login'
-        if (active) setAccountLink({ href, label: href === '/login' ? 'Log in' : 'Dashboard' })
+          : ['STAFF', 'BURIAL_ADMIN'].includes(payload.user?.role || '') ? '/staff'
+          : payload.user?.role === 'USER' ? '/dashboard' : '/#parish-access'
+        if (active) setAccountLink({ href, label: href === '/#parish-access' ? 'Log in' : 'Dashboard' })
       } catch {
-        if (active) setAccountLink({ href: '/login', label: 'Log in' })
+        if (active) setAccountLink({ href: '/#parish-access', label: 'Log in' })
       }
     }
     void updateAccountLink()
@@ -56,7 +56,7 @@ function PublicNavigation({ pathname }: { pathname: string }) {
 
 
 
-  const links = [...LINKS, accountLink]
+  const links = pathname === '/' && accountLink.label === 'Log in' ? LINKS : [...LINKS, accountLink]
   return <nav className="public-nav" aria-label="Parish navigation">
     <div className="nav-inner">
       <Link href="/" className="brand"><ParishLogo height={45}/><span>Iglesia Filipina Independiente<small>Maragondon, Cavite</small></span></Link>

@@ -68,11 +68,11 @@ export default function StaffAccounts() {
 
   return <main className="min-h-screen bg-slate-50 p-4 sm:p-8 text-slate-900">
     <div className="mx-auto max-w-5xl space-y-6">
-      <a href="/admin" className="text-emerald-800 underline">Back to Super Admin</a>
+      <a href="/admin" className="text-navy-mid underline">Back to Super Admin</a>
       <h1 className="text-2xl font-bold">Church Staff Accounts</h1>
       <p className="text-base text-slate-600">Invite document-processing staff. Staff cannot manage the website, fees, Mass recordings or other accounts. MFA is required.</p>
       {error && <p role="alert" className="rounded-lg bg-red-50 p-4 text-red-800">{error}</p>}
-      {notice && <p role="status" className="rounded-lg bg-emerald-50 p-4 text-emerald-900">{notice}</p>}
+      {notice && <p role="status" className="rounded-lg bg-rose-50 p-4 text-navy-mid">{notice}</p>}
       <form onSubmit={invite} className="rounded-xl border bg-white p-5">
         <h2 className="mb-4 text-xl font-semibold">Invite Church Staff</h2>
         <div className="grid gap-3 sm:grid-cols-3">
@@ -83,7 +83,7 @@ export default function StaffAccounts() {
               className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 px-3 text-base"/>
           </label>)}
         </div>
-        <button disabled={busy} className="mt-4 rounded-lg bg-emerald-800 px-5 py-3 text-white disabled:opacity-50">Send staff invitation</button>
+        <button disabled={busy} className="mt-4 rounded-lg bg-navy px-5 py-3 text-white disabled:opacity-50">Send staff invitation</button>
       </form>
       <section className="rounded-xl border bg-white p-5">
         <h2 className="text-xl font-semibold">Staff access</h2>

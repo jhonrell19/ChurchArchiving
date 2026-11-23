@@ -1,24 +1,34 @@
-import Link from 'next/link'
-import Image from 'next/image'
 import Footer from './components/Footer'
 import ParishCalendar from './components/ParishCalendar'
+import ParishSlideshow from './components/ParishSlideshow'
+import ParishNoticesPreview from './components/ParishNoticesPreview'
+import HomepageAuth from './components/HomepageAuth'
+import { publishedContent } from '@/lib/publishedSiteContent'
+import { parishPhotos } from '@/lib/siteContent'
 
-import {publishedContent} from '@/lib/publishedSiteContent'
 export const dynamic = 'force-dynamic'
 export default async function HomePage() {
-  const content=await publishedContent()
+  const content = await publishedContent()
+  const photos = [content.photo, ...parishPhotos.filter(photo => photo !== content.photo)]
   return <>
-    <main className="parish-home">
-      <section className="welcome">
-        <div className="welcome-copy">
-          <p className="place">IFI · Maragondon, Cavite</p>
-          <h1>{content.title}</h1>
-          <p>{content.introduction}</p>
-          <div className="welcome-actions"><Link href="/login">Log in</Link><Link href="/register">Register</Link></div>
+    <main className="portal-home" id="main-content">
+      <div className="portal-home-intro">
+        <p className="portal-eyebrow">Iglesia Filipina Independiente · Maragondon, Cavite</p>
+        <h1>{content.title}</h1>
+        <p>{content.introduction}</p>
+      </div>
+      <div className="portal-home-layout">
+        <HomepageAuth />
+        <div className="portal-home-information">
+          <ParishSlideshow photos={photos} />
+          <ParishNoticesPreview />
         </div>
-        <div className="welcome-photo"><Image src={content.photo} alt="Iglesia Filipina Independiente parish in Maragondon" fill priority sizes="(max-width: 720px) 100vw, 48vw" /></div>
-      </section>
-      <nav className="parish-directory" aria-label="Parish directory"><a href="#parish-calendar">Mass times and notices <span>↓</span></a><Link href="/services">Sacraments and fees <span>→</span></Link><Link href="/contact">Parish office <span>→</span></Link></nav>
+      </div>
+      <nav className="portal-home-shortcuts" aria-label="Explore the parish">
+        <a href="#parish-calendar"><span>Mass schedules and calendar</span><span aria-hidden="true">→</span></a>
+        <a href="/services"><span>Sacraments and parish services</span><span aria-hidden="true">→</span></a>
+        <a href="/contact"><span>Contact the parish office</span><span aria-hidden="true">→</span></a>
+      </nav>
       <div id="parish-calendar"><ParishCalendar services={content.services}/></div>
     </main>
     <Footer address={content.address}/>

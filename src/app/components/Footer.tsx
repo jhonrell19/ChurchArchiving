@@ -11,7 +11,7 @@ const LINKS = [
   { href: '/about',    label: 'About'    },
   { href: '/services', label: 'Services' },
   { href: '/contact',  label: 'Contact'  },
-  { href: '/login',    label: 'Login'    },
+  { href: '/#parish-access', label: 'Account access' },
 ]
 
 export default function Footer({address='Poblacion 2-B, Maragondon, Cavite, Philippines'}:{address?:string}) {

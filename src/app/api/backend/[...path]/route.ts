@@ -114,7 +114,7 @@ if (
 
   if (path.startsWith('api/archive/')) {
     if (path === 'api/archive/deleted-documents') return m === 'GET' && role === 'ADMIN'
-    if (/^api\\/archive\\/documents\\/\\d+\\/(delete|restore)$/.test(path))
+    if (/^api\/archive\/documents\/\d+\/(delete|restore)$/.test(path))
       return m === 'PATCH' && role === 'ADMIN'
     if (role === 'ADMIN') return m === 'GET'
     return role === 'STAFF' || role === 'BURIAL_ADMIN'

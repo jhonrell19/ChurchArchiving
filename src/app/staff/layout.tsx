@@ -1,7 +1,14 @@
 import type { ReactNode } from 'react'
-import { requireRole } from '@/lib/auth'
+import { redirect } from 'next/navigation'
+import { getCurrentUser, getRoleHome } from '@/lib/auth'
 
 export default async function StaffLayout({ children }: { children: ReactNode }) {
-  await requireRole('STAFF')
+  const user = await getCurrentUser()
+  if (!user) redirect('/login')
+  // Temporary compatibility for the legacy account between web deployment and
+  // the reviewed post-deploy role-conversion migration. No cemetery UI is served.
+  if (user.role !== 'STAFF' && user.role !== 'BURIAL_ADMIN') {
+    redirect(getRoleHome(user.role))
+  }
   return children
 }

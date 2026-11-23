@@ -1,0 +1,26 @@
+name: Expire Smart Parish announcements
+on:
+  schedule:
+    # Each night at 02:30 Philippine time. Public filtering hides notices instantly.
+    - cron: '30 18 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  expire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Remove expired announcement rows and media
+        env:
+          NOTICE_CLEANUP_SECRET: ${{ secrets.PARISH_NOTICE_CLEANUP_SECRET }}
+        run: |
+          if [ -z "$NOTICE_CLEANUP_SECRET" ]; then
+            echo "PARISH_NOTICE_CLEANUP_SECRET repository secret is not configured."
+            exit 1
+          fi
+          curl --fail-with-body --silent --show-error --max-time 180 --retry 1 \
+            -X POST 'https://ifimarag.onrender.com/api/admin/notices/cleanup' \
+            -H "Authorization: Bearer $NOTICE_CLEANUP_SECRET"

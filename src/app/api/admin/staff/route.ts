@@ -52,6 +52,7 @@ export async function POST(req: NextRequest) {
   }
 
   let userId: number | null = null
+  let mailSent = false
   try {
     const password = await bcrypt.hash(randomBytes(48).toString('hex'), 12)
     const user = await prisma.user.create({
@@ -68,17 +69,19 @@ export async function POST(req: NextRequest) {
       html: `<p>A parish supervisor invited this address to be a Church Staff account.</p><p><a href="${inviteUrl}">Set your staff password</a></p><p>The link expires in one hour. After password setup, sign in and enroll an authenticator. If you did not expect this invitation, ignore it and contact the parish office.</p>`,
     })
     if (!mail.sent) throw new Error('email delivery failed')
+    mailSent = true
     await prisma.$executeRaw`INSERT INTO parish_private.audit_log ("user", action, created_at)
       VALUES (${actor.email}, ${'Staff invitation created for user #' + user.id}, now())`
     return respond({ created: true })
   } catch (error) {
-    // Do not leave an unverified, unusable invited account after a failed send.
-    // Password setup tokens cascade with its User row.
-    if (userId) {
-      // On an audit failure *after sending*, preserve the account so the sent
-      // invitation does not become a broken link.
-      console.error('Staff invitation needs administrative reconciliation', { userId })
-      return respond({ message: 'Staff invitation was created but audit confirmation failed. Verify the staff list before retrying.' }, 503)
+    // If delivery fails, remove the unusable invited account and its tokens.
+    // After a successful send, keep it so the invitation link remains valid.
+    if (userId && !mailSent) {
+      await prisma.user.delete({ where: { id: userId } }).catch(() => undefined)
+    }
+    if (userId && mailSent) {
+      console.error('Staff invitation needs audit reconciliation', { userId })
+      return respond({ message: 'Invitation sent, but audit confirmation failed. Verify the staff list before retrying.' }, 503)
     }
     console.error('Staff invitation failed')
     return respond({ message: 'Unable to create the invitation. Check Resend configuration.' }, 503)

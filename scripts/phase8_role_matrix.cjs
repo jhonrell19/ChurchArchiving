@@ -33,7 +33,8 @@ const endpoints = [
   ['GET','api/archive/documents/ownership'], ['POST','api/archive/upload'],
   ['POST','api/archive/ocr-preview'], ['GET','api/archive/audit-logs'],
   ['GET','files/uploads/baptismal/example.pdf'],
-  ['GET','api/cemetery/slots'], ['GET','api/reports/certificates'],
+  ['GET','api/cemetery/slots'], ['GET','api/cemetery/burials'], ['POST','api/cemetery/burials'],
+  ['GET','api/reports/certificates'],
   ['GET','api/reports/members'], ['GET','api/reports/schedules'],
   ['GET','api/masses'], ['POST','api/masses'],
   ['PATCH','api/masses/3/transcription'],
@@ -42,14 +43,14 @@ const endpoints = [
   ['POST','api/claims/9/review'], ['GET','api/user/dashboard-summary'],
 ]
 if (require.main === module) {
-  console.log('| Method | Endpoint | Main Admin | Burial Admin | Parishioner |')
-  console.log('|---|---|:---:|:---:|:---:|')
+  console.log('| Method | Endpoint | Super Admin | Church Staff | Legacy Burial Admin | Parishioner |')
+  console.log('|---|---|:---:|:---:|:---:|:---:|')
   for (const [method, endpoint] of endpoints) {
-    const roles = ['ADMIN','BURIAL_ADMIN','USER'].map(role =>
+    const roles = ['ADMIN','STAFF','BURIAL_ADMIN','USER'].map(role =>
       isAllowed(role, method, endpoint) ? '✓' : '—')
     console.log(`| ${method} | \`${endpoint}\` | ${roles.join(' | ')} |`)
   }
   console.log('\nAccess for request IDs, file paths and office-scoped archives ALSO depends on Flask ownership and role checks.')
-  console.log('Separate STAFF role does not exist in the current Prisma schema.')
+  console.log('STAFF is the unified document office; legacy BURIAL_ADMIN remains temporarily for safe migration.')
 }
 module.exports = { isAllowed, endpoints }

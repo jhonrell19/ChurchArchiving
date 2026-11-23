@@ -14,6 +14,7 @@ enum Role {
   USER
   ADMIN
   BURIAL_ADMIN
+  STAFF
 
   @@schema("parish_auth")
 }
@@ -41,6 +42,7 @@ model User {
   membershipReviewReason String?
 
   emailVerified Boolean @default(false)
+  accountEnabled Boolean @default(true)
 
   // Google is the only external sign-in provider.
   googleSub String? @unique

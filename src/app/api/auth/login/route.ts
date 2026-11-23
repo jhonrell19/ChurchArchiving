@@ -48,6 +48,10 @@ export async function POST(req: Request) {
       )
     }
 
+    if (user && !user.accountEnabled) {
+      return NextResponse.json({ message: 'This account is disabled. Contact the parish office.' }, { status: 403 })
+    }
+
     if (
   user.role === 'USER' &&
   !user.emailVerified &&

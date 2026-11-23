@@ -135,7 +135,8 @@ BURIAL_ADMIN_TYPES = ["burial", "land_agreement", "ownership"]
 from relationship_claims import claims, enabled as relative_claims_enabled
 from appointments import appointments
 from office_reports import reports
-app.config["PARISH_REPORT_SCOPE"] = {"ADMIN": MAIN_ADMIN_TYPES, "BURIAL_ADMIN": BURIAL_ADMIN_TYPES}
+app.config["PARISH_REPORT_SCOPE"] = {"ADMIN": MAIN_ADMIN_TYPES + BURIAL_ADMIN_TYPES,
+    "STAFF": MAIN_ADMIN_TYPES + BURIAL_ADMIN_TYPES, "BURIAL_ADMIN": BURIAL_ADMIN_TYPES}
 app.register_blueprint(reports)
 app.register_blueprint(claims)
 app.register_blueprint(appointments)
@@ -467,7 +468,7 @@ def protect_backend_boundary():
     if request.path == "/api/paymongo/confirm-internal" and g.user_role == "PAYMONGO_WEBHOOK":
         return None
 
-    if g.user_role not in {"USER", "ADMIN", "BURIAL_ADMIN"}:
+    if g.user_role not in {"USER", "ADMIN", "STAFF", "BURIAL_ADMIN"}:
 
         return {"error": "Invalid authenticated role"}, 401
 
@@ -497,7 +498,11 @@ def allowed_types_for_current_role():
 
     if role == "ADMIN":
 
-        return MAIN_ADMIN_TYPES
+        return MAIN_ADMIN_TYPES + BURIAL_ADMIN_TYPES
+
+    if role == "STAFF":
+
+        return MAIN_ADMIN_TYPES + BURIAL_ADMIN_TYPES
 
     if role == "BURIAL_ADMIN":
 
@@ -577,7 +582,18 @@ def can_access_filepath(filepath):
         func.replace(CertificateRequest.draft_file, "\\", "/") == normalized
     )
 
-    # MAIN ADMIN
+    # Staff retrieves protected records across both old offices, but not Mass assets.
+    if role == "STAFF":
+        document = Document.query.filter(document_path_matches).first()
+        if document and document.sacrament_type in MAIN_ADMIN_TYPES + BURIAL_ADMIN_TYPES:
+            return True
+        release_request = CertificateRequest.query.filter(request_path_matches).first()
+        if release_request is not None:
+            return True
+        draft_request = CertificateRequest.query.filter(draft_path_matches).first()
+        return draft_request is not None
+
+    # SUPER ADMIN (read-only oversight)
     if role == "ADMIN":
 
         if (
@@ -592,14 +608,14 @@ def can_access_filepath(filepath):
             .first()
         )
 
-        if document and document.sacrament_type in MAIN_ADMIN_TYPES:
+        if document and document.sacrament_type in MAIN_ADMIN_TYPES + BURIAL_ADMIN_TYPES:
             return True
 
         release_request = (
             CertificateRequest.query
             .filter(
                 request_path_matches,
-                CertificateRequest.sacrament_type.in_(MAIN_ADMIN_TYPES),
+                CertificateRequest.sacrament_type.in_(MAIN_ADMIN_TYPES + BURIAL_ADMIN_TYPES),
             )
             .first()
         )
@@ -611,7 +627,7 @@ def can_access_filepath(filepath):
             CertificateRequest.query
             .filter(
                 draft_path_matches,
-                CertificateRequest.sacrament_type.in_(MAIN_ADMIN_TYPES),
+                CertificateRequest.sacrament_type.in_(MAIN_ADMIN_TYPES + BURIAL_ADMIN_TYPES),
             )
             .first()
         )
@@ -1591,7 +1607,7 @@ def _archive_file_links(document):
 
 @app.route('/api/archive/documents/<int:document_id>/original-scan', methods=['GET'])
 def api_archive_original_scan(document_id):
-    denied = require_roles('ADMIN')
+    denied = require_roles('ADMIN', 'STAFF')
     if denied:
         return denied
     document = db.session.get(Document, document_id)
@@ -1617,7 +1633,7 @@ def api_archive_original_scan(document_id):
 @app.route('/api/archive/documents/<int:document_id>/promote-filled-template', methods=['POST'])
 def api_archive_promote_filled_template(document_id):
     """One-time, explicit migration of a legacy scanned-primary archive."""
-    denied = require_roles('ADMIN')
+    denied = require_roles('STAFF')
     if denied:
         return denied
     document = db.session.get(Document, document_id)
@@ -1646,7 +1662,7 @@ def api_archive_promote_filled_template(document_id):
 
 @app.route('/api/archive/documents/<int:document_id>/filled-template', methods=['GET'])
 def api_archive_filled_template(document_id):
-    denied = require_roles('ADMIN')
+    denied = require_roles('ADMIN', 'STAFF')
     if denied:
         return denied
     document = db.session.get(Document, document_id)
@@ -1675,7 +1691,7 @@ def api_archive_filled_template(document_id):
 
 @app.route("/api/archive/ocr-preview", methods=["POST"])
 def api_archive_ocr_preview():
-    denied = require_roles("ADMIN", "BURIAL_ADMIN")
+    denied = require_roles("STAFF", "BURIAL_ADMIN")
     if denied:
         return denied
 
@@ -1726,7 +1742,7 @@ def api_archive_template_preview():
     No database write or official release occurs. The existing blank PNG is
     used as the background for a new, disposable preview PDF.
     """
-    denied = require_roles("ADMIN")
+    denied = require_roles("STAFF")
     if denied:
         return denied
 
@@ -1802,7 +1818,7 @@ def api_health():
 @app.route("/api/archive/upload", methods=["POST"])
 def api_upload_document():
 
-    denied = require_roles("ADMIN", "BURIAL_ADMIN")
+    denied = require_roles("STAFF", "BURIAL_ADMIN")
 
     if denied:
 
@@ -2126,7 +2142,7 @@ def api_upload_document():
 
 @app.get("/api/archive/storage-status")
 def api_archive_storage_status():
-    denied = require_roles("ADMIN", "BURIAL_ADMIN")
+    denied = require_roles("ADMIN", "STAFF", "BURIAL_ADMIN")
     if denied:
         return denied
     enabled = private_uploads.enabled()
@@ -2142,7 +2158,7 @@ def api_archive_storage_status():
 
 @app.get("/api/archive/ocr-health")
 def api_archive_ocr_health():
-    denied = require_roles("ADMIN", "BURIAL_ADMIN")
+    denied = require_roles("ADMIN", "STAFF", "BURIAL_ADMIN")
     if denied:
         return denied
     available = bool(find_tesseract_executable())
@@ -2155,7 +2171,7 @@ def api_archive_ocr_health():
 
 def api_archive_stats():
 
-    denied = require_roles("ADMIN", "BURIAL_ADMIN")
+    denied = require_roles("ADMIN", "STAFF", "BURIAL_ADMIN")
 
     if denied:
 
@@ -2219,7 +2235,7 @@ def api_archive_stats():
 
 def api_archive_documents():
 
-    denied = require_roles("ADMIN", "BURIAL_ADMIN")
+    denied = require_roles("ADMIN", "STAFF", "BURIAL_ADMIN")
 
     if denied:
 
@@ -2305,7 +2321,7 @@ def api_archive_documents():
 
 def api_archive_documents_by_type(sacrament_type):
 
-    denied = require_roles("ADMIN", "BURIAL_ADMIN")
+    denied = require_roles("ADMIN", "STAFF", "BURIAL_ADMIN")
 
     if denied:
 
@@ -2872,6 +2888,8 @@ def api_get_requests():
 
             "BURIAL_ADMIN",
 
+            "STAFF",
+
         }:
 
 
@@ -3038,7 +3056,7 @@ def api_get_single_request(request_id):
         if cert_request.requester_user_id != user_id:
             return {"error": "Forbidden"}, 403
 
-    elif role in {"ADMIN", "BURIAL_ADMIN"}:
+    elif role in {"ADMIN", "STAFF", "BURIAL_ADMIN"}:
         if not staff_can_access_request(cert_request):
             return {"error": "Forbidden"}, 403
 
@@ -3058,7 +3076,7 @@ def api_demo_pay_request(request_id):
 
 @app.route("/api/requests/<int:request_id>/status", methods=["PATCH"])
 def api_update_request_status(request_id):
-    denied = require_roles("ADMIN", "BURIAL_ADMIN")
+    denied = require_roles("STAFF", "BURIAL_ADMIN")
 
     if denied:
         return denied
@@ -3146,7 +3164,7 @@ def api_update_request_status(request_id):
 @app.route("/api/requests/<int:request_id>/select-record", methods=["PATCH"])
 @app.route("/api/requests/<int:request_id>/attach-document", methods=["PATCH"])
 def api_select_source_record(request_id):
-    denied = require_roles("ADMIN", "BURIAL_ADMIN")
+    denied = require_roles("STAFF", "BURIAL_ADMIN")
 
     if denied:
         return denied
@@ -3244,7 +3262,7 @@ def api_select_source_record(request_id):
 
 @app.route("/api/requests/<int:request_id>/release-document", methods=["POST"])
 def api_upload_release_document(request_id):
-    denied = require_roles("ADMIN", "BURIAL_ADMIN")
+    denied = require_roles("STAFF", "BURIAL_ADMIN")
 
     if denied:
         return denied
@@ -3327,7 +3345,7 @@ def api_upload_release_document(request_id):
 
 @app.route("/api/requests/<int:request_id>/generate-document", methods=["POST"])
 def api_generate_release_document(request_id):
-    denied = require_roles("ADMIN", "BURIAL_ADMIN")
+    denied = require_roles("STAFF", "BURIAL_ADMIN")
     if denied:
         return denied
 
@@ -3406,7 +3424,7 @@ def api_download_request_document(request_id):
             return {"error": "Forbidden"}, 403
         if cert_request.status != "Released" or cert_request.payment_status != "Paid" or _payment_is_test_only(cert_request):
             return {"error": "This document is not available for download yet."}, 403
-    elif role in {"ADMIN", "BURIAL_ADMIN"}:
+    elif role in {"ADMIN", "STAFF", "BURIAL_ADMIN"}:
         if not staff_can_access_request(cert_request):
             return {"error": "Forbidden"}, 403
     else:
@@ -4354,7 +4372,7 @@ def api_transcribe_mass_ai(mass_id):
 
 def api_deleted_documents():
 
-    denied = require_roles("ADMIN", "BURIAL_ADMIN")
+    denied = require_roles("ADMIN")
 
     if denied:
 
@@ -4433,7 +4451,7 @@ def api_deleted_documents():
 
 def api_soft_delete_document(document_id):
 
-    denied = require_roles("ADMIN", "BURIAL_ADMIN")
+    denied = require_roles("ADMIN")
 
     if denied:
 
@@ -4509,7 +4527,7 @@ def api_soft_delete_document(document_id):
 
 def api_restore_document(document_id):
 
-    denied = require_roles("ADMIN", "BURIAL_ADMIN")
+    denied = require_roles("ADMIN")
 
     if denied:
 
@@ -5095,9 +5113,16 @@ def api_cemetery_payments():
 
 @app.route("/api/cemetery/burials", methods=["GET", "POST"])
 def api_cemetery_burials():
-    denied = _cemetery_only()
-    if denied:
-        return denied
+    # STAFF may inspect historical burial documents, not create cemetery
+    # records or manage slots, reservations and financial accounts.
+    if request.method == "GET":
+        denied = require_roles("STAFF", "BURIAL_ADMIN")
+        if denied:
+            return denied
+    else:
+        denied = _cemetery_only()
+        if denied:
+            return denied
 
     if request.method == "GET":
         q = (request.args.get("q") or "").strip()
@@ -5178,7 +5203,7 @@ def api_cemetery_burials():
 
 @app.route("/api/cemetery/files/<path:filepath>", methods=["GET"])
 def api_cemetery_file(filepath):
-    denied = _cemetery_only()
+    denied = require_roles("STAFF", "BURIAL_ADMIN")
     if denied:
         return denied
     normalized = normalize_path(filepath)
@@ -5454,7 +5479,7 @@ def api_record_cash_receipt(request_id):
     Requires deploy/migrations/20261122_cash_receipts.sql. Receipt entry never
     updates or deletes a previous ledger row; a reversal is a NEW negative row.
     """
-    denied = require_roles("ADMIN", "BURIAL_ADMIN")
+    denied = require_roles("STAFF", "BURIAL_ADMIN")
     if denied:
         return denied
     if os.getenv("PARISH_CASH_RECEIPTS") != "enabled":

@@ -30,10 +30,6 @@ function isAllowed(role: Role, method: string, path: string) {
   if (archiveCategoryMatch) {
     const category = decodeURIComponent(archiveCategoryMatch[1])
 
-    if (role === 'ADMIN' && BURIAL_ARCHIVE_TYPES.has(category)) {
-      return false
-    }
-
     if (role === 'BURIAL_ADMIN' && MAIN_ARCHIVE_TYPES.has(category)) {
       return false
     }
@@ -50,13 +46,17 @@ function isAllowed(role: Role, method: string, path: string) {
 
   if (path === 'api/reports/members' || path === 'api/reports/schedules') return role === 'ADMIN' && (m === 'GET' || m === 'POST')
   if (/^api\/reports\/schedules\/\d+\/latest$/.test(path)) return role === 'ADMIN' && m === 'GET'
-  if (path === 'api/reports/certificates') return m === 'GET' && (role === 'ADMIN' || role === 'BURIAL_ADMIN')
+  if (path === 'api/reports/certificates') return m === 'GET' && (role === 'ADMIN' || role === 'STAFF' || role === 'BURIAL_ADMIN')
 
   if (path === 'api/health') {
     return m === 'GET'
   }
 
   if (path.startsWith('api/cemetery/')) {
+    if (role === 'STAFF') {
+      return m === 'GET' && (path === 'api/cemetery/burials' ||
+        path.startsWith('api/cemetery/files/'))
+    }
     return role === 'BURIAL_ADMIN'
   }
 
@@ -66,7 +66,7 @@ function isAllowed(role: Role, method: string, path: string) {
 
    if (path === 'api/requests/pricing') {
     if (m === 'GET') {
-      return ['USER', 'ADMIN', 'BURIAL_ADMIN'].includes(role)
+      return ['USER', 'ADMIN', 'STAFF', 'BURIAL_ADMIN'].includes(role)
     }
 
     if (m === 'PATCH') {
@@ -78,7 +78,7 @@ function isAllowed(role: Role, method: string, path: string) {
 
   if (path === 'api/requests') {
     if (m === 'POST') return role === 'USER'
-    if (m === 'GET') return ['USER', 'ADMIN', 'BURIAL_ADMIN'].includes(role)
+    if (m === 'GET') return ['USER', 'ADMIN', 'STAFF', 'BURIAL_ADMIN'].includes(role)
     return false
   }
 
@@ -87,7 +87,7 @@ function isAllowed(role: Role, method: string, path: string) {
   }
 
   if (/^api\/requests\/\d+$/.test(path)) {
-    return m === 'GET' && ['USER', 'ADMIN', 'BURIAL_ADMIN'].includes(role)
+    return m === 'GET' && ['USER', 'ADMIN', 'STAFF', 'BURIAL_ADMIN'].includes(role)
   }
 
 if (
@@ -97,19 +97,19 @@ if (
 }
 
   if (/^api\/requests\/\d+\/cash-receipt$/.test(path)) {
-    return m === 'POST' && ['ADMIN', 'BURIAL_ADMIN'].includes(role)
+    return m === 'POST' && ['STAFF', 'BURIAL_ADMIN'].includes(role)
   }
 
   if (/^api\/requests\/\d+\/(status|attach-document|select-record)$/.test(path)) {
-    return m === 'PATCH' && ['ADMIN', 'BURIAL_ADMIN'].includes(role)
+    return m === 'PATCH' && ['STAFF', 'BURIAL_ADMIN'].includes(role)
   }
 
   if (/^api\/requests\/\d+\/(release-document|generate-document)$/.test(path)) {
-    return m === 'POST' && ['ADMIN', 'BURIAL_ADMIN'].includes(role)
+    return m === 'POST' && ['STAFF', 'BURIAL_ADMIN'].includes(role)
   }
 
   if (/^api\/requests\/\d+\/download$/.test(path)) {
-    return m === 'GET' && ['USER', 'ADMIN', 'BURIAL_ADMIN'].includes(role)
+    return m === 'GET' && ['USER', 'ADMIN', 'STAFF', 'BURIAL_ADMIN'].includes(role)
   }
 
   if (path === 'api/archive/audit-logs') {
@@ -117,7 +117,11 @@ if (
   }
 
   if (path.startsWith('api/archive/')) {
-    return ['ADMIN', 'BURIAL_ADMIN'].includes(role)
+    if (path === 'api/archive/deleted-documents') return m === 'GET' && role === 'ADMIN'
+    if (/^api\/archive\/documents\/\d+\/(delete|restore)$/.test(path))
+      return m === 'PATCH' && role === 'ADMIN'
+    if (role === 'ADMIN') return m === 'GET'
+    return role === 'STAFF' || role === 'BURIAL_ADMIN'
   }
 
   if (path === 'api/masses') {
@@ -154,9 +158,7 @@ function forceRoleScope(url: URL, role: Role, path: string) {
 
   if (!scopedPaths.has(path)) return
 
-  if (role === 'ADMIN') {
-    url.searchParams.set('scope', 'main')
-  } else if (role === 'BURIAL_ADMIN') {
+  if (role === 'BURIAL_ADMIN') {
     url.searchParams.set('scope', 'burial')
   } else {
     url.searchParams.delete('scope')

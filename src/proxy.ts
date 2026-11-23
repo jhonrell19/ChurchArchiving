@@ -6,6 +6,7 @@ const protectedPrefixes = [
   '/dashboard',
   '/admin',
   '/burial-admin',
+  '/staff',
   '/complete-profile',
 ]
 
@@ -68,6 +69,7 @@ export const config = {
     '/dashboard/:path*',
     '/admin/:path*',
     '/burial-admin/:path*',
+    '/staff/:path*',
     '/complete-profile/:path*',
     '/api/:path*',
   ],

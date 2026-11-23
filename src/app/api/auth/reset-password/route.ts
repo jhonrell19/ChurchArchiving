@@ -31,9 +31,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: 'Reset link is invalid or expired.' }, { status: 400 })
     }
 
+    const user = await prisma.user.findUnique({ where: { id: record.userId }, select: { role: true, accountEnabled: true } })
+    if (!user || !user.accountEnabled) return NextResponse.json({ message: 'Account unavailable.' }, { status: 403 })
     const hashedPassword = await bcrypt.hash(newPassword, 12)
     await prisma.$transaction([
-      prisma.user.update({ where: { id: record.userId }, data: { password: hashedPassword } }),
+      prisma.user.update({ where: { id: record.userId }, data: { password: hashedPassword, ...(user.role === 'STAFF' ? { emailVerified: true } : {}) } }),
       prisma.session.deleteMany({ where: { userId: record.userId } }),
       prisma.passwordResetToken.deleteMany({ where: { userId: record.userId } }),
     ])

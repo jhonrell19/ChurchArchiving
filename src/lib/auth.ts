@@ -17,8 +17,9 @@ export function getRoleHome(role: Role) {
   switch (role) {
     case 'ADMIN':
       return '/admin'
+    case 'STAFF':
     case 'BURIAL_ADMIN':
-      return '/burial-admin'
+      return '/staff'
     default:
       return '/dashboard'
   }
@@ -89,6 +90,7 @@ export async function getCurrentUser() {
           role: true,
           membershipStatus: true,
           emailVerified: true,
+          accountEnabled: true,
           googleSub: true,
           createdAt: true,
           updatedAt: true,
@@ -97,7 +99,7 @@ export async function getCurrentUser() {
     },
   })
 
-  if (!session) return null
+  if (!session || !session.user.accountEnabled) return null
 
   // Enforce member approval even for a pre-existing login session.
   if (session.user.role === 'USER' && session.user.membershipStatus !== 'approved') {

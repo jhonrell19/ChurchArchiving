@@ -235,7 +235,7 @@ export async function POST(request: Request) {
     response.cookies.set(SESSION_COOKIE, token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: 'strict',
       path: '/',
       maxAge: SESSION_MAX_AGE_SECONDS,
     })
@@ -243,7 +243,7 @@ export async function POST(request: Request) {
     response.cookies.set('token', '', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: 'strict',
       path: '/',
       expires: new Date(0),
     })

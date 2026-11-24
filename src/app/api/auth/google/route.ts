@@ -105,6 +105,13 @@ export async function POST(request: Request) {
         })
 
       if (existingEmailUser) {
+        // Refuse a disabled account before linking or mutating its Google ID.
+        if (!existingEmailUser.accountEnabled) {
+          return NextResponse.json(
+            { message: 'This account is disabled. Contact the parish office.' },
+            { status: 403, headers: { 'Cache-Control': 'no-store' } }
+          )
+        }
         if (existingEmailUser.role !== 'USER') {
           return NextResponse.json(
             {

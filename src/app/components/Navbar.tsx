@@ -56,7 +56,8 @@ function PublicNavigation({ pathname }: { pathname: string }) {
 
 
 
-  // Always show the shortcut; the server resolves /login when signed out.\n  const links = [...LINKS, accountLink]
+  // Always show the shortcut; the server resolves /login when signed out.
+  const links = [...LINKS, accountLink]
   return <nav className="public-nav" aria-label="Parish navigation">
     <div className="nav-inner">
       <Link href="/" className="brand"><ParishLogo height={45}/><span>Iglesia Filipina Independiente<small>Maragondon, Cavite</small></span></Link>

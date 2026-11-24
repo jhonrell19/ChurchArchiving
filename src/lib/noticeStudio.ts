@@ -214,6 +214,8 @@ export function parseNotice(data:any){
 export function noticeMutationIsSameOrigin(req:Request){
   const origin=req.headers.get('origin')
   const configured=process.env.APP_BASE_URL?.replace(/\/$/,'')
-  const expected=process.env.NODE_ENV==='production' ? configured : new URL(req.url).origin
-  return Boolean(origin&&expected&&origin===expected)
+  const allowed=process.env.NODE_ENV==='production'
+    ? ['https://ifimarag.onrender.com',configured]
+    : [new URL(req.url).origin,configured]
+  return Boolean(origin&&allowed.includes(origin))
 }

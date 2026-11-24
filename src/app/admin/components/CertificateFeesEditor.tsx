@@ -130,7 +130,7 @@ export default function CertificateFeesEditor() {
   }
 
   return (
-    <section className="mt-8 rounded-xl border border-gold/20 bg-white p-5">
+    <section className="bg-white">
       <h3 className="font-display text-lg font-semibold text-navy-mid">
         Certificate Request Fees
       </h3>

@@ -9,8 +9,8 @@ export default async function SiteContentPage(){
   if (!user) redirect('/login')
   if (!isSupervisor(user)) redirect('/admin')
   const edition=siteEditingEnabled()?await readEdition().catch(()=>null):null
-  return <main className="parish-workspace site-editor"><Link href="/admin">← Parish office</Link>
-    <h1>Website editor</h1>
+  return <main className="parish-workspace site-editor"><Link href="/admin?page=settings">← Admin settings</Link>
+    <h1>Website content management</h1>
     {edition?<Editor initial={edition.content} initialRevision={edition.revision}/>:<p role="status">Website editing is unavailable. Check the site edition migration and the web service’s PARISH_SITE_EDITOR setting.</p>}
   </main>
 }

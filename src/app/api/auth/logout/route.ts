@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     })
   }
 
-  const response = NextResponse.redirect(new URL('/login', request.url), 303)
+  const response = new NextResponse(null, { status: 303, headers: { Location: '/login' } })
   for (const [name, value] of Object.entries(PRIVATE_CACHE_HEADERS)) {
     response.headers.set(name, value)
   }

@@ -10,10 +10,10 @@ import TranscriptionsPage from './components/TranscriptionsPage'
 import AnnouncementsPage from './components/AnnouncementsPage'
 import SettingsPage from './components/SettingsPage'
 
-export default function AdminPanel({managePolicy=false,manageWebsite=false,manageStaff=false}:{
-  managePolicy?:boolean;manageWebsite?:boolean;manageStaff?:boolean
+export default function AdminPanel({accountEmail,initialPage="dashboard",managePolicy=false,manageWebsite=false,manageStaff=false}:{
+  accountEmail:string;initialPage?:'settings'|'dashboard';managePolicy?:boolean;manageWebsite?:boolean;manageStaff?:boolean
 }) {
-  const [page,setPage]=useState<AdminPage>('dashboard')
+  const [page,setPage]=useState<AdminPage>(initialPage)
   const [transcriptId,setTranscriptId]=useState<number|null>(null)
   const [sidebarOpen,setSidebar]=useState(false)
   const navigate=(next:AdminPage)=>{setPage(next);setSidebar(false)}
@@ -22,8 +22,6 @@ export default function AdminPanel({managePolicy=false,manageWebsite=false,manag
     ...(manageStaff?[{href:'/admin/staff',text:'Church Staff accounts',icon:'ti-users'}]:[]),
     {href:'/admin/member-approvals',text:'Membership approvals',icon:'ti-user-check'},
     {href:'/office-reports',text:'Reports and exports',icon:'ti-chart-bar'},
-    ...(manageWebsite?[{href:'/admin/site-content',text:'Public website editor',icon:'ti-world'}]:[]),
-    ...(managePolicy?[{href:'/admin/portal-settings',text:'Privacy policies & purposes',icon:'ti-shield-check'}]:[]),
   ]
   return <div className="portal-workspace-shell parish-shell min-h-screen lg:flex">
     <aside className={`fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-r border-slate-200 bg-white transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${sidebarOpen?'translate-x-0':'-translate-x-full'}`}>
@@ -55,13 +53,13 @@ export default function AdminPanel({managePolicy=false,manageWebsite=false,manag
         </button>
         <h1>{label}</h1><span className="ml-auto hidden text-sm text-slate-600 sm:inline">Super Admin workspace</span>
       </header>
-      <main className="role-content flex-1">
+      <main className="role-content mx-auto flex-1">
         {page==='dashboard' && <SuperAdminOverview manageStaff={manageStaff} manageWebsite={manageWebsite}
           onOpenMasses={()=>navigate('masses')} onOpenNotices={()=>navigate('announcements')} onOpenSettings={()=>navigate('settings')}/>}
         {page==='masses' && <MassesPage initialTranscript={transcriptId}/>}
         {page==='transcriptions' && <TranscriptionsPage openMass={id=>{setTranscriptId(id);navigate('masses')}}/>}
         {page==='announcements' && <AnnouncementsPage/>}
-        {page==='settings' && <SettingsPage/>}
+        {page==='settings' && <SettingsPage manageWebsite={manageWebsite} managePolicy={managePolicy} accountEmail={accountEmail}/>}
       </main>
     </div>
   </div>

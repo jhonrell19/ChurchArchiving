@@ -1,117 +1,63 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import {useCallback,useEffect,useState} from 'react'
 import ParishCalendar from '../../components/ParishCalendar'
-import { BADGE_COLOR } from '../data/ui'
-
-type Announcement = {
-  id: number
-  title: string
-  category: string
-  date: string
-  body: string
-  imagePath?: string
-  starts?: string
-  ends?: string
-  createdAt: string
-}
-
 import type {Service} from '@/lib/siteContent'
-export default function AnnouncementsPage({services}:{services:Service[]}) {
-  const [announcements, setAnnouncements] = useState<Announcement[]>([])
-  const [loading, setLoading] = useState(true)
 
-  const [failed, setFailed] = useState(false)
-
-  const loadAnnouncements = async () => {
-    try {
-      setLoading(true)
-      setFailed(false)
-
-      const res = await fetch('/api/backend/api/announcements')
-
-      if (!res.ok) {
-        throw new Error('Failed to load announcements')
-      }
-
-      const data = await res.json()
-      setAnnouncements(data.announcements || [])
-    } catch (err) {
-      console.warn('Load announcements error:', err)
-      setFailed(true)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    queueMicrotask(() => void loadAnnouncements())
-  }, [])
-
-  return (
-    <div>
-      <h2 className="font-display text-navy-mid text-xl font-semibold mb-1">
-        Parish Announcements
-      </h2>
-
-      <p className="font-body text-[#6b8caa] text-[14px] mb-6">
-        Latest updates and announcements from the parish.
-      </p>
-
-      {!loading && !failed && <ParishCalendar notices={announcements} services={services} />}
-      {loading ? (
-        <div className="bg-white border border-gold/20 rounded-xl p-12 text-center">
-          <p className="font-body text-[#9ab0c4] text-[14px]">
-            Loading announcements...
-          </p>
-        </div>
-      ) : failed ? (
-        <div role="alert">
-          <p>Parish notices could not be loaded.</p>
-          <button className="underline" onClick={() => void loadAnnouncements()}>Try again</button>
-        </div>
-      ) : announcements.length === 0 ? (
-        <div className="bg-white border border-gold/20 rounded-xl p-12 text-center">
-          <i className="ti ti-bell-off text-gold/30 text-5xl mb-3 block" />
-
-          <p className="font-display text-navy-mid text-[14px] font-semibold mb-1">
-            No announcements yet
-          </p>
-
-          <p className="font-body text-[#9ab0c4] text-[13px]">
-            Parish announcements will appear here after the admin publishes them.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {announcements.map(a => (
-            <div key={a.id} className="bg-white border border-gold/20 rounded-xl p-6">
-              {a.imagePath && <img src={a.imagePath} alt="" className="mb-4 h-44 w-full object-cover rounded-lg"/>}
-              <div className="flex items-start justify-between gap-4 mb-2">
-                <p className="font-display text-navy-mid text-[14px] font-semibold leading-snug">
-                  {a.title}
-                </p>
-
-                <span
-                  className={`flex-shrink-0 font-display text-[10px] tracking-wider border px-2.5 py-0.5 rounded-full ${
-                    BADGE_COLOR[a.category] ?? 'bg-gold/10 text-gold border-gold/25'
-                  }`}
-                >
-                  {a.category || 'General'}
-                </span>
-              </div>
-
-              <p className="font-body text-[12px] text-[#9ab0c4] mb-3">
-                {a.date || a.createdAt?.slice(0, 10) || 'No date'}{a.ends && ' · Notice ends ' + a.ends}
-              </p>
-
-              <p className="font-body text-[14px] text-[#4a6a8a] leading-relaxed">
-                {a.body}
-              </p>
-            </div>
-          ))}
-        </div>
-      )}
+type Media={id:string;type:'image'|'video';url:string;displaySeconds:number}
+type Notice={id:number;title:string;body:string;category:string|null;date:string|null;starts:string|null;ends:string|null;media:Media[]}
+export default function AnnouncementsPage({services}:{services:Service[]}){
+  const [notices,setNotices]=useState<Notice[]>([])
+  const [loading,setLoading]=useState(true)
+  const [error,setError]=useState(false)
+  const [now,setNow]=useState('')
+  useEffect(()=>{
+    const update=()=>setNow(new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()))
+    update();const t=window.setInterval(update,60000);return ()=>window.clearInterval(t)
+  },[])
+  const active=notices.filter(n=>!now||((!n.starts||n.starts<=now)&&(!n.ends||n.ends>=now)))
+  const load=useCallback(async()=>{
+    setLoading(true);setError(false)
+    try{
+      const response=await fetch('/api/public-notices',{cache:'no-store'})
+      if(!response.ok)throw Error()
+      const result=await response.json()
+      setNotices(Array.isArray(result.notices)?result.notices:[])
+    }catch{setError(true)}
+    finally{setLoading(false)}
+  },[])
+  useEffect(()=>{void load()},[load])
+  return <div className="max-w-6xl space-y-6 text-slate-900">
+    <div className="role-banner">
+      <p className="portal-eyebrow">Parish community</p>
+      <h2>Mass schedules and announcements</h2>
+      <p>View upcoming services and official notices from the parish. Expired notices are removed automatically.</p>
     </div>
-  )
+    {!error&&<ParishCalendar services={services} notices={active.map(n=>({
+      id:n.id,title:n.title,body:n.body,date:n.date,starts:n.starts,ends:n.ends,
+    }))}/>}
+    {error?<section className="role-card">
+      <p role="alert">The parish notices could not be loaded right now.</p>
+      <button className="portal-secondary-btn mt-3" onClick={()=>void load()}>Try again</button>
+    </section>:loading?<p role="status">Loading parish announcements…</p>
+      :active.length===0?<section className="role-card"><h3 className="text-xl font-bold">No public notices at the moment</h3><p className="mt-2 text-slate-600">The parish office will publish new announcements here.</p></section>
+      :<section aria-labelledby="notices-heading">
+        <h3 id="notices-heading" className="role-subtitle mb-3">Current parish notices</h3>
+        <div className="grid gap-4 md:grid-cols-2">
+          {active.map(n=><article key={n.id} className="role-card space-y-3">
+            <div><p className="portal-eyebrow">{n.category||'General'}</p>
+              <h4 className="text-xl font-bold">{n.title}</h4></div>
+            {n.media.length>0&&<div className="grid gap-2">
+              {n.media.slice(0,5).map(m=>m.type==='video'
+                ?<video key={m.id} src={m.url} controls preload="metadata" className="aspect-video w-full rounded-xl bg-slate-200 object-cover" aria-label={'Announcement video for '+n.title}/>
+                :<img key={m.id} src={m.url} alt={'Illustration for '+n.title} loading="lazy" className="aspect-video w-full rounded-xl object-cover"/>)}
+            </div>}
+            <p className="whitespace-pre-line text-base text-slate-700">{n.body}</p>
+            <p className="text-sm text-slate-600">
+              {n.date?'Event date: '+n.date+' · ':''}Published through {n.ends||'parish announcement period'}
+            </p>
+          </article>)}
+        </div>
+      </section>}
+  </div>
 }

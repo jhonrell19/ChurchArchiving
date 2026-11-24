@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { isTransactionalEmailConfigured, sendTransactionalEmail } from '@/lib/email'
 
 import { evidenceEnabled } from '@/lib/membershipEvidence'
 
@@ -90,6 +91,26 @@ export async function POST(req: NextRequest) {
   })
   if (update.count !== 1) {
     return NextResponse.json({ message: 'Check pending status, ID evidence and the exact baptismal certificate number.' }, { status: 409 })
+  }
+  // An account decision is an operational email, not an unsolicited SMS broadcast.
+  // Queue/outbound failures never roll back a membership decision.
+  try {
+    if (isTransactionalEmailConfigured()) {
+      const reviewed=await prisma.user.findUnique({
+        where:{id},select:{email:true,emailVerified:true},
+      })
+      if (reviewed?.emailVerified) {
+        const message=decision==='approved'
+          ? 'Your Smart Parish membership was approved. You can now sign in and request certificates.'
+          : 'Your Smart Parish membership application was reviewed and was not approved. Please contact the parish office for the reason and next steps.'
+        await sendTransactionalEmail({
+          to: reviewed.email,subject:'Smart Parish membership review',
+          html:'<p>'+message+'</p><p>Only use the official Smart Parish website to review your account. Never share OTP codes.</p>',
+        })
+      }
+    }
+  } catch {
+    console.warn('Membership email unavailable; membership decision remains saved.')
   }
   console.info('Parish membership reviewed', { memberId: id, actorId: actor.id, decision })
   return NextResponse.json({ success: true }, { headers: cache })

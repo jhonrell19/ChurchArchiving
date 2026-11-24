@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 
 import { SCHEDULE } from './serviceSchedule'
 
-type Notice = {id:number; title:string; body:string; date?:string; starts?:string; ends?:string}
+type Notice = {id:number; title:string; body:string; date?:string|null; starts?:string|null; ends?:string|null}
 const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
 const manilaDate = () => new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date())
 
@@ -12,7 +12,7 @@ const key = (d:Date) => d.toISOString().slice(0,10)
 const dateOf = (s:string) => new Date(s + 'T12:00:00Z')
 const label = (d:Date, options:Intl.DateTimeFormatOptions) => d.toLocaleDateString('en-PH',{...options,timeZone:'UTC'})
 const full = (s:string) => label(dateOf(s),{month:'long',day:'numeric',year:'numeric'})
-const applies = (n:Notice, day:string) => n.date === day || (!!n.starts && !!n.ends && n.starts <= day && day <= n.ends)
+const applies = (n:Notice, day:string) => n.date ? n.date === day : (!!n.starts && !!n.ends && n.starts <= day && day <= n.ends)
 function noticeEnd(end:string,today:string) {
   const days = Math.round((dateOf(end).getTime()-dateOf(today).getTime()) / 86400000)
   if (days===0) return 'Notice ends today'

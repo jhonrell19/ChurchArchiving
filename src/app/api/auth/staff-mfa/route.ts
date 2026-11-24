@@ -96,7 +96,7 @@ export async function POST(req: Request) {
   await prisma.staffMfaChallenge.deleteMany({ where: { userId: challenge.userId } })
   const response = json({ message: 'Staff authentication successful.', role: challenge.user.role, recoveryCodes })
   const secure = process.env.NODE_ENV === 'production'
-  response.cookies.set(SESSION_COOKIE, session.token, { httpOnly: true, secure, sameSite: 'lax', path: '/', maxAge: STAFF_SESSION_MAX_AGE_SECONDS })
-  response.cookies.set(MFA_PENDING_COOKIE, '', { httpOnly: true, secure, sameSite: 'lax', path: '/', maxAge: 0 })
+  response.cookies.set(SESSION_COOKIE, session.token, { httpOnly: true, secure, sameSite: 'strict', path: '/', maxAge: STAFF_SESSION_MAX_AGE_SECONDS })
+  response.cookies.set(MFA_PENDING_COOKIE, '', { httpOnly: true, secure, sameSite: 'strict', path: '/', maxAge: 0 })
   return response
 }

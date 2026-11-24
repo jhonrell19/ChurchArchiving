@@ -136,21 +136,49 @@ export function formatNotices(rows:NoticeRow[],media:MediaRow[]){
     })),
   }))
 }
+/**
+ * Public parish notices must not be taken offline by an optional media
+ * migration. The legacy calendar/announcement rows remain readable while
+ * the parish is deploying slide/media upgrades. We never expose unpublished
+ * scheduled slides or bypass their date window when the table exists.
+ */
 export async function publicNotices(limit=15){
-  const rows=await prisma.$queryRaw<NoticeRow[]>`
-    SELECT a.id,a.title,a.body,a.category,a.announcement_date AS date,
-      s.starts_at::text AS starts,s.ends_at::text AS ends,
-      COALESCE(s.priority,0)::int AS priority,a.active,a.created_at AS "createdAt"
-    FROM parish_private.announcement a
-    LEFT JOIN parish_private.announcement_slide s ON s.announcement_id=a.id
-    WHERE a.active=TRUE
-      AND (s.starts_at IS NULL OR s.starts_at <= (now() AT TIME ZONE 'Asia/Manila')::date)
-      AND (s.ends_at IS NULL OR s.ends_at >= (now() AT TIME ZONE 'Asia/Manila')::date)
-    ORDER BY COALESCE(s.priority,0) DESC,a.id DESC
-    LIMIT ${limit}
+  const [tables]=await prisma.$queryRaw<{
+    slidesReady:boolean;mediaReady:boolean
+  }[]>`
+    SELECT
+      to_regclass('parish_private.announcement_slide') IS NOT NULL AS "slidesReady",
+      to_regclass('parish_private.announcement_media') IS NOT NULL AS "mediaReady"
   `
+
+  const rows=tables?.slidesReady
+    ? await prisma.$queryRaw<NoticeRow[]>`
+      SELECT a.id,a.title,a.body,a.category,a.announcement_date::date::text AS date,
+        s.starts_at::text AS starts,s.ends_at::text AS ends,
+        COALESCE(s.priority,0)::int AS priority,a.active,a.created_at AS "createdAt"
+      FROM parish_private.announcement a
+      LEFT JOIN parish_private.announcement_slide s ON s.announcement_id=a.id
+      WHERE a.active=TRUE
+        AND (s.starts_at IS NULL OR s.starts_at <= (now() AT TIME ZONE 'Asia/Manila')::date)
+        AND (s.ends_at IS NULL OR s.ends_at >= (now() AT TIME ZONE 'Asia/Manila')::date)
+      ORDER BY COALESCE(s.priority,0) DESC,a.id DESC
+      LIMIT ${limit}
+    `
+    : await prisma.$queryRaw<NoticeRow[]>`
+      SELECT a.id,a.title,a.body,a.category,a.announcement_date::date::text AS date,
+        NULL::text AS starts,NULL::text AS ends,
+        0::int AS priority,a.active,a.created_at AS "createdAt"
+      FROM parish_private.announcement a
+      WHERE a.active=TRUE
+      ORDER BY a.id DESC
+      LIMIT ${limit}
+    `
+
   const ids=rows.map(row=>row.id)
-  if(!ids.length)return []
+  // An empty set means nothing to display; a missing optional media table
+  // means text announcements should remain fully usable.
+  if(!ids.length||!tables?.mediaReady)return formatNotices(rows,[])
+
   const media=await prisma.$queryRaw<MediaRow[]>`
     SELECT id,announcement_id AS "announcementId",object_path AS "objectPath",
       original_name AS "originalName",media_type AS "mediaType",mime_type AS "mimeType",

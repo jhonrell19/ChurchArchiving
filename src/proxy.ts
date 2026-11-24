@@ -26,12 +26,15 @@ export async function proxy(request: NextRequest) {
     const origin = request.headers.get('origin')
     const configured = process.env.APP_BASE_URL?.replace(/\/$/, '')
     const production = process.env.NODE_ENV === 'production'
-    const permitted = production ? [configured] : [request.nextUrl.origin, configured]
+    // The canonical Render hostname is fixed, rather than inferred from an
+    // untrusted Host header. An additional custom domain must be explicitly
+    // listed in APP_BASE_URL. A stale APP_BASE_URL must never break sign-out.
+    const trustedOrigins = production
+      ? ['https://ifimarag.onrender.com', configured].filter(Boolean)
+      : [request.nextUrl.origin, configured].filter(Boolean)
     const site = request.headers.get('sec-fetch-site')
 
-    if (site === 'cross-site' ||
-        (origin && !permitted.includes(origin)) ||
-        (production && (!configured || !origin || origin !== configured))) {
+    if (site === 'cross-site' || !origin || !trustedOrigins.includes(origin)) {
       return privateHeaders(NextResponse.json({ message: 'Invalid request origin.' }, { status: 403 }))
     }
   }

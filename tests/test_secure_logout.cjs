@@ -5,12 +5,12 @@ const ts=require('typescript')
 const cache={}
 let revoked=[],revocationFails=false,mfaRemoved=0
 class ResponseStub {
-  constructor(body,status=200){
-    this.body=body;this.status=status;this.headers=new Headers()
+  constructor(body,options={}){
+    this.body=body;this.status=options.status||200;this.headers=new Headers(options.headers)
     this.cookieChanges=[];this.cookies={set:(name,value,opts)=>this.cookieChanges.push({name,value,opts})}
   }
   static redirect(url,status){const r=new ResponseStub(null,status);r.headers.set('Location',url.toString());return r}
-  static json(body,options={}){const r=new ResponseStub(body,options.status||200);for(const [k,v] of Object.entries(options.headers||{}))r.headers.set(k,v);return r}
+  static json(body,options={}){const r=new ResponseStub(body,options);for(const [k,v] of Object.entries(options.headers||{}))r.headers.set(k,v);return r}
 }
 const source=fs.readFileSync('src/app/api/auth/logout/route.ts','utf8')
 const js=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText
@@ -32,7 +32,7 @@ new Function('require','exports',js)(name=>{
  throw Error('Unexpected logout dependency: '+name)
 },cache)
 const request={
- url:'https://ifimarag.onrender.com/api/auth/logout',
+ url:'https://0.0.0.0:10000/api/auth/logout',
  cookies:{get:n=>n==='parish_session'?{value:'fictional-valid-token'}:
    n==='parish_mfa_pending'?{value:'fictional-mfa'}:undefined}
 }
@@ -40,7 +40,7 @@ async function run(){
  process.env.NODE_ENV='production'
  const success=await cache.POST(request)
  assert.equal(success.status,303)
- assert.equal(new URL(success.headers.get('Location')).pathname,'/login')
+ assert.equal(success.headers.get('Location'),'/login')
  assert.deepEqual(revoked,['fictional-valid-token'])
  assert.equal(mfaRemoved,1)
  assert.match(success.headers.get('Cache-Control'),/no-store/)

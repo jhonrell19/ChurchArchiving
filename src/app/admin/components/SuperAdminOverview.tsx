@@ -105,7 +105,7 @@ export default function SuperAdminOverview({
         <button onClick={onOpenMasses} className="role-action"><span>Manage Mass recordings</span><i className="ti ti-video"/></button>
         <button onClick={onOpenNotices} className="role-action"><span>Post announcements</span><i className="ti ti-bell"/></button>
         <a href="/office-reports" className="role-action"><span>Reports and exports</span><i className="ti ti-chart-bar"/></a>
-        {manageWebsite && <a href="/admin/site-content" className="role-action"><span>Edit public website</span><i className="ti ti-world"/></a>}
+        {manageWebsite && <a href="/admin/site-content" className="role-action"><span>Website content management</span><i className="ti ti-world"/></a>}
         <button onClick={onOpenSettings} className="role-action"><span>Parish settings and fees</span><i className="ti ti-settings"/></button>
       </div>
     </section>

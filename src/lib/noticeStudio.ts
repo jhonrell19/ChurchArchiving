@@ -153,7 +153,7 @@ export async function publicNotices(limit=15){
 
   const rows=tables?.slidesReady
     ? await prisma.$queryRaw<NoticeRow[]>`
-      SELECT a.id,a.title,a.body,a.category,a.announcement_date::date::text AS date,
+      SELECT a.id,a.title,a.body,a.category,a.announcement_date AS date,
         s.starts_at::text AS starts,s.ends_at::text AS ends,
         COALESCE(s.priority,0)::int AS priority,a.active,a.created_at AS "createdAt"
       FROM parish_private.announcement a
@@ -165,7 +165,7 @@ export async function publicNotices(limit=15){
       LIMIT ${limit}
     `
     : await prisma.$queryRaw<NoticeRow[]>`
-      SELECT a.id,a.title,a.body,a.category,a.announcement_date::date::text AS date,
+      SELECT a.id,a.title,a.body,a.category,a.announcement_date AS date,
         NULL::text AS starts,NULL::text AS ends,
         0::int AS priority,a.active,a.created_at AS "createdAt"
       FROM parish_private.announcement a

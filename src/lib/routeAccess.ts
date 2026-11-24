@@ -85,6 +85,5 @@ export const PRIVATE_CACHE_HEADERS = {
   'Cache-Control': 'private, no-store, no-cache, must-revalidate, max-age=0',
   Pragma: 'no-cache',
   Expires: '0',
-  Vary: 'Cookie',
   'X-Content-Type-Options': 'nosniff',
 } as const

@@ -179,15 +179,23 @@ export async function publicNotices(limit=15){
   // means text announcements should remain fully usable.
   if(!ids.length||!tables?.mediaReady)return formatNotices(rows,[])
 
-  const media=await prisma.$queryRaw<MediaRow[]>`
-    SELECT id,announcement_id AS "announcementId",object_path AS "objectPath",
-      original_name AS "originalName",media_type AS "mediaType",mime_type AS "mimeType",
-      size_bytes AS "sizeBytes",duration_seconds AS "durationSeconds",
-      display_seconds AS "displaySeconds",sort_order AS "sortOrder"
-    FROM parish_private.announcement_media
-    WHERE announcement_id=ANY(${ids}::integer[])
-    ORDER BY sort_order,id
-  `
+  let media:MediaRow[]=[]
+  try {
+    media=await prisma.$queryRaw<MediaRow[]>`
+      SELECT id,announcement_id AS "announcementId",object_path AS "objectPath",
+        original_name AS "originalName",media_type AS "mediaType",mime_type AS "mimeType",
+        size_bytes AS "sizeBytes",duration_seconds AS "durationSeconds",
+        display_seconds AS "displaySeconds",sort_order AS "sortOrder"
+      FROM parish_private.announcement_media
+      WHERE announcement_id=ANY(${ids}::integer[])
+      ORDER BY sort_order,id
+    `
+  } catch {
+    // Do not take all church announcements offline because optional media
+    // metadata is temporarily unavailable. Publication dates were already
+    // enforced in the announcement_slide query above.
+    console.warn('Notice media lookup failed; returning public text notices only.')
+  }
   return formatNotices(rows,media)
 }
 

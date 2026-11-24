@@ -147,7 +147,7 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="max-w-lg">
+      <div className="mx-auto w-full max-w-3xl">
         <h2 className="font-display text-navy-mid text-xl font-semibold mb-1">My Profile</h2>
         <p className="font-body text-[#6b8caa] text-[14px] mb-6">Loading your account information...</p>
       </div>
@@ -156,10 +156,10 @@ export default function ProfilePage() {
 
   if (!user) {
     return (
-      <div className="max-w-lg">
+      <div className="mx-auto w-full max-w-3xl">
         <h2 className="font-display text-navy-mid text-xl font-semibold mb-1">My Profile</h2>
         <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-          <p className="font-body text-red-600 text-[13px]">{error || 'Unable to load profile.'}</p>
+          <p className="font-body text-red-600 text-base">{error || 'Unable to load profile.'}</p>
         </div>
       </div>
     )
@@ -175,7 +175,7 @@ export default function ProfilePage() {
   ]
 
   return (
-    <div className="max-w-lg">
+    <div className="mx-auto w-full max-w-3xl">
       <h2 className="font-display text-navy-mid text-xl font-semibold mb-1">My Profile</h2>
       <p className="font-body text-[#6b8caa] text-[14px] mb-6">Your account information and preferences.</p>
 
@@ -185,8 +185,8 @@ export default function ProfilePage() {
             <span className="font-display text-gold text-xl font-semibold">{getInitials(user.fullName)}</span>
           </div>
           <div>
-            <p className="font-display text-navy-mid text-[15px] font-semibold">{user.fullName}</p>
-            <p className="font-body text-[#6b8caa] text-[13px]">
+            <p className="font-display text-navy-mid text-lg font-semibold">{user.fullName}</p>
+            <p className="font-body text-[#6b8caa] text-base">
               {formatRole(user.role)} · Member since {new Date(user.createdAt).getFullYear()}
             </p>
           </div>
@@ -196,8 +196,8 @@ export default function ProfilePage() {
           {fields.map(({ label, value, icon }) => (
             <div key={label} className="flex items-start gap-3">
               <i className={`ti ${icon} text-gold text-[16px] w-5 mt-0.5`} aria-hidden="true" />
-              <span className="font-body text-[13px] text-[#6b8caa] w-20 flex-shrink-0">{label}</span>
-              <span className="font-body text-[13px] text-navy-mid break-words">{value}</span>
+              <span className="font-body text-base text-[#6b8caa] w-20 flex-shrink-0">{label}</span>
+              <span className="font-body text-base text-navy-mid break-words">{value}</span>
             </div>
           ))}
         </div>
@@ -247,7 +247,7 @@ export default function ProfilePage() {
 
       <div className="bg-gold/5 border border-gold/20 rounded-xl p-4 flex items-start gap-3">
         <i className="ti ti-info-circle text-gold text-[18px] mt-0.5 flex-shrink-0" aria-hidden="true" />
-        <p className="font-body text-[13px] text-[#4a6a8a] leading-relaxed">
+        <p className="font-body text-base text-[#4a6a8a] leading-relaxed">
           To change your account name or email address, contact the parish office. Contact details can be updated above.
         </p>
       </div>

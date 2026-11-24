@@ -93,7 +93,7 @@ const proxyModule = transpile('src/proxy.ts', name => {
 function request(path,options={}){
   const url=new URL('https://ifimarag.onrender.com'+path)
   const headers=new Headers(options.headers||{})
-  if(options.method&&options.method!=='GET'&&!options.noOrigin)
+  if(options.method&&options.method!=='GET'&&!options.noOrigin&&!headers.has('Origin'))
     headers.set('Origin','https://ifimarag.onrender.com')
   return {
     url:url.href,nextUrl:url,headers,

@@ -66,13 +66,19 @@ async function main(){
   assert.match(fs.readFileSync('src/components/auth/SignOutForm.tsx','utf8'),
     /<form method="post" action="\/api\/auth\/logout">/)
   const header=fs.readFileSync('src/app/components/Navbar.tsx','utf8')
-  assert.match(header,/const links = \[\.\.\.LINKS, accountLink\]/)
-  assert.match(header,/label: 'Dashboard'/)
+  assert.match(header,/const PUBLIC_LINKS = \[/)
+  assert.doesNotMatch(header,/Dashboard|\/admin|\/staff|\/dashboard/)
+  assert.doesNotMatch(header,/fetch\(['"]\/api\/auth\/me/)
+  // The private routes are not exposed by navigation, and access is still
+  // enforced independently on the server for direct URL attempts.
+  const policy=fs.readFileSync('src/lib/routeAccess.ts','utf8')
+  assert.match(policy,/if \(under\(pathname, '\/admin'\)\)/)
+  assert.match(policy,/roles: \['ADMIN'\]/)
   const profile=fs.readFileSync('src/app/dashboard/components/ProfilePage.tsx','utf8')
   assert.match(profile,/mx-auto w-full max-w-3xl/)
   const calendar=fs.readFileSync('src/app/dashboard/components/AnnouncementsPage.tsx','utf8')
   assert.match(calendar,/    <ParishCalendar services=\{services\}/)
   assert.doesNotMatch(calendar,/!error&&<ParishCalendar/)
-  console.log('PASS: native sign-out, always-visible dashboard, centered profile, calendar uptime, notices with optional schema')
+  console.log('PASS: native sign-out, public-only header, server role guard, centered profile, calendar uptime, notices with optional schema')
 }
 main().catch(error=>{console.error(error);process.exitCode=1})

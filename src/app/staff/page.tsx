@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useFeedback } from '@/components/ui/FeedbackProvider'
-import { useRefreshOnHistoryRestore } from '@/hooks/useRefreshOnHistoryRestore'
 import ParishLogo from '../components/ParishLogo'
 import ArchivesPage from '../admin/components/ArchivesPage'
 import RequestsPage from '../admin/components/RequestsPage'
@@ -17,7 +16,6 @@ const links: {page:Section;label:string;icon:string}[] = [
   {page:'deceased',label:'Deceased records',icon:'ti-file-text'},
 ]
 export default function StaffPage() {
-  useRefreshOnHistoryRestore()
   const {toast}=useFeedback()
   const [section,setSection]=useState<Section>('dashboard')
   const [navOpen,setNavOpen]=useState(false)

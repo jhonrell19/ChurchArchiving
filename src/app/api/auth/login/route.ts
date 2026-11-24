@@ -54,8 +54,7 @@ export async function POST(req: Request) {
 
     if (
   user.role === 'USER' &&
-  !user.emailVerified &&
-  !user.googleSub
+  !user.emailVerified
 ) {
       return NextResponse.json(
         {
@@ -94,7 +93,7 @@ export async function POST(req: Request) {
       )
       response.cookies.set(MFA_PENDING_COOKIE, pendingToken, {
         httpOnly: true, secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax', path: '/', maxAge: MFA_PENDING_MAX_AGE,
+        sameSite: 'strict', path: '/', maxAge: MFA_PENDING_MAX_AGE,
       })
       return response
     }
@@ -132,7 +131,7 @@ export async function POST(req: Request) {
     response.cookies.set(SESSION_COOKIE, token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: 'strict',
       path: '/',
       maxAge: user.role === 'USER' ? SESSION_MAX_AGE_SECONDS : STAFF_SESSION_MAX_AGE_SECONDS,
     })
@@ -140,7 +139,7 @@ export async function POST(req: Request) {
     response.cookies.set('token', '', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: 'strict',
       path: '/',
       expires: new Date(0),
     })

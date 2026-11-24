@@ -1,7 +1,6 @@
 'use client'
 import { useState } from 'react'
 import { useFeedback } from '@/components/ui/FeedbackProvider'
-import { useRefreshOnHistoryRestore } from '@/hooks/useRefreshOnHistoryRestore'
 import type { Page } from './types'
 import type { Service } from '@/lib/siteContent'
 import ParishLogo from '../components/ParishLogo'
@@ -14,7 +13,6 @@ import AnnouncementsPage from './components/AnnouncementsPage'
 import ProfilePage from './components/ProfilePage'
 
 export default function UserDashboard({services}:{services:Service[]}) {
-  useRefreshOnHistoryRestore()
   const {toast}=useFeedback()
   const [page,setPage]=useState<Page>('home')
   const [navOpen,setNavOpen]=useState(false)

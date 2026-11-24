@@ -1,7 +1,6 @@
 'use client'
 import { useState } from 'react'
 import { useFeedback } from '@/components/ui/FeedbackProvider'
-import { useRefreshOnHistoryRestore } from '@/hooks/useRefreshOnHistoryRestore'
 import ParishLogo from '../components/ParishLogo'
 import { ADMIN_NAV } from './data/navigation'
 import type { AdminPage } from './types.ts'
@@ -14,7 +13,6 @@ import SettingsPage from './components/SettingsPage'
 export default function AdminPanel({managePolicy=false,manageWebsite=false,manageStaff=false}:{
   managePolicy?:boolean;manageWebsite?:boolean;manageStaff?:boolean
 }) {
-  useRefreshOnHistoryRestore()
   const {toast}=useFeedback()
   const [page,setPage]=useState<AdminPage>('dashboard')
   const [transcriptId,setTranscriptId]=useState<number|null>(null)

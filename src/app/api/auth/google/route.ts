@@ -105,6 +105,13 @@ export async function POST(request: Request) {
         })
 
       if (existingEmailUser) {
+        // Refuse a disabled account before linking or mutating its Google ID.
+        if (!existingEmailUser.accountEnabled) {
+          return NextResponse.json(
+            { message: 'This account is disabled. Contact the parish office.' },
+            { status: 403, headers: { 'Cache-Control': 'no-store' } }
+          )
+        }
         if (existingEmailUser.role !== 'USER') {
           return NextResponse.json(
             {
@@ -181,6 +188,13 @@ export async function POST(request: Request) {
         }, body?.policyVersion)
     }
 
+    if (!user.accountEnabled) {
+      return NextResponse.json(
+        { message: 'This account is disabled. Contact the parish office.' },
+        { status: 403, headers: { 'Cache-Control': 'no-store' } }
+      )
+    }
+
     if (user.role !== 'USER') {
       return NextResponse.json(
         {
@@ -235,7 +249,7 @@ export async function POST(request: Request) {
     response.cookies.set(SESSION_COOKIE, token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: 'strict',
       path: '/',
       maxAge: SESSION_MAX_AGE_SECONDS,
     })
@@ -243,7 +257,7 @@ export async function POST(request: Request) {
     response.cookies.set('token', '', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: 'strict',
       path: '/',
       expires: new Date(0),
     })

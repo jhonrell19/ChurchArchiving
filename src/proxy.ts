@@ -1,76 +1,109 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { SESSION_COOKIE, validateSessionToken } from '@/lib/sessionValidation'
+import { accessRule, PRIVATE_CACHE_HEADERS, roleCanAccess } from '@/lib/routeAccess'
 
-const SESSION_COOKIE = 'parish_session'
+function privateHeaders(response: NextResponse) {
+  for (const [key, value] of Object.entries(PRIVATE_CACHE_HEADERS)) response.headers.set(key, value)
+  return response
+}
 
-const protectedPrefixes = [
-  '/dashboard',
-  '/admin',
-  '/burial-admin',
-  '/staff',
-  '/complete-profile',
-]
-
-export function proxy(request: NextRequest) {
+/**
+ * Next.js 16 Proxy uses the Node runtime: verify revocable PostgreSQL sessions
+ * BEFORE protected HTML/RSC/API responses. A cookie's mere presence is never
+ * sufficient. Layouts and API handlers verify again for defence in depth.
+ */
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
-  // Browser-origin boundary for cookie-authenticated mutations. This does not
-  // replace auth/role checks in application routes or proxy-level rate limits.
-  if (pathname.startsWith('/api/') &&
-      !['GET', 'HEAD', 'OPTIONS'].includes(request.method.toUpperCase()) &&
-      pathname !== '/api/paymongo/webhook') {
+  const isApi = pathname === '/api' || pathname.startsWith('/api/')
+  const originBound = isApi && !['GET', 'HEAD', 'OPTIONS'].includes(request.method.toUpperCase())
+  const signedCleanup = pathname === '/api/admin/notices/cleanup' &&
+    request.method.toUpperCase() === 'POST' &&
+    (request.headers.get('authorization') || '').startsWith('Bearer ')
+
+  // CSRF guard for cookies on all state-changing browser APIs. The only
+  // exceptions use HMAC/Bearer secrets checked inside their route handlers.
+  if (originBound && pathname !== '/api/paymongo/webhook' && !signedCleanup) {
     const origin = request.headers.get('origin')
     const configured = process.env.APP_BASE_URL?.replace(/\/$/, '')
     const production = process.env.NODE_ENV === 'production'
-    // ngrok terminates HTTPS while the local dev server may see localhost internally.
-    // Trust ONLY the explicitly configured public URL, never wildcard ngrok domains.
-    const allowed = production ? [configured] : [request.nextUrl.origin, configured]
+    const permitted = production ? [configured] : [request.nextUrl.origin, configured]
     const site = request.headers.get('sec-fetch-site')
+
     if (site === 'cross-site' ||
-        (origin && !allowed.includes(origin)) ||
+        (origin && !permitted.includes(origin)) ||
         (production && (!configured || !origin || origin !== configured))) {
-      return NextResponse.json({ message: 'Invalid request origin.' }, { status: 403 })
+      return privateHeaders(NextResponse.json({ message: 'Invalid request origin.' }, { status: 403 }))
     }
   }
 
+  // GitHub scheduled cleanup: Bearer authorization is validated by the cleanup
+  // handler using a constant-time digest check. Never treat it as a user session.
+  if (signedCleanup) return privateHeaders(NextResponse.next())
 
-  const isProtected = protectedPrefixes.some(prefix =>
-    pathname === prefix || pathname.startsWith(`${prefix}/`)
-  )
-
-  if (!isProtected) {
-    if (pathname === '/login' || pathname === '/staff-mfa') {
-      const response = NextResponse.next()
-      response.headers.set('Cache-Control', 'private, no-store, max-age=0, must-revalidate')
-      return response
-    }
-    return NextResponse.next()
-  }
-
-  // This is only a fast cookie-presence boundary. The protected
-  // layouts and APIs still verify the database-backed session and role.
-  const sessionToken = request.cookies.get(SESSION_COOKIE)?.value
-
-  if (!sessionToken) {
-    const loginUrl = new URL('/login', request.url)
-    loginUrl.searchParams.set('next', pathname)
-    const response = NextResponse.redirect(loginUrl)
-    response.headers.set('Cache-Control', 'private, no-store, max-age=0, must-revalidate')
+  const rule = accessRule(pathname)
+  if (!rule) {
+    const response = NextResponse.next()
+    if (isApi || pathname === '/login' || pathname === '/staff-mfa' || pathname === '/verification')
+      return privateHeaders(response)
     return response
   }
 
-  const response = NextResponse.next()
-  response.headers.set('Cache-Control', 'private, no-store, max-age=0, must-revalidate')
-  return response
+  const token = request.cookies.get(SESSION_COOKIE)?.value
+  if (!token) {
+    if (rule.kind === 'api')
+      return privateHeaders(NextResponse.json({ message: 'Authentication required.' }, { status: 401 }))
+
+    const target = new URL('/login', request.url)
+    const response = NextResponse.redirect(target)
+    return privateHeaders(response)
+  }
+
+  try {
+    const user = await validateSessionToken(token)
+    if (!user) {
+      const response = rule.kind === 'api'
+        ? NextResponse.json({ message: 'Session expired or revoked.' }, { status: 401 })
+        : NextResponse.redirect(new URL('/login', request.url))
+      response.cookies.set(SESSION_COOKIE, '', {
+        httpOnly: true, secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict', path: '/', maxAge: 0,
+      })
+      return privateHeaders(response)
+    }
+
+    if (!roleCanAccess(rule, user.role)) {
+      return privateHeaders(rule.kind === 'api'
+        ? NextResponse.json({ message: 'Forbidden.' }, { status: 403 })
+        : new NextResponse('403 Forbidden: You do not have access to this parish workspace.', {
+            status: 403, headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+          }))
+    }
+
+    return privateHeaders(NextResponse.next())
+  } catch (error) {
+    // Database failures must never fall through to protected UI or data.
+    console.error('Protected route session lookup failed:', pathname)
+    return privateHeaders(rule.kind === 'api'
+      ? NextResponse.json({ message: 'Session verification is temporarily unavailable.' }, { status: 503 })
+      : new NextResponse('503: Secure session verification is temporarily unavailable.', {
+          status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        }))
+  }
 }
 
 export const config = {
   matcher: [
     '/login',
     '/staff-mfa',
+    '/verification',
     '/dashboard/:path*',
     '/admin/:path*',
     '/burial-admin/:path*',
     '/staff/:path*',
     '/complete-profile/:path*',
+    '/office-reports/:path*',
+    '/claims/:path*',
+    '/appointments/:path*',
     '/api/:path*',
   ],
 }

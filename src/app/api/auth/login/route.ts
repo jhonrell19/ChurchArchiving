@@ -54,8 +54,7 @@ export async function POST(req: Request) {
 
     if (
   user.role === 'USER' &&
-  !user.emailVerified &&
-  !user.googleSub
+  !user.emailVerified
 ) {
       return NextResponse.json(
         {

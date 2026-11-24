@@ -3,6 +3,7 @@ import '@tabler/icons-webfont/dist/tabler-icons.min.css'
 import './globals.css'
 import Navbar from './components/Navbar'
 import { FeedbackProvider } from '@/components/ui/FeedbackProvider'
+import SessionHistoryGuard from '@/components/auth/SessionHistoryGuard'
 
 export const metadata: Metadata = {
   title: 'Iglesia Filipina Independiente – Maragondon, Cavite',
@@ -14,6 +15,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" suppressHydrationWarning>
       <body suppressHydrationWarning>
         <FeedbackProvider>
+          <SessionHistoryGuard />
           <Navbar />
           {children}
         </FeedbackProvider>

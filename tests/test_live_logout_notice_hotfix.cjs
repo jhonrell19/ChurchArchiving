@@ -31,14 +31,14 @@ const prisma={
     throw Error('Unexpected SQL:'+sql.slice(0,100))
   }
 }
-const module={exports:{}}
+const sandboxModule={exports:{}}
 new Function('require','module','exports',compiled)(name=>{
   if(name==='server-only')return {}
   if(name==='node:crypto')return crypto
   if(name==='@/lib/prisma')return {prisma}
   throw Error('Unexpected module '+name)
-},module,module.exports)
-const {publicNotices}=module.exports
+},sandboxModule,sandboxModule.exports)
+const {publicNotices}=sandboxModule.exports
 async function main(){
   let notices=await publicNotices()
   assert.equal(notices[0].title,'Sunday Mass')

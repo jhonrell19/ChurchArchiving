@@ -181,6 +181,13 @@ export async function POST(request: Request) {
         }, body?.policyVersion)
     }
 
+    if (!user.accountEnabled) {
+      return NextResponse.json(
+        { message: 'This account is disabled. Contact the parish office.' },
+        { status: 403, headers: { 'Cache-Control': 'no-store' } }
+      )
+    }
+
     if (user.role !== 'USER') {
       return NextResponse.json(
         {

@@ -182,6 +182,12 @@ async function main(){
     method:'POST',cookie:true,headers:{Origin:'https://attacker.example.test'},
   }))
   assert.equal(res.status,403,'CSRF must be rejected')
+  // The pinned live host must remain usable if APP_BASE_URL was left on a
+  // previous staging/ngrok address. Unknown hosts remain CSRF forbidden.
+  process.env.APP_BASE_URL='https://obsolete-staging.example.test'
+  res=await proxyModule.proxy(request('/api/auth/logout',{method:'POST'}))
+  assert.equal(res.status,200,'logout must work on canonical Render host despite stale APP_BASE_URL')
+  process.env.APP_BASE_URL='https://ifimarag.onrender.com'
   console.log('PASS real DB session/expiry/revocation/disabled checks, strict route RBAC, direct URL, no-store headers, CSRF and signed cleanup exception')
 }
 main().catch(e=>{console.error(e);process.exitCode=1})

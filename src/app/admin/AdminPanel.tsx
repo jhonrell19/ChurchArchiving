@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
-import { useFeedback } from '@/components/ui/FeedbackProvider'
 import ParishLogo from '../components/ParishLogo'
+import SignOutForm from '@/components/auth/SignOutForm'
 import { ADMIN_NAV } from './data/navigation'
 import type { AdminPage } from './types.ts'
 import SuperAdminOverview from './components/SuperAdminOverview'
@@ -13,18 +13,10 @@ import SettingsPage from './components/SettingsPage'
 export default function AdminPanel({managePolicy=false,manageWebsite=false,manageStaff=false}:{
   managePolicy?:boolean;manageWebsite?:boolean;manageStaff?:boolean
 }) {
-  const {toast}=useFeedback()
   const [page,setPage]=useState<AdminPage>('dashboard')
   const [transcriptId,setTranscriptId]=useState<number|null>(null)
   const [sidebarOpen,setSidebar]=useState(false)
   const navigate=(next:AdminPage)=>{setPage(next);setSidebar(false)}
-  async function logout() {
-    try {
-      const r=await fetch('/api/auth/logout',{method:'POST'})
-      if (!r.ok)throw Error()
-      window.location.replace('/')
-    } catch {toast.error('Unable to sign out. Please try again.')}
-  }
   const label=ADMIN_NAV.find(item=>item.id===page)?.label||'Super Admin'
   const links=[
     ...(manageStaff?[{href:'/admin/staff',text:'Church Staff accounts',icon:'ti-users'}]:[]),
@@ -52,7 +44,7 @@ export default function AdminPanel({managePolicy=false,manageWebsite=false,manag
         </nav>
       </div>
       <div className="border-t border-slate-200 p-3">
-        <button onClick={()=>void logout()} className="role-signout w-full"><i className="ti ti-logout" aria-hidden="true"/> Sign out</button>
+        <SignOutForm />
       </div>
     </aside>
     {sidebarOpen && <button className="fixed inset-0 z-30 bg-black/40 lg:hidden" aria-label="Close navigation" onClick={()=>setSidebar(false)}/>}

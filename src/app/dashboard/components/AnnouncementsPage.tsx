@@ -33,9 +33,9 @@ export default function AnnouncementsPage({services}:{services:Service[]}){
       <h2>Mass schedules and announcements</h2>
       <p>View upcoming services and official notices from the parish. Expired notices are removed automatically.</p>
     </div>
-    {!error&&<ParishCalendar services={services} notices={active.map(n=>({
+    <ParishCalendar services={services} notices={active.map(n=>({
       id:n.id,title:n.title,body:n.body,date:n.date,starts:n.starts,ends:n.ends,
-    }))}/>}
+    }))}/>
     {error?<section className="role-card">
       <p role="alert">The parish notices could not be loaded right now.</p>
       <button className="portal-secondary-btn mt-3" onClick={()=>void load()}>Try again</button>

@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { useFeedback } from '@/components/ui/FeedbackProvider'
 import ParishLogo from '../components/ParishLogo'
+import SignOutForm from '@/components/auth/SignOutForm'
 import ArchivesPage from '../admin/components/ArchivesPage'
 import RequestsPage from '../admin/components/RequestsPage'
 import DeceasedRecords from './components/DeceasedRecords'
@@ -16,17 +16,9 @@ const links: {page:Section;label:string;icon:string}[] = [
   {page:'deceased',label:'Deceased records',icon:'ti-file-text'},
 ]
 export default function StaffPage() {
-  const {toast}=useFeedback()
   const [section,setSection]=useState<Section>('dashboard')
   const [navOpen,setNavOpen]=useState(false)
   const navigate=(target:Section)=>{setSection(target);setNavOpen(false)}
-  async function logout(){
-    try {
-      const response=await fetch('/api/auth/logout',{method:'POST'})
-      if (!response.ok) throw Error()
-      window.location.replace('/')
-    } catch {toast.error('Could not sign out. Please try again.')}
-  }
   return <div className="portal-workspace-shell parish-shell min-h-screen lg:flex">
     <aside className={`fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-r border-slate-200 bg-white transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${navOpen?'translate-x-0':'-translate-x-full'}`}>
       <div className="flex items-center gap-3 border-b border-slate-200 p-5">
@@ -45,7 +37,7 @@ export default function StaffPage() {
         </nav>
       </div>
       <div className="border-t border-slate-200 p-3">
-        <button onClick={()=>void logout()} className="role-signout w-full"><i className="ti ti-logout" aria-hidden="true"/> Sign out</button>
+        <SignOutForm />
       </div>
     </aside>
     {navOpen && <button className="fixed inset-0 z-30 bg-black/40 lg:hidden" aria-label="Close navigation" onClick={()=>setNavOpen(false)}/>}

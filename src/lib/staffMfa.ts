@@ -101,8 +101,8 @@ export async function findValidStaffChallenge(token: string | undefined) {
   if (!token) return null
   const challenge = await prisma.staffMfaChallenge.findUnique({
     where: { tokenHash: challengeHash(token) },
-    include: { user: { select: { id: true, email: true, role: true, emailVerified: true } } },
+    include: { user: { select: { id: true, email: true, role: true, emailVerified: true, accountEnabled: true } } },
   })
-  if (!challenge || challenge.expiresAt.getTime() < Date.now() || challenge.attempts >= 5 || challenge.user.role === 'USER' || !challenge.user.emailVerified) return null
+  if (!challenge || challenge.expiresAt.getTime() < Date.now() || challenge.attempts >= 5 || challenge.user.role === 'USER' || !challenge.user.emailVerified || !challenge.user.accountEnabled) return null
   return challenge
 }

@@ -21,7 +21,7 @@ export default function Navbar() {
 
 function PublicNavigation({ pathname }: { pathname: string }) {
   const [open, setOpen] = useState(false)
-  const [accountLink, setAccountLink] = useState({ href: '/#parish-access', label: 'Log in' })
+  const [accountLink, setAccountLink] = useState({ href: '/login', label: 'Dashboard' })
 
   useEffect(() => {
     queueMicrotask(() => setOpen(false))
@@ -34,16 +34,16 @@ function PublicNavigation({ pathname }: { pathname: string }) {
       try {
         const response = await fetch('/api/auth/me', { cache: 'no-store', credentials: 'same-origin' })
         if (!response.ok) {
-          if (active) setAccountLink({ href: '/#parish-access', label: 'Log in' })
+          if (active) setAccountLink({ href: '/login', label: 'Dashboard' })
           return
         }
         const payload: { user?: { role?: string } } = await response.json()
         const href = payload.user?.role === 'ADMIN' ? '/admin'
           : ['STAFF', 'BURIAL_ADMIN'].includes(payload.user?.role || '') ? '/staff'
           : payload.user?.role === 'USER' ? '/dashboard' : '/#parish-access'
-        if (active) setAccountLink({ href, label: href === '/#parish-access' ? 'Log in' : 'Dashboard' })
+        if (active) setAccountLink({ href, label: 'Dashboard' })
       } catch {
-        if (active) setAccountLink({ href: '/#parish-access', label: 'Log in' })
+        if (active) setAccountLink({ href: '/login', label: 'Dashboard' })
       }
     }
     void updateAccountLink()
@@ -56,7 +56,7 @@ function PublicNavigation({ pathname }: { pathname: string }) {
 
 
 
-  const links = pathname === '/' && accountLink.label === 'Log in' ? LINKS : [...LINKS, accountLink]
+  // Always show the shortcut; the server resolves /login when signed out.\n  const links = [...LINKS, accountLink]
   return <nav className="public-nav" aria-label="Parish navigation">
     <div className="nav-inner">
       <Link href="/" className="brand"><ParishLogo height={45}/><span>Iglesia Filipina Independiente<small>Maragondon, Cavite</small></span></Link>

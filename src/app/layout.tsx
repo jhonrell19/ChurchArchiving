@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import '@tabler/icons-webfont/dist/tabler-icons.min.css'
 import './globals.css'
+import ApiWorkspace from '@/components/ApiWorkspace'
 import Navbar from './components/Navbar'
 import { FeedbackProvider } from '@/components/ui/FeedbackProvider'
 import SessionHistoryGuard from '@/components/auth/SessionHistoryGuard'
@@ -17,7 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <FeedbackProvider>
           <SessionHistoryGuard />
           <Navbar />
-          {children}
+          <ApiWorkspace>{children}</ApiWorkspace>
         </FeedbackProvider>
       </body>
     </html>

@@ -91,7 +91,7 @@ function ResetPasswordForm() {
           </div>
 
           <div>
-            <PasswordField label="Confirm Password" autoComplete="new-password"
+            <PasswordField label="Confirm Password" match={newPassword} autoComplete="new-password"
               required
               value={confirmPassword}
               onChange={e => setConfirmPassword(e.target.value)}

@@ -160,7 +160,7 @@ export default function HomepageAuth() {
       </label>
       <div className="portal-auth-name-grid">
         <PasswordField label="Password *" guidance className={fieldClass} id="portal-register-password" required minLength={12} autoComplete="new-password" value={register.password} onChange={e=>setRegister(p=>({...p,password:e.target.value}))}/>
-        <PasswordField label="Confirm password *" className={fieldClass} id="portal-register-confirm" required minLength={12} autoComplete="new-password" value={register.confirmPassword} onChange={e=>setRegister(p=>({...p,confirmPassword:e.target.value}))}/>
+        <PasswordField label="Confirm password *" match={register.password} className={fieldClass} id="portal-register-confirm" required minLength={12} autoComplete="new-password" value={register.confirmPassword} onChange={e=>setRegister(p=>({...p,confirmPassword:e.target.value}))}/>
       </div>
       <p className="portal-form-help">Use at least 8 characters with uppercase and lowercase letters and a number.</p>
       <label className="portal-consent"><input type="checkbox" required checked={consent} onChange={e=>setConsent(e.target.checked)}/>

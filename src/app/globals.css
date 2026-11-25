@@ -303,9 +303,6 @@ input::placeholder,textarea::placeholder {color:#605351;opacity:1}
 .portal-notice-list article small {color:var(--portal-muted);font-size:.85rem}
 .portal-notice-list article h3 {font-size:1.12rem;color:var(--portal-text);font-weight:750;margin:.15rem 0}
 .portal-notice-list article p {font-size:1rem;color:var(--portal-muted);white-space:pre-line}
-.portal-home-shortcuts {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.7rem;margin:1.6rem 0}
-.portal-home-shortcuts a {display:flex;gap:1rem;align-items:center;justify-content:space-between;min-height:68px;padding:1rem;background:#fff;border:1px solid var(--portal-border);border-radius:12px;font-weight:700;color:var(--portal-accent-dark)}
-.portal-home-shortcuts a:hover {background:#f5eded}
 .portal-home #parish-calendar {scroll-margin-top:2rem}
 .portal-workspace-shell {background:var(--portal-bg);color:var(--portal-text);font-size:1rem;line-height:1.48}
 .portal-workspace-shell>aside {background:#fff;border-color:var(--portal-border)}
@@ -341,7 +338,6 @@ input::placeholder,textarea::placeholder {color:#605351;opacity:1}
 @media(max-width:640px) {
  .portal-home {padding:1rem}
  .portal-home-intro {margin:.4rem 0 1.1rem}
- .portal-home-shortcuts {grid-template-columns:1fr}
  .portal-auth-name-grid {grid-template-columns:1fr}
  .portal-slide-photo {aspect-ratio:1.25;min-height:250px}
  .portal-workspace-shell .role-metrics {grid-template-columns:1fr 1fr}

@@ -52,22 +52,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: 'This account is disabled. Contact the parish office.' }, { status: 403 })
     }
 
-    if (
-  user.role === 'USER' &&
-  !user.emailVerified
-) {
-      return NextResponse.json(
-        {
-          message:
-            'Please verify your email address before signing in.',
-          verificationRequired: true,
-        },
-        { status: 403 }
-      )
-    }
-
-    if (user.role !== 'USER' && !user.emailVerified) {
-      return NextResponse.json({ message: 'Staff account requires verification.' }, { status: 403 })
+    if (!user.emailVerified) {
+      return NextResponse.json({
+        message: 'Choose Resend verification email, then open the link in your account inbox.',
+        verificationRequired: true,
+      }, { status: 403 })
     }
 
     if (user.role === 'USER' && user.membershipStatus !== 'approved') {

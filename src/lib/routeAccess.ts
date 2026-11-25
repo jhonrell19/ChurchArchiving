@@ -66,6 +66,7 @@ export function accessRule(pathname: string): AccessRule | null {
     return { kind: 'api', roles: ['ADMIN'] }
 
   if (under(pathname, '/api/notifications') ||
+      pathname === '/api/auth/change-password' ||
       pathname === '/api/auth/profile' ||
       pathname === '/api/auth/complete-profile' ||
       pathname === '/api/auth/phone-otp')

@@ -1,4 +1,5 @@
 'use client'
+import PasswordField from '@/components/auth/PasswordField'
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
@@ -132,10 +133,8 @@ export default function HomepageAuth() {
         <input className={fieldClass} id="portal-login-email" type="email" required autoComplete="email" placeholder="your@email.com"
           value={login.email} onChange={event => setLogin(p => ({...p,email:event.target.value}))}/>
       </label>
-      <label htmlFor="portal-login-password">Password
-        <input className={fieldClass} id="portal-login-password" type="password" required autoComplete="current-password"
+      <PasswordField label="Password" className={fieldClass} id="portal-login-password" required autoComplete="current-password"
           value={login.password} onChange={event => setLogin(p => ({...p,password:event.target.value}))}/>
-      </label>
       <Link href="/forgot-password" className="portal-subtle-link">Forgot password?</Link>
       <button className="portal-primary-btn" disabled={busy} type="submit">{busy ? 'Signing in…' : 'Log in to Smart Parish'}</button>
       <div className="portal-auth-divider">Or continue with Google</div>
@@ -160,12 +159,8 @@ export default function HomepageAuth() {
         <input className={fieldClass} id="portal-register-email" type="email" required autoComplete="email" value={register.email} onChange={e=>setRegister(p=>({...p,email:e.target.value}))}/>
       </label>
       <div className="portal-auth-name-grid">
-        <label htmlFor="portal-register-password">Password *
-          <input className={fieldClass} id="portal-register-password" type="password" required minLength={8} autoComplete="new-password" value={register.password} onChange={e=>setRegister(p=>({...p,password:e.target.value}))}/>
-        </label>
-        <label htmlFor="portal-register-confirm">Confirm password *
-          <input className={fieldClass} id="portal-register-confirm" type="password" required minLength={8} autoComplete="new-password" value={register.confirmPassword} onChange={e=>setRegister(p=>({...p,confirmPassword:e.target.value}))}/>
-        </label>
+        <PasswordField label="Password *" guidance className={fieldClass} id="portal-register-password" required minLength={12} autoComplete="new-password" value={register.password} onChange={e=>setRegister(p=>({...p,password:e.target.value}))}/>
+        <PasswordField label="Confirm password *" className={fieldClass} id="portal-register-confirm" required minLength={12} autoComplete="new-password" value={register.confirmPassword} onChange={e=>setRegister(p=>({...p,confirmPassword:e.target.value}))}/>
       </div>
       <p className="portal-form-help">Use at least 8 characters with uppercase and lowercase letters and a number.</p>
       <label className="portal-consent"><input type="checkbox" required checked={consent} onChange={e=>setConsent(e.target.checked)}/>

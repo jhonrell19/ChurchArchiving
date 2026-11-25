@@ -1,4 +1,5 @@
 'use client'
+import PasswordField from '@/components/auth/PasswordField'
 
 import { useEffect, useState } from 'react'
 
@@ -126,9 +127,9 @@ export default function StaffAccounts() {
                 if (window.confirm(`Change the password for ${item.email} and sign them out?`))
                   void update(item, { action: 'password', password: details.password }, 'Password changed. Previous sessions were revoked.')
               }}>
-                <label>New password<input required type="password" autoComplete="new-password" minLength={12}
+                <PasswordField label="New password" guidance required autoComplete="new-password" minLength={12}
                   className="block min-h-11 w-full rounded border bg-white px-3" value={details.password}
-                  onChange={e => setDetails({ ...details, password: e.target.value })}/></label>
+                  onChange={e => setDetails({ ...details, password: e.target.value })}/>
                 <p>Use at least 12 characters, including uppercase, lowercase, a number and a symbol.</p>
                 <button disabled={busy} className="min-h-11 justify-self-start rounded border bg-white px-4">Change password</button>
               </form>}

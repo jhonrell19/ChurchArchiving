@@ -225,7 +225,7 @@ async function forward(request: NextRequest, context: { params: Promise<{ path: 
 
   // Allow a free instance to wake. Restrict the deadline to interactive reads.
   const interactiveRead = request.method === 'GET' && (path.startsWith('api/archive/documents/') || [
-    'api/health', 'api/requests', 'api/archive/documents', 'api/announcements',
+    'api/health', 'api/requests', 'api/reports/certificates', 'api/archive/documents', 'api/announcements',
     'api/user/dashboard-summary', 'api/masses', 'api/transcriptions', 'api/archive/deleted-documents',
   ].includes(path))
   const deadline = interactiveRead ? AbortSignal.timeout(90_000) : undefined
@@ -273,7 +273,11 @@ async function forward(request: NextRequest, context: { params: Promise<{ path: 
     let upstreamResponse: Response
     try {
       upstreamResponse = await send()
-      if (interactiveRead && [502, 503, 504].includes(upstreamResponse.status)) {
+      const expectsCertificateJson = path === 'api/requests' ||
+        (path === 'api/reports/certificates' && (upstreamUrl.searchParams.get('format') || 'json') === 'json')
+      const htmlInsteadOfData = expectsCertificateJson && upstreamResponse.ok &&
+        upstreamResponse.headers.get('content-type')?.includes('text/html')
+      if (interactiveRead && ([502, 503, 504].includes(upstreamResponse.status) || htmlInsteadOfData)) {
         await upstreamResponse.body?.cancel()
         throw new Error('Temporary upstream failure')
       }

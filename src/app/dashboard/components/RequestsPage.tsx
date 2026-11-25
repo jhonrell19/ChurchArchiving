@@ -1,4 +1,5 @@
 'use client'
+import { certificateResponse } from '@/lib/certificateResponse'
 
 import { useFeedback } from '@/components/ui/FeedbackProvider'
 import RequestTracking from '@/components/RequestTracking'
@@ -274,14 +275,12 @@ export default function RequestsPage() {
         cache: 'no-store',
       })
 
-      const data = await res.json().catch(() => ({}))
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to load requests')
+      const data = await certificateResponse(res)
+      if (!Array.isArray(data.requests) || !Number.isInteger(data.page) || !Number.isInteger(data.pages)) {
+        throw new Error('The request list was incomplete. Please retry.')
       }
-
       setHistoryPage(data.page); setHistoryPages(data.pages)
-      setRequests(Array.isArray(data.requests) ? data.requests : [])
+      setRequests(data.requests)
     } catch (err) {
       setRequestsError(err instanceof Error ? err.message : 'Failed to load requests')
       setRequests([])
@@ -823,7 +822,7 @@ if (
               <i aria-hidden="true" className="ti ti-refresh mr-2" />{requestsLoading ? 'Updating…' : 'Refresh tracking'}
             </button>
           </div>
-          <nav className="parish-pager" aria-label="Request history pages"><button disabled={requestsLoading || historyPage<=1} onClick={()=>setHistoryPage(historyPage-1)}>Previous</button><span>Page {historyPage} of {historyPages}</span><button disabled={requestsLoading || historyPage>=historyPages} onClick={()=>setHistoryPage(historyPage+1)}>Next</button></nav>
+          {!requestsError && !requestsLoading && <nav className="parish-pager" aria-label="Request history pages"><button disabled={requestsLoading || historyPage<=1} onClick={()=>setHistoryPage(historyPage-1)}>Previous</button><span>Page {historyPage} of {historyPages}</span><button disabled={requestsLoading || historyPage>=historyPages} onClick={()=>setHistoryPage(historyPage+1)}>Next</button></nav>}
           {requestsLoading ? (
             <div className="bg-white border border-gold/20 rounded-xl p-12 text-center">
               <i className="ti ti-loader-2 animate-spin text-gold text-3xl mb-3 inline-block" />

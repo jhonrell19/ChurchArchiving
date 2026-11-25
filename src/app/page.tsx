@@ -24,11 +24,7 @@ export default async function HomePage() {
           <ParishNoticesPreview />
         </div>
       </div>
-      <nav className="portal-home-shortcuts" aria-label="Explore the parish">
-        <a href="#parish-calendar"><span>Mass schedules and calendar</span><span aria-hidden="true">→</span></a>
-        <a href="/services"><span>Sacraments and parish services</span><span aria-hidden="true">→</span></a>
-        <a href="/contact"><span>Contact the parish office</span><span aria-hidden="true">→</span></a>
-      </nav>
+
       <div id="parish-calendar"><ParishCalendar services={content.services}/></div>
     </main>
     <Footer address={content.address}/>

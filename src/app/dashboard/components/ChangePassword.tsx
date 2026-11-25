@@ -28,7 +28,7 @@ export default function ChangePassword() {
       <p>After saving, sign in again with your new password.</p>
       <PasswordField {...common} label="Current password" autoComplete="current-password" value={current} onChange={e => setCurrent(e.target.value)}/>
       <PasswordField {...common} guidance label="New password" autoComplete="new-password" minLength={12} value={next} onChange={e => setNext(e.target.value)}/>
-      <PasswordField {...common} label="Confirm new password" autoComplete="new-password" value={confirm} onChange={e => setConfirm(e.target.value)}/>
+      <PasswordField {...common} label="Confirm new password" match={next} autoComplete="new-password" value={confirm} onChange={e => setConfirm(e.target.value)}/>
       <button disabled={busy} className="rounded-lg border px-4 py-3">{busy ? 'Saving…' : 'Save new password'}</button>
       <a href="/forgot-password" className="ml-4 underline">Forgot your password?</a>
       {message && <p role="alert">{message}</p>}

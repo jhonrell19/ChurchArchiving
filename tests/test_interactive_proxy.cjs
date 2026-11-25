@@ -9,7 +9,7 @@ const { outputText } = ts.transpileModule(route, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 })
 const handlers = {}
-const user = { id: 1, email: 'test@example.invalid', role: 'ADMIN' }
+const user = { id: 1, email: 'test@example.invalid', role: 'BURIAL_ADMIN' }
 function load(name) {
   return name === '@/lib/auth' ? { getCurrentUser: async () => user } : require(name)
 }
@@ -29,7 +29,7 @@ async function run() {
       return controller.signal
     }
     global.fetch = async (url, options) => {
-      assert.equal(url.searchParams.get('scope'), 'main')
+      assert.equal(url.searchParams.get('scope'), 'burial')
       assert.equal(options.signal, controller.signal)
       controller.abort()
       throw Error('Simulated slow upstream')
@@ -38,8 +38,12 @@ async function run() {
     assert.equal(timedOut.status, 504)
     assert.match((await timedOut.json()).message, /try again/i)
     AbortSignal.timeout = originalTimeout
-    global.fetch = async () => Response.json({ requests: [] })
+    let calls = 0
+    global.fetch = async () => ++calls === 1
+      ? new Response('Starting', { status: 503 })
+      : Response.json({ requests: [] })
     const retry = await handlers.GET(request, context)
+    assert.equal(calls, 2)
     assert.equal(retry.status, 200)
     assert.deepEqual(await retry.json(), { requests: [] })
     console.log('PASS interactive read timeout, office scope and subsequent retry')

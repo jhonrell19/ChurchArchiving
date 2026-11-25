@@ -6,7 +6,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { isSupervisor } from '@/lib/portalConfig'
 import { createPasswordResetToken } from '@/lib/accountTokens'
 import { appBaseUrl, isTransactionalEmailConfigured, sendTransactionalEmail } from '@/lib/email'
-import { EMAIL_RE, normalizeEmail } from '@/lib/validation'
+import { EMAIL_RE, normalizeEmail, validatePassword } from '@/lib/validation'
 
 const respond = (value: object, status = 200) =>
   NextResponse.json(value, { status, headers: { 'Cache-Control': 'no-store' } })
@@ -31,7 +31,7 @@ export async function GET() {
   return respond({ staff: users })
 }
 
-// Invite by email; no administrator ever sees or chooses a staff password.
+// Invite by email so the staff member can set their initial password.
 // A one-use password setup link proves control of the inbox, and staff MFA
 // remains mandatory before a session can be issued.
 export async function POST(req: NextRequest) {
@@ -95,21 +95,45 @@ export async function PATCH(req: NextRequest) {
   if (!actor) return respond({ message: 'Forbidden' }, 403)
   const body = await req.json().catch(() => null)
   const userId = Number(body?.userId)
-  const enabled = body?.accountEnabled
-  if (!Number.isSafeInteger(userId) || userId <= 0 || typeof enabled !== 'boolean' || userId === actor.id) {
-    return respond({ message: 'Invalid staff account or action.' }, 400)
+  if (!Number.isSafeInteger(userId) || userId <= 0 || userId === actor.id) {
+    return respond({ message: 'Invalid staff account.' }, 400)
+  }
+
+  const passwordChange = body.action === 'password'
+  const nameChange = body.action === 'name'
+  const enabled = body.accountEnabled
+  const firstName = typeof body.firstName === 'string' ? body.firstName.trim() : ''
+  const surname = typeof body.surname === 'string' ? body.surname.trim() : ''
+  if (nameChange && (!firstName || !surname || firstName.length > 100 || surname.length > 100)) {
+    return respond({ message: 'Enter a first name and surname of up to 100 characters each.' }, 400)
+  }
+  if (passwordChange) {
+    if (typeof body.password !== 'string' || Buffer.byteLength(body.password) > 72) {
+      return respond({ message: 'Enter a password of up to 72 bytes.' }, 400)
+    }
+    const errors = validatePassword(body.password)
+    if (errors.length) return respond({ message: 'Password must contain ' + errors.join(', ') + '.' }, 400)
+  }
+  if (!nameChange && !passwordChange && (body.action !== undefined || typeof enabled !== 'boolean')) {
+    return respond({ message: 'Invalid staff action.' }, 400)
   }
   try {
+    const data = passwordChange ? { password: await bcrypt.hash(body.password, 12) }
+      : nameChange ? { firstName, surname } : { accountEnabled: enabled }
+    const action = passwordChange ? 'Changed password for' : nameChange ? 'Renamed' : enabled ? 'Enabled' : 'Disabled'
     const result = await prisma.$transaction(async tx => {
       const updated = await tx.user.updateMany({
-        where: { id: userId, role: { in: ['STAFF', 'BURIAL_ADMIN'] } },
-        data: { accountEnabled: enabled },
+        where: { id: userId, role: { in: ['STAFF', 'BURIAL_ADMIN'] }, ...(passwordChange && { emailVerified: true }) },
+        data,
       })
       if (updated.count !== 1) return 0
-      await tx.session.deleteMany({ where: { userId } })
-      await tx.staffMfaChallenge.deleteMany({ where: { userId } })
+      if (!nameChange) {
+        await tx.session.deleteMany({ where: { userId } })
+        await tx.staffMfaChallenge.deleteMany({ where: { userId } })
+      }
+      if (passwordChange) await tx.passwordResetToken.deleteMany({ where: { userId } })
       await tx.$executeRaw`INSERT INTO parish_private.audit_log ("user", action, created_at)
-        VALUES (${actor.email}, ${(enabled ? 'Enabled' : 'Disabled') + ' staff account #' + userId}, now())`
+        VALUES (${actor.email}, ${action + ' staff account #' + userId}, now())`
       return updated.count
     })
     if (!result) return respond({ message: 'Staff account not found.' }, 404)

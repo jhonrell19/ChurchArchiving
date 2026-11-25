@@ -226,7 +226,7 @@ async function forward(request: NextRequest, context: { params: Promise<{ path: 
   // Allow a free instance to wake. Restrict the deadline to interactive reads.
   const interactiveRead = request.method === 'GET' && (path.startsWith('api/archive/documents/') || [
     'api/health', 'api/requests', 'api/archive/documents', 'api/announcements',
-    'api/user/dashboard-summary', 'api/masses',
+    'api/user/dashboard-summary', 'api/masses', 'api/transcriptions', 'api/archive/deleted-documents',
   ].includes(path))
   const deadline = interactiveRead ? AbortSignal.timeout(90_000) : undefined
   try {
@@ -261,7 +261,7 @@ async function forward(request: NextRequest, context: { params: Promise<{ path: 
       body = await request.arrayBuffer()
     }
 
-    const upstreamResponse = await fetch(upstreamUrl, {
+    const send = () => fetch(upstreamUrl, {
       method: request.method,
       headers,
       body,
@@ -269,6 +269,20 @@ async function forward(request: NextRequest, context: { params: Promise<{ path: 
       redirect: 'manual',
       signal: deadline,
     })
+
+    let upstreamResponse: Response
+    try {
+      upstreamResponse = await send()
+      if (interactiveRead && [502, 503, 504].includes(upstreamResponse.status)) {
+        await upstreamResponse.body?.cancel()
+        throw new Error('Temporary upstream failure')
+      }
+    } catch (error) {
+      if (!interactiveRead || deadline?.aborted || request.signal.aborted) throw error
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      if (deadline?.aborted || request.signal.aborted) throw error
+      upstreamResponse = await send()
+    }
 
     // Post-commit notifications: ONLY the authoritative Flask response may
     // supply the request id/owner/status. This is not client-provided input.

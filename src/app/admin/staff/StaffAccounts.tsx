@@ -49,17 +49,22 @@ export default function StaffAccounts() {
     } finally { setBusy(false) }
   }
 
-  async function changeStatus(item: Staff) {
-    if (busy || !window.confirm(`${item.accountEnabled ? 'Disable' : 'Enable'} staff account ${item.email}?`)) return
+  const [editing, setEditing] = useState<number | null>(null)
+  const [details, setDetails] = useState({ firstName: '', surname: '', password: '' })
+
+  async function update(item: Staff, change: object, success: string) {
+    if (busy) return
     setBusy(true); setError(''); setNotice('')
     try {
       const res = await fetch('/api/admin/staff', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: item.id, accountEnabled: !item.accountEnabled }),
+        body: JSON.stringify({ userId: item.id, ...change }),
       })
       const result = await res.json()
       if (!res.ok) throw new Error(result.message || 'Update failed')
-      setNotice('Staff access updated. Previous sessions have been revoked.')
+      setNotice(success)
+      setEditing(null)
+      setDetails({ firstName: '', surname: '', password: '' })
       await load()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Update failed')
@@ -88,14 +93,46 @@ export default function StaffAccounts() {
       <section className="rounded-xl border bg-white p-5">
         <h2 className="text-xl font-semibold">Staff access</h2>
         <div className="mt-3 space-y-3">
-          {staff.map(item => <div key={item.id} className="flex flex-col gap-2 border-b py-3 sm:flex-row sm:items-center sm:justify-between">
+          {staff.map(item => <div key={item.id} className="space-y-3 border-b py-4">
             <div><p className="font-semibold">{item.firstName} {item.surname}</p>
               <p className="break-all text-sm text-slate-600">{item.email}</p>
               <p className="text-sm text-slate-600">{item.role === 'BURIAL_ADMIN' ? 'Legacy role — migrate to STAFF' : 'Church Staff'} · {item.emailVerified ? 'Email verified' : 'Invitation pending'} · {item.accountEnabled ? 'Active' : 'Disabled'}</p></div>
-            <button disabled={busy} onClick={() => void changeStatus(item)}
+            <button disabled={busy} aria-expanded={editing === item.id} className="mr-3 min-h-11 rounded-lg border px-4"
+              onClick={() => {
+                setDetails({ firstName: item.firstName || '', surname: item.surname || '', password: '' })
+                setEditing(editing === item.id ? null : item.id)
+              }}>{editing === item.id ? 'Close editor' : 'Edit account'}</button>
+            <button disabled={busy} onClick={() => {
+              if (window.confirm(`${item.accountEnabled ? 'Disable' : 'Enable'} access for ${item.email}?`))
+                void update(item, { accountEnabled: !item.accountEnabled }, 'Staff access updated.')
+            }}
               className="min-h-11 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold disabled:opacity-50">
               {item.accountEnabled ? 'Disable access' : 'Enable access'}
             </button>
+            {editing === item.id && <div className="space-y-4 rounded-lg bg-slate-50 p-4">
+              <form className="grid gap-3 sm:grid-cols-3" onSubmit={e => {
+                e.preventDefault()
+                void update(item, { action: 'name', firstName: details.firstName, surname: details.surname }, 'Staff name updated.')
+              }}>
+                {(['firstName', 'surname'] as const).map(key => <label key={key}>
+                  {key === 'firstName' ? 'First name' : 'Surname'}
+                  <input required maxLength={100} value={details[key]} className="block min-h-11 w-full rounded border bg-white px-3"
+                    onChange={e => setDetails({ ...details, [key]: e.target.value })}/>
+                </label>)}
+                <button disabled={busy} className="min-h-11 self-end rounded border bg-white px-4">Save name</button>
+              </form>
+              {item.emailVerified && <form className="grid gap-2" onSubmit={e => {
+                e.preventDefault()
+                if (window.confirm(`Change the password for ${item.email} and sign them out?`))
+                  void update(item, { action: 'password', password: details.password }, 'Password changed. Previous sessions were revoked.')
+              }}>
+                <label>New password<input required type="password" autoComplete="new-password" minLength={12}
+                  className="block min-h-11 w-full rounded border bg-white px-3" value={details.password}
+                  onChange={e => setDetails({ ...details, password: e.target.value })}/></label>
+                <p>Use at least 12 characters, including uppercase, lowercase, a number and a symbol.</p>
+                <button disabled={busy} className="min-h-11 justify-self-start rounded border bg-white px-4">Change password</button>
+              </form>}
+            </div>}
           </div>)}
           {!staff.length && <p className="py-4 text-slate-600">No staff accounts yet.</p>}
         </div>

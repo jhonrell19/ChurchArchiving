@@ -328,6 +328,7 @@ async function forward(request: NextRequest, context: { params: Promise<{ path: 
     for (const key of [
       'content-type',
       'content-disposition',
+      'retry-after',
       // Do not copy upstream Content-Length: fetch() may decompress the body,
       // making the original length stale and truncating JSON in the browser.
       'content-range',

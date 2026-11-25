@@ -8,7 +8,7 @@ import SupervisorReports from './SupervisorReports'
 type Row = { month: string, type: string, status: string, requests: number, collected: number }
 const money = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' })
 
-export default function ReportView({ burial, supervisor }: { burial: boolean, supervisor:boolean }) {
+export default function ReportView({ officeHome, burial, supervisor }: { officeHome: string; burial: boolean, supervisor:boolean }) {
   const [query, setQuery] = useState('')
   const [rows, setRows] = useState<Row[]>([])
   const [state, setState] = useState('Loading report…')
@@ -31,7 +31,7 @@ export default function ReportView({ burial, supervisor }: { burial: boolean, su
   const months = new Map<string, number>()
   for (const row of rows) months.set(row.month, (months.get(row.month) || 0) + (byPayment ? row.collected : row.requests))
   return <main className="parish-workspace">
-    <a href={burial ? '/burial-admin' : '/admin'}>← Back to office</a>
+    <a href={officeHome}>← Back to office</a>
     <h1>Certificate activity</h1>
     <p>Choose the request date or the recorded payment date. Payment totals include cash and verified live PayMongo payments. Entries without a payment date are excluded from the payment-date view.</p>
     <form className="parish-filters" onSubmit={e => {

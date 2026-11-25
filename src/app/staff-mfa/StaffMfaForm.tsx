@@ -11,7 +11,7 @@ export default function StaffMfaForm() {
   const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null)
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
-  const [roleHome, setRoleHome] = useState('/admin')
+  const [roleHome, setRoleHome] = useState('/login')
 
   useEffect(() => {
     void (async () => {
@@ -19,7 +19,6 @@ export default function StaffMfaForm() {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) { setMessage(data.message || 'Please sign in again.'); return }
       setEnrolled(Boolean(data.enrolled))
-      setRoleHome(data.role === 'BURIAL_ADMIN' ? '/burial-admin' : '/admin')
       if (!data.enrolled) {
         const setup = await fetch('/api/auth/staff-mfa', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'setup' }) })
         const content = await setup.json().catch(() => ({}))
@@ -36,11 +35,13 @@ export default function StaffMfaForm() {
       const res = await fetch('/api/auth/staff-mfa', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'verify', code }) })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) { setMessage(data.message || 'Authentication failed.'); return }
+      const destination = ['/staff', '/admin'].includes(data.destination) ? data.destination : '/login'
       if (Array.isArray(data.recoveryCodes)) {
+        setRoleHome(destination)
         setRecoveryCodes(data.recoveryCodes)
         setMessage('MFA enabled. Save these one-time recovery codes privately before continuing.')
       } else {
-        window.location.replace(data.role === 'BURIAL_ADMIN' ? '/burial-admin' : '/admin')
+        window.location.replace(destination)
       }
     } catch {
       setMessage('Cannot reach the security service. Please retry.')
@@ -62,7 +63,7 @@ export default function StaffMfaForm() {
   return <main className="min-h-screen bg-slate-50 flex items-center justify-center px-5 py-12">
     <section className="w-full max-w-lg rounded-2xl bg-white border border-slate-200 p-7 shadow-sm space-y-5">
       <h1 className="text-xl font-semibold text-slate-900">Staff two-factor authentication</h1>
-      <p className="text-sm text-slate-700">Main Admin and Burial Admin must verify an authenticator code before accessing parish records.</p>
+      <p className="text-sm text-slate-700">Administrators and church staff must verify an authenticator code before accessing parish records.</p>
       {enrolled === false && secret && !recoveryCodes && <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 space-y-2">
         <p className="font-medium text-sm">First-time setup</p>
         <p className="text-sm">Open Google Authenticator, Microsoft Authenticator, or another TOTP app. Choose <strong>Add account → Enter setup key</strong>.</p>

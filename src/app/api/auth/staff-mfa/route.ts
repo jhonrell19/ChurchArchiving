@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 
-import { createSession, SESSION_COOKIE, STAFF_SESSION_MAX_AGE_SECONDS } from '@/lib/auth'
+import { createSession, getRoleHome, SESSION_COOKIE, STAFF_SESSION_MAX_AGE_SECONDS } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import {
   MFA_PENDING_COOKIE, createRecoveryCodes, decryptMfaSecret, encryptMfaSecret,
@@ -94,7 +94,7 @@ export async function POST(req: Request) {
   // A normal staff session exists ONLY after successful second-factor verification.
   const session = await createSession(challenge.userId, true)
   await prisma.staffMfaChallenge.deleteMany({ where: { userId: challenge.userId } })
-  const response = json({ message: 'Staff authentication successful.', role: challenge.user.role, recoveryCodes })
+  const response = json({ message: 'Staff authentication successful.', role: challenge.user.role, destination: getRoleHome(challenge.user.role), recoveryCodes })
   const secure = process.env.NODE_ENV === 'production'
   response.cookies.set(SESSION_COOKIE, session.token, { httpOnly: true, secure, sameSite: 'strict', path: '/', maxAge: STAFF_SESSION_MAX_AGE_SECONDS })
   response.cookies.set(MFA_PENDING_COOKIE, '', { httpOnly: true, secure, sameSite: 'strict', path: '/', maxAge: 0 })

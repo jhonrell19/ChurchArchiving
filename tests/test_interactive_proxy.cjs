@@ -46,6 +46,15 @@ async function run() {
     assert.equal(calls, 2)
     assert.equal(retry.status, 200)
     assert.deepEqual(await retry.json(), { requests: [] })
+    let limitedCalls = 0
+    global.fetch = async () => {
+      limitedCalls++
+      return new Response('', { status: 429, headers: { 'Retry-After': '42' } })
+    }
+    const limited = await handlers.GET(request, context)
+    assert.equal(limited.status, 429)
+    assert.equal(limited.headers.get('Retry-After'), '42')
+    assert.equal(limitedCalls, 1)
     console.log('PASS interactive read timeout, office scope and subsequent retry')
   } finally {
     AbortSignal.timeout = originalTimeout

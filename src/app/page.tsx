@@ -12,7 +12,7 @@ export default async function HomePage() {
   const photos = [content.photo, ...parishPhotos.filter(photo => photo !== content.photo)]
   return <>
     <main className="portal-home" id="main-content">
-      <div className="portal-home-intro">
+      <div id="parish-access" className="portal-home-intro">
         <p className="portal-eyebrow">Iglesia Filipina Independiente · Maragondon, Cavite</p>
         <h1>{content.title}</h1>
         <p>{content.introduction}</p>

@@ -34,7 +34,7 @@ function PublicNavigation({ pathname }: { pathname: string }) {
     queueMicrotask(() => setOpen(false))
   }, [pathname])
 
-  return <nav className="public-nav" aria-label="Parish navigation">
+  return <nav className={pathname === '/' ? 'public-nav home-nav' : 'public-nav'} aria-label="Parish navigation">
     <div className="nav-inner">
       <Link href="/" className="brand">
         <ParishLogo height={45}/>

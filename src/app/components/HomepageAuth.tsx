@@ -26,6 +26,8 @@ export default function HomepageAuth() {
   })
 
   useEffect(() => {
+    // Begin waking the archive when a visitor arrives, while they sign in.
+    void fetch('/api/ready', { cache: 'no-store' }).catch(() => undefined)
     if (new URLSearchParams(window.location.search).get('auth') === 'register') setMode('register')
     fetch('/api/portal-config', { cache: 'no-store' })
       .then(response => response.ok ? response.json() : null)
@@ -114,7 +116,7 @@ export default function HomepageAuth() {
     finally { setBusy(false) }
   }
 
-  return <section id="parish-access" className="portal-auth-card" aria-labelledby="portal-auth-heading">
+  return <section className="portal-auth-card" aria-labelledby="portal-auth-heading">
     <div className="portal-auth-head">
       <p className="portal-eyebrow">Your parish account</p>
       <h2 id="portal-auth-heading">{mode === 'login' ? 'Welcome back' : 'Join the parish portal'}</h2>

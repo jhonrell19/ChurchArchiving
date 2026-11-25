@@ -1,4 +1,5 @@
 'use client'
+import PasswordField from '@/components/auth/PasswordField'
 
 import ParishLogo from '../components/ParishLogo'
 
@@ -24,8 +25,8 @@ function ResetPasswordForm() {
       return
     }
 
-    if (newPassword.length < 8) {
-      alert('Password must be at least 8 characters long.')
+    if (newPassword.length < 12) {
+      alert('Password must be at least 12 characters long.')
       return
     }
 
@@ -80,11 +81,7 @@ function ResetPasswordForm() {
 
         <form onSubmit={submit} className="space-y-5">
           <div>
-            <label className="block font-display text-[10px] tracking-wider uppercase text-navy-mid mb-2">
-              New Password
-            </label>
-            <input
-              type="password"
+            <PasswordField label="New Password" autoComplete="new-password" guidance minLength={12}
               required
               value={newPassword}
               onChange={e => setNewPassword(e.target.value)}
@@ -94,11 +91,7 @@ function ResetPasswordForm() {
           </div>
 
           <div>
-            <label className="block font-display text-[10px] tracking-wider uppercase text-navy-mid mb-2">
-              Confirm Password
-            </label>
-            <input
-              type="password"
+            <PasswordField label="Confirm Password" autoComplete="new-password"
               required
               value={confirmPassword}
               onChange={e => setConfirmPassword(e.target.value)}

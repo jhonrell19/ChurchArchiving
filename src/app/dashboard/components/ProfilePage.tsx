@@ -1,4 +1,5 @@
 'use client'
+import ChangePassword from './ChangePassword'
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -242,6 +243,7 @@ export default function ProfilePage() {
       </div>
 
 
+      <ChangePassword />
       <PhoneOtpPanel phoneNumber={user.phoneNumber} />
       <NotificationPreferencesPanel />
 

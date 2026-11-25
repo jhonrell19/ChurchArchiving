@@ -42,29 +42,37 @@ export default function ArchivesPage({initialTab='baptismal'}:{initialTab?:strin
   const [loadError, setLoadError] = useState('')
   const [storageMessage, setStorageMessage] = useState('')
   const [ocrMessage, setOcrMessage] = useState('')
+  const [healthRevision, setHealthRevision] = useState(0)
+  const [hasLoaded, setHasLoaded] = useState(false)
+  const [blockedUntil, setBlockedUntil] = useState(0)
+  const blocked = useRef(0)
   useEffect(() => {
-    let active = true
-    async function check() {
+    if (!blockedUntil) return
+    const timer = setTimeout(() => setBlockedUntil(0), Math.max(0, blockedUntil - Date.now()))
+    return () => clearTimeout(timer)
+  }, [blockedUntil])
+
+  useEffect(() => {
+    if (!hasLoaded) return
+    const controller = new AbortController()
+    async function check(path: string, flag: string, fallback: string, setMessage: (s: string) => void) {
       try {
-        const [storage, ocr] = await Promise.all([
-          fetch('/api/backend/api/archive/storage-status', {cache:'no-store'}),
-          fetch('/api/backend/api/archive/ocr-health', {cache:'no-store'}),
-        ])
-        const [storageInfo, ocrInfo] = await Promise.all([
-          storage.json().catch(() => ({})), ocr.json().catch(() => ({})),
-        ])
-        if (!active) return
-        if (!storage.ok || !storageInfo.durable)
-          setStorageMessage(storageInfo.message || 'Private storage could not be verified. Do not upload actual parish records.')
-        if (!ocr.ok || !ocrInfo.available)
-          setOcrMessage(ocrInfo.message || 'OCR is unavailable. Staff can enter reviewed fields manually.')
+        const response = await fetch('/api/backend/api/archive/' + path, { cache: 'no-store', signal: controller.signal })
+        if (!response.ok) throw Error()
+        const data = await response.json()
+        if (typeof data[flag] !== 'boolean') throw Error()
+        if (!controller.signal.aborted) setMessage(data[flag] ? '' : data.message || fallback)
       } catch {
-        if (active) setStorageMessage('Storage status could not be checked. Do not assume uploads are durable.')
+        if (!controller.signal.aborted) setMessage(fallback)
       }
     }
-    void check()
-    return () => { active = false }
-  }, [])
+    async function checkServices() {
+      await check('storage-status', 'durable', 'Storage is unverified. Wait before uploading parish records.', setStorageMessage)
+      if (!controller.signal.aborted) await check('ocr-health', 'available', 'Text recognition status could not be verified.', setOcrMessage)
+    }
+    void checkServices()
+    return () => controller.abort()
+  }, [hasLoaded, healthRevision])
 
   const [showForm, setShowForm] = useState(false)
   const [recordData, setRecordData] = useState<TemplateRecordData>({})
@@ -158,12 +166,20 @@ export default function ArchivesPage({initialTab='baptismal'}:{initialTab?:strin
   const [counts,setCounts] = useState<Record<string,number>>({})
   const fetchVersion = useRef(0)
   const loadDocuments = async () => {
+    if (blocked.current > Date.now()) return
     const version = ++fetchVersion.current
     setLoading(true)
     setLoadError('')
     try {
       const res = await fetch(`/api/backend/api/archive/documents?page=${page}&category=${activeTab}&q=${encodeURIComponent(search)}`, { cache: 'no-store' })
       if (!res.ok) {
+        if (res.status === 429 && version === fetchVersion.current) {
+          const header = res.headers.get('Retry-After')?.trim() || ''
+          const retryTime = /^\d+$/.test(header) ? Date.now() + Number(header) * 1000 : Date.parse(header)
+          blocked.current = Number.isFinite(retryTime) && retryTime > Date.now() ? retryTime : Date.now() + 60_000
+          setBlockedUntil(blocked.current)
+          throw Error('Too many archive requests (HTTP 429). Try again after ' + new Date(blocked.current).toLocaleTimeString() + '.')
+        }
         const unavailable = [502, 503, 504].includes(res.status)
         throw new Error(unavailable
           ? `The parish backend could not be reached (HTTP ${res.status}). Check the Flask service in Render.`
@@ -181,6 +197,7 @@ export default function ArchivesPage({initialTab='baptismal'}:{initialTab?:strin
         throw new Error('The backend returned an unexpected archive response.')
       }
       if (version !== fetchVersion.current) return
+      setHasLoaded(true)
       setCounts(data.counts); setPages(data.pages); setPage(data.page)
       setDocuments(data.documents)
     } catch (err) {
@@ -194,7 +211,7 @@ export default function ArchivesPage({initialTab='baptismal'}:{initialTab?:strin
   }
 
   useEffect(() => {
-    const timer = setTimeout(() => void loadDocuments(), 180)
+    const timer = setTimeout(() => void loadDocuments(), 450)
     return () => { clearTimeout(timer); fetchVersion.current++ }
   }, [page, activeTab, search])
 
@@ -384,7 +401,7 @@ const makeFilledTemplatePrimary = async (record: ArchiveDocument) => {
 }
 
 const records = documents
-  const countByType = (type:string) => counts[type] || 0
+  const countByType = (type:string) => loading || loadError ? '—' : counts[type] || 0
 
   const activeLabel =
     ARCHIVE_TYPES.find(type => type.value === activeTab)?.label || 'Archive'
@@ -417,8 +434,8 @@ const records = documents
         Store scanned church records with metadata, categorization, and searchable archive retrieval.
       </p>
 
-      {storageMessage && <p role="alert" className="mb-3 rounded-lg border border-rose-300 bg-rose-50 p-3 text-sm text-rose-900">
-        <strong>Storage warning:</strong> {storageMessage}
+      {(storageMessage || !hasLoaded) && <p role="alert" className="mb-3 rounded-lg border border-rose-300 bg-rose-50 p-3 text-sm text-rose-900">
+        <strong>Storage warning:</strong> {storageMessage || 'Storage verification is pending. Wait before uploading parish records.'}
       </p>}
       {ocrMessage && <p role="status" className="mb-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
         <strong>OCR warning:</strong> {ocrMessage}
@@ -426,8 +443,8 @@ const records = documents
       {loadError && (
         <div role="alert" className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900">
           <span className="font-body text-sm">{loadError}</span>
-          <button type="button" onClick={() => void loadDocuments()} className="rounded-lg bg-navy px-4 py-2 text-sm font-semibold text-white">
-            Retry
+          <button type="button" disabled={Boolean(blockedUntil) || loading} onClick={() => { if (hasLoaded) setHealthRevision(n => n + 1); void loadDocuments() }} className="rounded-lg bg-navy px-4 py-2 text-sm font-semibold text-white">
+            {blockedUntil ? 'Please wait' : 'Retry'}
           </button>
         </div>
       )}
@@ -674,7 +691,7 @@ const records = documents
         />
       </div>
 
-      <nav className="parish-pager" aria-label="Archive pages"><button disabled={loading || page<=1} onClick={()=>setPage(page-1)}>Previous</button><span>Page {page} of {pages}</span><button disabled={loading || page>=pages} onClick={()=>setPage(page+1)}>Next</button></nav>
+      {!loading && !loadError && <nav className="parish-pager" aria-label="Archive pages"><button disabled={loading || page<=1} onClick={()=>setPage(page-1)}>Previous</button><span>Page {page} of {pages}</span><button disabled={loading || page>=pages} onClick={()=>setPage(page+1)}>Next</button></nav>}
       <div className="bg-white border border-gold/20 rounded-xl overflow-hidden">
         <table className="w-full">
           <thead>

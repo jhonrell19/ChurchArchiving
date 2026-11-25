@@ -10,7 +10,7 @@ export async function POST(req: Request) {
 
     const record = await prisma.emailVerificationToken.findUnique({
       where: { tokenHash: hashAccountToken(token) },
-      include: { user: true },
+      include: { user: { select: { role: true, membershipStatus: true } } },
     })
 
     if (!record || record.expiresAt.getTime() <= Date.now()) {
@@ -23,7 +23,9 @@ export async function POST(req: Request) {
       prisma.emailVerificationToken.deleteMany({ where: { userId: record.userId } }),
     ])
 
-    return NextResponse.json({ message: 'Email verified successfully. Your account is awaiting parish administrator approval before you can sign in.' })
+    return NextResponse.json({ message: record.user.role === 'USER' && record.user.membershipStatus !== 'approved'
+      ? 'Email verified. Parish administrator approval is required before you can sign in.'
+      : 'Email verified. Continue to login.' })
   } catch (error) {
     console.error('VERIFY EMAIL ERROR:', error)
     return NextResponse.json({ message: 'Unable to verify email.' }, { status: 500 })

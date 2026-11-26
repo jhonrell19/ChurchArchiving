@@ -55,7 +55,17 @@ async function run() {
     assert.equal(limited.status, 429)
     assert.equal(limited.headers.get('Retry-After'), '42')
     assert.equal(limitedCalls, 1)
-    console.log('PASS interactive read timeout, office scope and subsequent retry')
+    calls = 0
+    global.fetch = async () => ++calls === 1
+      ? new Response('<!DOCTYPE html>', { headers: { 'content-type': 'text/html' } })
+      : Response.json({ rows: [] })
+    const report = await handlers.GET(
+      new NextRequest('http://localhost/api/backend/api/reports/certificates'),
+      { params: Promise.resolve({ path: ['api', 'reports', 'certificates'] }) }
+    )
+    assert.equal(calls, 2)
+    assert.deepEqual(await report.json(), { rows: [] })
+    console.log('PASS interactive read timeout, office scope, transient failure and report HTML recovery')
   } finally {
     AbortSignal.timeout = originalTimeout
     global.fetch = originalFetch

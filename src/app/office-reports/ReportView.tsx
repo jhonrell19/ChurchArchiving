@@ -1,4 +1,5 @@
 'use client'
+import { certificateResponse } from '@/lib/certificateResponse'
 import { useEffect, useState } from 'react'
 
 import { ReportChart } from './ReportChart'
@@ -17,8 +18,8 @@ export default function ReportView({ officeHome, burial, supervisor }: { officeH
     const controller = new AbortController()
     setState('Loading report…')
     fetch(endpoint, { signal: controller.signal, cache: 'no-store' }).then(async r => {
-      const data = await r.json()
-      if (!r.ok) throw Error(data.error || 'Report unavailable.')
+      const data = await certificateResponse(r)
+      if (!Array.isArray(data.rows)) throw Error('The report was incomplete. Apply filters to try again.')
       if (!controller.signal.aborted) { setRows(data.rows); setState('') }
     }).catch(e => { if (!controller.signal.aborted) setState(e.message) })
     return () => controller.abort()

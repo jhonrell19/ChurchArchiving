@@ -26,7 +26,7 @@ export async function GET() {
     orderBy: { id: 'asc' },
     take: 100,
     select: { id: true, email: true, firstName: true, surname: true, role: true,
-      emailVerified: true, accountEnabled: true, createdAt: true },
+      membershipStatus: true, emailVerified: true, accountEnabled: true, createdAt: true },
   })
   return respond({ staff: users })
 }

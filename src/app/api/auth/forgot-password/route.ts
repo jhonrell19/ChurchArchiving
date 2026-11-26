@@ -1,3 +1,4 @@
+import { supervisorProvisioned } from '@/lib/staffProvisioning'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { createPasswordResetToken } from '@/lib/accountTokens'
@@ -14,7 +15,7 @@ export async function POST(req: Request) {
     }
 
     const user = await prisma.user.findUnique({ where: { email } })
-    if (!user) {
+    if (!user || supervisorProvisioned(user)) {
       return NextResponse.json({ message: 'If that account exists, a password reset link has been prepared.' })
     }
 

@@ -9,7 +9,11 @@ const compiled = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
 const mod = new Module(file)
 mod.filename = file
 mod.paths = module.paths
-mod.require = id => id === '@/lib/prisma' ? { prisma: {} } : require(id)
+mod.require = id => {
+  if (id === '@/lib/prisma') return { prisma: {} }
+  if (id === '@/lib/staffProvisioning') return {} // This vector only exercises TOTP calculation.
+  return require(id)
+}
 mod._compile(compiled, file)
 const { base32Encode, totpAt, matchingTotpStep } = mod.exports
 const secret = base32Encode(Buffer.from('12345678901234567890'))

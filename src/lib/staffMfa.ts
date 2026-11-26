@@ -1,3 +1,4 @@
+import { supervisorProvisioned } from '@/lib/staffProvisioning'
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 
 import { prisma } from '@/lib/prisma'
@@ -101,8 +102,8 @@ export async function findValidStaffChallenge(token: string | undefined) {
   if (!token) return null
   const challenge = await prisma.staffMfaChallenge.findUnique({
     where: { tokenHash: challengeHash(token) },
-    include: { user: { select: { id: true, email: true, role: true, emailVerified: true, accountEnabled: true } } },
+    include: { user: { select: { id: true, email: true, role: true, emailVerified: true, membershipStatus: true, accountEnabled: true } } },
   })
-  if (!challenge || challenge.expiresAt.getTime() < Date.now() || challenge.attempts >= 5 || challenge.user.role === 'USER' || !challenge.user.emailVerified || !challenge.user.accountEnabled) return null
+  if (!challenge || challenge.expiresAt.getTime() < Date.now() || challenge.attempts >= 5 || challenge.user.role === 'USER' || (!challenge.user.emailVerified && !supervisorProvisioned(challenge.user)) || !challenge.user.accountEnabled) return null
   return challenge
 }

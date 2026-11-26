@@ -1,3 +1,4 @@
+import { supervisorProvisioned } from '@/lib/staffProvisioning'
 import 'server-only'
 
 import { createHash } from 'node:crypto'
@@ -46,7 +47,7 @@ export async function validateSessionToken(token: string | undefined | null) {
     return null
   }
 
-  if (!session.user.accountEnabled || !session.user.emailVerified) return null
+  if (!session.user.accountEnabled || (!session.user.emailVerified && !supervisorProvisioned(session.user))) return null
   if (session.user.role === 'USER' && session.user.membershipStatus !== 'approved')
     return null
 

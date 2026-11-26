@@ -1,3 +1,4 @@
+import { supervisorProvisioned } from '@/lib/staffProvisioning'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { createEmailVerificationToken } from '@/lib/accountTokens'
@@ -14,7 +15,7 @@ export async function POST(req: Request) {
     }
 
     const user = await prisma.user.findUnique({ where: { email } })
-    if (!user || user.emailVerified) {
+    if (!user || user.emailVerified || supervisorProvisioned(user)) {
       return NextResponse.json({ message: 'If the account needs verification, a new link has been prepared.' })
     }
 

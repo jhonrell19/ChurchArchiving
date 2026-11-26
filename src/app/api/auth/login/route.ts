@@ -1,3 +1,4 @@
+import { supervisorProvisioned } from '@/lib/staffProvisioning'
 import { evidenceEnabled, pendingEvidenceResponse } from '@/lib/membershipEvidence'
 import bcrypt from 'bcryptjs'
 import { NextResponse } from 'next/server'
@@ -52,7 +53,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: 'This account is disabled. Contact the parish office.' }, { status: 403 })
     }
 
-    if (!user.emailVerified) {
+    if (!user.emailVerified && !supervisorProvisioned(user)) {
       return NextResponse.json({
         message: 'Choose Resend verification email, then open the link in your account inbox.',
         verificationRequired: true,

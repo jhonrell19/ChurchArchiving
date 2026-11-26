@@ -50,6 +50,7 @@ const fakePrisma = {
   },
 }
 const validator = transpile('src/lib/sessionValidation.ts', name => {
+  if (name === '@/lib/staffProvisioning') return transpile('src/lib/staffProvisioning.ts')
   if (name === 'server-only') return {}
   if (name === 'node:crypto') return crypto
   if (name === '@/lib/prisma') return { prisma: fakePrisma }
@@ -114,11 +115,14 @@ async function main(){
   assert.equal((await validator.validateSessionToken(TOKEN)).id,6)
   for(const overrides of [
     {accountEnabled:false},{emailVerified:false},{membershipStatus:'pending'},
-    {membershipStatus:'rejected'},
+    {membershipStatus:'rejected'}, {emailVerified:false,membershipStatus:'staff_provisioned'},
+    {role:'STAFF',emailVerified:false,membershipStatus:'approved'},
   ]){
     record=valid(u(overrides))
     assert.equal(await validator.validateSessionToken(TOKEN),null)
   }
+  record=valid(u({role:'STAFF',emailVerified:false,membershipStatus:'staff_provisioned'}))
+  assert.equal((await validator.validateSessionToken(TOKEN)).role,'STAFF')
   record={id:55,expiresAt:new Date(Date.now()-1000),user:u()}
   assert.equal(await validator.validateSessionToken(TOKEN),null)
   assert.equal(removed,1)

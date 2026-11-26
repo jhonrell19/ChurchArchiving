@@ -1,3 +1,4 @@
+import { supervisorProvisioned } from '@/lib/staffProvisioning'
 import { NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
@@ -31,8 +32,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: 'Reset link is invalid or expired.' }, { status: 400 })
     }
 
-    const user = await prisma.user.findUnique({ where: { id: record.userId }, select: { role: true, accountEnabled: true } })
-    if (!user || !user.accountEnabled) return NextResponse.json({ message: 'Account unavailable.' }, { status: 403 })
+    const user = await prisma.user.findUnique({ where: { id: record.userId }, select: { role: true, membershipStatus: true, accountEnabled: true } })
+    if (!user || !user.accountEnabled || supervisorProvisioned(user)) return NextResponse.json({ message: 'Account unavailable.' }, { status: 403 })
     const hashedPassword = await bcrypt.hash(newPassword, 12)
     await prisma.$transaction([
       prisma.user.update({ where: { id: record.userId }, data: { password: hashedPassword, ...(user.role === 'STAFF' ? { emailVerified: true } : {}) } }),

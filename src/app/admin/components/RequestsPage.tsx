@@ -457,6 +457,8 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
             const isBusy = busyId === item.id
             const isSearching = searchingId === item.id
             const results = searchResults[item.id] || []
+            // Only sacramental categories have configured official PDF templates.
+            const canAutoGenerate = ['baptismal', 'confirmation', 'marriage'].includes(item.sacramentType)
             const canRelease =
               item.status === 'Ready' &&
               item.paymentStatus === 'Paid' &&
@@ -723,7 +725,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
                       {item.status === 'Approved' || item.status === 'Ready' ? (
                         <div className="space-y-3">
                           <div className="flex items-center gap-2 flex-wrap">
-                            {item.sacramentType !== 'ownership' ? (
+                            {canAutoGenerate ? (
                             <button
                               type="button"
                               disabled={isBusy || !item.matchedDocumentId}
@@ -734,10 +736,10 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
                             </button>
                             ) : (
                               <span className="font-body text-sm text-amber-800">
-                                No automatic ownership-certificate template is configured. Verify the ownership record, then upload the approved and signed final document below.
+                                No automatic official template is configured for this document type. Church Staff must verify the source record and upload the approved and signed final document below.
                               </span>
                             )}
-                            {item.sacramentType !== 'ownership' && (
+                            {canAutoGenerate && (
                               <span className="font-body text-sm text-slate-500">
                                 Then upload the reviewed/signed final certificate below.
                               </span>

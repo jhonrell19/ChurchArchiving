@@ -752,7 +752,7 @@ if (
     onChange={(e) => {
       handleChange('purpose', e.target.value)
       setSelectedSlotId(null)
-    }
+    }}
     className={inputCls}
     required
   >

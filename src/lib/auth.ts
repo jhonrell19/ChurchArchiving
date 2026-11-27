@@ -33,11 +33,11 @@ export async function createSession(userId: number, staff = false) {
     Date.now() + (staff ? STAFF_SESSION_MAX_AGE_SECONDS : SESSION_MAX_AGE_SECONDS) * 1000
   )
 
-  // Atomic rotation: a subsequent login invalidates old browser sessions.
-  await prisma.$transaction(async tx => {
-    await tx.session.deleteMany({ where: { userId } })
-    await tx.session.create({ data: { tokenHash, userId, expiresAt } })
-  })
+  // A user can have independent sessions on different devices/browsers.
+  // Do not revoke another browser's token just because the same user signed
+  // in elsewhere. Logout revokes the presented token; password reset and
+  // account disabling still invalidate every session separately.
+  await prisma.session.create({ data: { tokenHash, userId, expiresAt } })
 
   return { token, expiresAt }
 }

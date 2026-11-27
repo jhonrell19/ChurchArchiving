@@ -139,7 +139,7 @@ export default function CompleteProfilePage() {
           </h1>
 
           <p className="text-slate-600 text-sm mt-2">
-            Your Google email is verified. Confirm your name to continue. Your phone is optional; an address can be added later in your profile.
+            Your Google email is verified. Confirm your name to continue. Your phone number is optional.
           </p>
         </div>
 

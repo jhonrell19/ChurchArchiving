@@ -17,7 +17,7 @@ BACKUPS = ROOT.parent / 'smartparish_database_backups'
 
 REQUEST_COLUMNS = {
     'requester_user_id':'INTEGER',
-    'requester_address':'VARCHAR(500)',
+    'mother_full_name':'VARCHAR(150)', 'father_full_name':'VARCHAR(150)',
     'is_urgent':'BOOLEAN NOT NULL DEFAULT 0',
     'base_fee':'INTEGER NOT NULL DEFAULT 0',
     'urgent_fee':'INTEGER NOT NULL DEFAULT 0',

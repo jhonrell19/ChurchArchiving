@@ -31,7 +31,7 @@ export async function validateSessionToken(token: string | undefined | null) {
       user: {
         select: {
           id: true, firstName: true, middleName: true, surname: true,
-          phoneNumber: true, address: true, email: true, role: true,
+          phoneNumber: true, email: true, role: true,
           membershipStatus: true, emailVerified: true, accountEnabled: true,
           googleSub: true, createdAt: true, updatedAt: true,
         },

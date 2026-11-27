@@ -1,4 +1,5 @@
 'use client'
+import OfficeHeading from '@/components/OfficeHeading'
 import { supervisorProvisioned } from '@/lib/staffProvisioning'
 import PasswordField from '@/components/auth/PasswordField'
 
@@ -74,16 +75,15 @@ export default function StaffAccounts() {
     } finally { setBusy(false) }
   }
 
-  return <main className="min-h-screen bg-slate-50 p-4 sm:p-8 text-slate-900">
-    <div className="mx-auto max-w-5xl space-y-6">
-      <a href="/admin" className="text-navy-mid underline">Back to Super Admin</a>
-      <h1 className="text-2xl font-bold">Church Staff Accounts</h1>
+  return <main className="office-page">
+    <div className="office-inner space-y-6">
+      <OfficeHeading title="Church Staff Accounts"/>
       <p className="text-base text-slate-600">Assign a login email and password. Each staff member pairs their own authenticator when they first sign in.</p>
       {error && <p role="alert" className="rounded-lg bg-red-50 p-4 text-red-800">{error}</p>}
       {notice && <p role="status" className="rounded-lg bg-rose-50 p-4 text-navy-mid">{notice}</p>}
-      <form onSubmit={createStaff} className="rounded-xl border bg-white p-5">
+      <div className="staff-management-grid"><form onSubmit={createStaff} className="rounded-xl border bg-white p-5">
         <h2 className="mb-4 text-xl font-semibold">Create Church Staff account</h2>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="staff-account-fields grid gap-3 sm:grid-cols-2">
           {(['firstName', 'surname', 'email'] as const).map(key => <label key={key} className="block text-sm font-medium capitalize">
             {key === 'firstName' ? 'First Name' : key === 'surname' ? 'Surname' : 'Email'}
             <input required maxLength={120} type={key === 'email' ? 'email' : 'text'} value={form[key]}
@@ -154,7 +154,7 @@ export default function StaffAccounts() {
           </div>)}
           {!staff.length && <p className="py-4 text-slate-600">No staff accounts yet.</p>}
         </div>
-      </section>
+      </section></div>
     </div>
   </main>
 }

@@ -133,7 +133,6 @@ export async function POST(req: Request) {
         middleName: middleName || null,
         surname,
         phoneNumber,
-        address: null,
         email,
         password: hashedPassword,
         role: 'USER',

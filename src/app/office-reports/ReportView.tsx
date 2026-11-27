@@ -1,4 +1,5 @@
 'use client'
+import OfficeHeading from '@/components/OfficeHeading'
 import { useEffect, useState } from 'react'
 
 import { ReportChart } from './ReportChart'
@@ -26,12 +27,11 @@ export default function ReportView({ officeHome, burial, supervisor }: { officeH
   const types = burial ? ['burial', 'land_agreement', 'ownership'] : ['baptismal', 'confirmation', 'marriage']
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
   const byPayment = new URLSearchParams(query).get('basis') === 'paid'
-  const chartTitle = byPayment ? 'Collections by payment month (PHP)' : 'Requests by month'
-  const months = new Map<string, number>()
-  for (const row of rows) months.set(row.month, (months.get(row.month) || 0) + (byPayment ? row.collected : row.requests))
-  return <main className="parish-workspace">
-    <a href={officeHome}>← Back to office</a>
-    <h1>Certificate activity</h1>
+  const chartTitle = byPayment ? 'Collections by certificate (PHP)' : 'Requests by certificate'
+  const categories = new Map<string, number>()
+  for (const row of rows) categories.set(row.type, (categories.get(row.type) || 0) + (byPayment ? row.collected : row.requests))
+  return <main className="office-page parish-workspace">
+    <OfficeHeading title="Certificate activity" home={officeHome}/>
     <p>Choose the request date or the recorded payment date. Payment totals include cash and verified live PayMongo payments. Entries without a payment date are excluded from the payment-date view.</p>
     <form className="parish-filters" onSubmit={e => {
       e.preventDefault()
@@ -50,8 +50,7 @@ export default function ReportView({ officeHome, burial, supervisor }: { officeH
     {state ? <p role="status">{state}</p> : <>
       <section className="parish-metrics"><div>Requests<strong>{rows.reduce((v,r) => v+r.requests,0)}</strong></div><div>Collected<strong>{money.format(rows.reduce((v,r) => v+r.collected,0))}</strong></div></section>
       {rows.length ? <>
-        <h2>{chartTitle}</h2>
-        <ReportChart title={chartTitle} values={Array.from(months,([label,value])=>({label,value}))}/>
+        <ReportChart title={chartTitle} currency={byPayment} values={Array.from(categories,([label,value])=>({label,value}))}/>
         <h2>Breakdown</h2>
         <p><a href={endpoint+'&format=pdf'}>Download PDF</a> · <a href={endpoint+'&format=xlsx'}>Download Excel</a></p>
         <div className="overflow-x-auto"><table><thead><tr>{['Month','Certificate','Status','Requests','Collected'].map(c => <th key={c}>{c}</th>)}</tr></thead>

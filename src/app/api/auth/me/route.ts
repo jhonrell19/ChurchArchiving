@@ -38,7 +38,6 @@ export async function GET() {
           middleName: user.middleName,
           surname: user.surname,
           phoneNumber: user.phoneNumber,
-          address: user.address,
           email: user.email,
           role: user.role,
           emailVerified: user.emailVerified,

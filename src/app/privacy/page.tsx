@@ -11,7 +11,7 @@ export default async function PrivacyPage() {
         <h1 className="text-3xl font-semibold text-navy-mid">Smart Parish Privacy Notice</h1>
         <p>This system supports the parish's account management, church-record requests, archival services, and cemetery-related services.</p>
         <h2 className="text-xl font-semibold text-navy-mid">Information you provide</h2>
-        <p>Account registration collects your first name, surname, and email address. Middle name and phone number are optional. You may add contact and address information to your profile. Requests for certificates or cemetery services may require additional details and documents relevant to that service.</p>
+        <p>Account registration collects your first name, surname, and email address. Middle name and phone number are optional. Certificate requests collect the requester’s parents’ names to help staff distinguish people with similar names. Requests for certificates or cemetery services may require additional details and documents relevant to that service.</p>
         <h2 className="text-xl font-semibold text-navy-mid">How information is used</h2>
         <p>Information is used for account authentication, email verification, parish-service requests, record matching, service communication, and payment processing where applicable. Staff access is restricted according to their assigned role.</p>
         <h2 className="text-xl font-semibold text-navy-mid">Service providers</h2>

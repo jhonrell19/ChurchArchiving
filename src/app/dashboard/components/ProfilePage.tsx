@@ -5,7 +5,6 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { parsePhoneNumberFromString } from 'libphonenumber-js/max'
 import InternationalPhoneField from '@/components/auth/InternationalPhoneField'
-import StructuredAddressField, { emptyAddress, type AddressInfo } from '@/components/auth/StructuredAddressField'
 import PhoneOtpPanel from '@/components/auth/PhoneOtpPanel'
 import NotificationPreferencesPanel from './NotificationPreferencesPanel'
 
@@ -15,7 +14,6 @@ type UserProfile = {
   middleName: string | null
   surname: string | null
   phoneNumber: string | null
-  address: string | null
   fullName: string
   email: string
   role: string
@@ -61,9 +59,6 @@ export default function ProfilePage() {
   const [phone, setPhone] = useState('')
   const [phoneCountry, setPhoneCountry] = useState('PH')
   const [phoneEdited, setPhoneEdited] = useState(false)
-  const [editAddress, setEditAddress] = useState(false)
-  const [clearAddress, setClearAddress] = useState(false)
-  const [addressInfo, setAddressInfo] = useState<AddressInfo>(emptyAddress)
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -110,8 +105,6 @@ export default function ProfilePage() {
       payload.phoneNumber = phone
       payload.phoneCountry = phoneCountry
     }
-    if (clearAddress) payload.clearAddress = true
-    else if (editAddress) payload.addressInfo = addressInfo
     if (!Object.keys(payload).length) {
       setSaveMessage('Choose a field to update first.')
       return
@@ -130,14 +123,10 @@ export default function ProfilePage() {
       setUser(previous => previous ? {
         ...previous,
         phoneNumber: result.phoneNumber ?? null,
-        address: result.address ?? null,
       } : previous)
       setPhone(result.phoneNumber || '')
       setEditing(false)
       setPhoneEdited(false)
-      setEditAddress(false)
-      setClearAddress(false)
-      setAddressInfo({ ...emptyAddress })
       setSaveMessage(['Contact details saved.', result.phoneStatusNote].filter(Boolean).join(' '))
     } catch (err) {
       setSaveMessage(err instanceof Error ? err.message : 'Unable to save.')
@@ -169,7 +158,6 @@ export default function ProfilePage() {
   const fields = [
     { label: 'Email', value: user.email, icon: 'ti-mail' },
     { label: 'Phone', value: user.phoneNumber || 'N/A', icon: 'ti-phone' },
-    { label: 'Address', value: user.address || 'N/A', icon: 'ti-map-pin' },
     { label: 'User ID', value: `#${user.id}`, icon: 'ti-id' },
     { label: 'Role', value: formatRole(user.role), icon: 'ti-shield' },
     { label: 'Joined', value: formatDate(user.createdAt), icon: 'ti-calendar' },
@@ -209,7 +197,7 @@ export default function ProfilePage() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <h3 className="font-display font-semibold text-navy-mid">Optional contact details</h3>
-            <p className="text-xs text-slate-600 mt-1">Update your phone or save a mailing address for future requests.</p>
+            <p className="text-xs text-slate-600 mt-1">Update the phone number used for parish requests.</p>
           </div>
           <button type="button" onClick={() => { setEditing(v => !v); setSaveMessage('') }}
             className="rounded-lg border border-gold/30 px-4 py-2 text-sm text-navy-mid hover:bg-amber-50">
@@ -223,18 +211,7 @@ export default function ProfilePage() {
             onCountryChange={v => { setPhoneCountry(v); setPhoneEdited(true) }}
             onPhoneChange={v => { setPhone(v); setPhoneEdited(true) }}
             inputClass="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-navy-mid" />
-          <label className="flex gap-2 items-center text-sm text-navy-mid">
-            <input type="checkbox" checked={editAddress} onChange={e => {
-              setEditAddress(e.target.checked); setClearAddress(false)
-            }} />
-            {user.address ? 'Replace saved address' : 'Add an address (optional)'}
-          </label>
-          {editAddress && <StructuredAddressField value={addressInfo} onChange={setAddressInfo} />}
-          {user.address && <label className="flex gap-2 items-center text-sm text-navy-mid">
-            <input type="checkbox" checked={clearAddress} onChange={e => {
-              setClearAddress(e.target.checked); if (e.target.checked) setEditAddress(false)
-            }} />Remove saved address
-          </label>}
+
           <button type="button" onClick={() => void saveContact()} disabled={saving}
             className="bg-navy text-white rounded-xl px-5 py-3 text-sm disabled:opacity-50">
             {saving ? 'Saving...' : 'Save contact details'}

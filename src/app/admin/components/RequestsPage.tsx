@@ -1,7 +1,7 @@
 'use client'
 
 import { useFeedback } from '@/components/ui/FeedbackProvider'
-import RequestTracking from '@/components/RequestTracking'
+import RequestDetails from '@/components/RequestDetails'
 import NotificationOutboxControl from './NotificationOutboxControl'
 
 import { useEffect, useRef, useState } from 'react'
@@ -30,7 +30,8 @@ type CertificateRequest = {
   requesterName: string
   requesterEmail: string
   contactNumber: string
-  requesterAddress: string | null
+  motherFullName: string | null
+  fatherFullName: string | null
   sacramentType: string
   personName: string
   purpose: string
@@ -55,6 +56,7 @@ type CertificateRequest = {
 }
 
 type Props = {
+  readOnly?: boolean
   urgentOnly?: boolean
   office?: 'main' | 'burial'
 }
@@ -106,7 +108,7 @@ const releaseFileName = (filepath: string | null) => {
   return normalized.split('/').pop() || 'Release document'
 }
 
-export default function RequestsPage({ urgentOnly = false, office = 'main' }: Props) {
+export default function RequestsPage({ urgentOnly = false, office = 'main', readOnly = false }: Props) {
   const { toast, confirmAction } = useFeedback()
   const [requests, setRequests] = useState<CertificateRequest[]>([])
   const [filter, setFilter] = useState<ReqStatus>('All')
@@ -119,6 +121,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
   const [releaseFiles, setReleaseFiles] = useState<Record<number, File | null>>({})
 
   const [page, setPage] = useState(1)
+  const [query, setQuery] = useState('')
   const [pages, setPages] = useState(1)
   const [counts, setCounts] = useState<Record<string, number>>({})
   const [loadError, setLoadError] = useState(false)
@@ -129,7 +132,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
     try {
       setLoading(true)
       const priority = urgentOnly ? 'urgent' : 'all'
-      const res = await fetch(`/api/backend/api/requests?priority=${priority}&page=${page}&status=${encodeURIComponent(filter)}`, {
+      const res = await fetch(`/api/backend/api/requests?priority=${priority}&page=${page}&status=${encodeURIComponent(filter)}&q=${encodeURIComponent(query)}`, {
         cache: 'no-store',
       })
       const data = await res.json().catch(() => ({}))
@@ -156,7 +159,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
   useEffect(() => {
     queueMicrotask(() => void loadRequests())
     return () => { serial.current++ }
-  }, [urgentOnly, page, filter])
+  }, [urgentOnly, page, filter, query])
 
   const toggleExpanded = (item: CertificateRequest) => {
     const opening = expanded !== item.id
@@ -395,10 +398,19 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
             </span>
           )}
         </div>
-        <p className="font-body text-slate-500 text-[14px] mt-1">{description}</p>
+        <p className="font-body text-slate-500 text-[14px] mt-1">{readOnly ? "Review certificate requests and verify requester information." : description}</p>
       </div>
 
-      <NotificationOutboxControl />
+      {!readOnly && <NotificationOutboxControl />}
+      <form className="request-search" onSubmit={event => {
+        event.preventDefault()
+        setPage(1)
+        setQuery(String(new FormData(event.currentTarget).get('q') || '').trim())
+      }}>
+        <label>Search by requester, parent, or name on record
+          <input name="q" type="search" maxLength={150} />
+        </label><button>Search requests</button>
+      </form>
 
       <div className="flex gap-2 mb-5 flex-wrap">
         {FILTERS.map(status => (
@@ -524,32 +536,9 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
 
                 {expanded === item.id && (
                   <div className="border-t border-slate-100 px-5 py-5 bg-slate-50/60 space-y-4">
-                    <section className="rounded-xl border border-slate-200 bg-white p-4">
-                      <p className="font-display text-sm tracking-wider uppercase text-navy-mid mb-3">
-                        Request Details
-                      </p>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <Info label="Requester" value={item.requesterName || 'N/A'} />
-                        <Info label="Email" value={item.requesterEmail || 'N/A'} />
-                        <Info label="Phone" value={item.contactNumber || 'N/A'} />
-                        <Info label="Address" value={item.requesterAddress || 'N/A'} />
-                        <Info label="Requested Record" value={item.personName} />
-                        <Info label="Document Type" value={toDisplayType(item.sacramentType)} />
-                        <Info label="Priority" value={item.isUrgent ? 'Urgent' : 'Regular'} />
-                        <Info label="Total Fee" value={formatPeso(item.totalFee)} />
-                        <Info label="Payment" value={item.paymentStatus || 'Unpaid'} />
-                        <Info label="Payment Method" value={item.paymentMethod || 'Not paid'} />
-                        <Info label="Payment Reference" value={item.paymentReference || 'None'} />
-                        <div className="md:col-span-2">
-                          <Info label="Purpose" value={item.purpose || 'No purpose provided'} />
-                          <Info label="Approx. Record Date" value={item.recordDateHint || 'Not provided'} />
-                          <Info label="Identifying Details" value={item.recordDetails || 'Not provided'} />
-                        </div>
-                      </div>
-                    </section>
+                    <RequestDetails request={item} documentType={toDisplayType(item.sacramentType)} />
 
-                    <RequestTracking request={item} />
-
+                    {!readOnly && <>
                     <section className="rounded-xl border border-blue-200 bg-blue-50/50 p-4">
                       <StepTitle number="1" title="Find and verify the archive source record" />
 
@@ -818,9 +807,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main' }: Pr
                       )}
                     </section>
 
-                    <section className="rounded-xl border border-slate-200 bg-white p-4">
-                      <Info label="Staff Remarks" value={item.remarks || 'No remarks yet'} />
-                    </section>
+                    </>}
                   </div>
                 )}
               </div>
@@ -850,15 +837,6 @@ function CheckRow({ label, ok }: { label: string; ok: boolean }) {
         <i className={`ti ${ok ? 'ti-circle-check' : 'ti-clock'} mr-1`} />
         {label}
       </p>
-    </div>
-  )
-}
-
-function Info({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="font-display text-xs tracking-widest uppercase text-slate-400 mb-1">{label}</p>
-      <p className="font-body text-navy-mid text-base break-words">{value}</p>
     </div>
   )
 }

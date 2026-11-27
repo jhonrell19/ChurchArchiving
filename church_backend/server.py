@@ -54,7 +54,8 @@ import json
 import re
 from collections import Counter
 
-from sqlalchemy import func, text
+import unicodedata
+from sqlalchemy import func, text, or_
 from dotenv import load_dotenv
 
 
@@ -269,9 +270,8 @@ def serialize_request(r):
 
 
 
-        "requesterAddress":
-
-            r.requester_address,
+        "motherFullName": r.mother_full_name,
+        "fatherFullName": r.father_full_name,
 
 
 
@@ -458,7 +458,7 @@ def protect_backend_boundary():
 
 
 
-    g.user_address = request.headers.get("X-User-Address")
+
 
 
 
@@ -2511,13 +2511,16 @@ def api_create_request():
 
 
 
-        requester_address = (
-
-            getattr(g, "user_address", None)
-
-            or ""
-
-        ).strip()
+        parents = {}
+        for key in ("motherFullName", "fatherFullName"):
+            raw = data.get(key)
+            name = " ".join(raw.split()) if isinstance(raw, str) else ""
+            if not (2 <= len(name) <= 150 and any(c.isalpha() for c in name)
+                    and all(c.isalpha() or unicodedata.category(c).startswith("M")
+                            or c in " .-'’" for c in name)):
+                label = "Mother’s" if key == "motherFullName" else "Father’s"
+                return {"error": f"{label} full name must contain 2–150 characters using letters, spaces, apostrophes, periods or hyphens."}, 400
+            parents[key] = name
 
 
 
@@ -2690,7 +2693,8 @@ def api_create_request():
 
 
 
-            requester_address=requester_address,
+            mother_full_name=parents["motherFullName"],
+            father_full_name=parents["fatherFullName"],
 
 
 
@@ -2955,6 +2959,14 @@ def api_get_requests():
             }, 403
 
 
+
+        term = request.args.get("q", "").strip()
+        if term and role != "USER":
+            if len(term) > 150:
+                return {"error": "Use a search term of at most 150 characters."}, 400
+            query = query.filter(or_(*(column.icontains(term, autoescape=True) for column in (
+                CertificateRequest.requester_name, CertificateRequest.person_name,
+                CertificateRequest.mother_full_name, CertificateRequest.father_full_name))))
 
         if request.args.get("summary") == "counts":
             counts = query.with_entities(

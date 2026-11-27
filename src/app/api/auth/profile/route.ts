@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { validateAndFormatAddress } from '@/lib/address'
 import { validateInternationalPhone } from '@/lib/validation'
 import { lookupPhoneLineStatus, isConfirmedInactive, phoneLineStatusExplanation } from '@/lib/phoneLineStatus'
 
@@ -22,7 +21,7 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ message: 'Invalid request.' }, { status: 400 })
     }
 
-    const updates: { phoneNumber?: string | null; address?: string | null } = {}
+    const updates: { phoneNumber?: string | null } = {}
     let phoneStatusNote: string | undefined
     if (Object.prototype.hasOwnProperty.call(body, 'phoneNumber')) {
       if (typeof body.phoneNumber !== 'string') {
@@ -48,19 +47,6 @@ export async function PATCH(request: Request) {
       }
     }
 
-    if (body.clearAddress === true) {
-      updates.address = null
-    } else if (Object.prototype.hasOwnProperty.call(body, 'addressInfo')) {
-      const address = validateAndFormatAddress(body.addressInfo)
-      if (!address) {
-        return NextResponse.json(
-          { message: 'Complete the location fields, or leave your existing address unchanged.' },
-          { status: 400 }
-        )
-      }
-      updates.address = address
-    }
-
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ message: 'Nothing to update.' }, { status: 400 })
     }
@@ -68,7 +54,7 @@ export async function PATCH(request: Request) {
     const saved = await prisma.user.update({
       where: { id: currentUser.id },
       data: updates,
-      select: { phoneNumber: true, address: true },
+      select: { phoneNumber: true },
     })
     return NextResponse.json(
       { message: 'Contact information updated.', ...saved, phoneStatusNote },

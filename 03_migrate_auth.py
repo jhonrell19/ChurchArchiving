@@ -27,7 +27,7 @@ TYPES = {'Role': ('USER', 'ADMIN', 'BURIAL_ADMIN')}
 FIELDS = {
  'User': {
   'id': 'id', 'firstName': 'text', 'middleName': 'text', 'surname': 'text',
-  'phoneNumber': 'text', 'address': 'text', 'email': 'text',
+  'phoneNumber': 'text', 'email': 'text',
   'password': 'text', 'role': 'role', 'emailVerified': 'bool',
   'googleSub': 'text', 'createdAt': 'date', 'updatedAt': 'date',
  },

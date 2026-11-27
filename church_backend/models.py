@@ -63,9 +63,8 @@ class CertificateRequest(db.Model):
         db.String(100)
     )
 
-    requester_address = db.Column(
-        db.String(500)
-    )
+    mother_full_name = db.Column(db.String(150))
+    father_full_name = db.Column(db.String(150))
 
     sacrament_type = db.Column(
         db.String(100),

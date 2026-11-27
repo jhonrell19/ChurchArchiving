@@ -1,4 +1,5 @@
 'use client'
+import OfficeHeading from '@/components/OfficeHeading'
 
 import { useEffect, useState } from 'react'
 
@@ -56,27 +57,26 @@ export default function MemberApprovalsPage() {
     } finally { setBusy(null) }
   }
 
-  return <main className="min-h-screen bg-slate-50 p-6 text-slate-900">
-    <div className="mx-auto max-w-5xl">
-      <a href="/admin" className="text-blue-800 underline">Back to Main Admin</a>
-      <h1 className="mt-4 mb-2 text-2xl font-bold">Parish membership approvals</h1>
+  return <main className="office-page">
+    <div className="office-inner">
+      <OfficeHeading title="Parish membership approvals"/>
       <p className="mb-4">Only accounts with a verified email can be approved or rejected.</p>
       {message && <p role="status" className="mb-4 rounded bg-amber-50 p-3">{message}</p>}
-      <div className="overflow-x-auto rounded border bg-white">
+      <div className="approval-list overflow-x-auto rounded-lg border bg-white">
         <table className="w-full text-left text-sm">
           <thead><tr className="border-b bg-slate-100"><th className="p-3">Member</th>
             <th className="p-3">Email</th><th className="p-3">Email verified</th>
             {enabled && <th className="p-3">Evidence and church record</th>}<th className="p-3">Review reason</th><th className="p-3">Action</th></tr></thead>
           <tbody>{users.map(u => <tr className="border-b" key={u.id}>
-            <td className="p-3">{[u.firstName, u.middleName, u.surname].filter(Boolean).join(' ') || 'Unspecified'}</td>
-            <td className="p-3">{u.email}</td><td className="p-3">{u.emailVerified ? 'Yes' : 'No'}</td>
-            {enabled && <td className="p-3">{u.evidenceHint ? <><a className="underline" href={`/api/admin/membership/${u.id}/evidence`} target="_blank" rel="noreferrer">Open private ID</a><p>{u.evidenceHint}</p>
+            <td data-label="Member" className="p-3">{[u.firstName, u.middleName, u.surname].filter(Boolean).join(' ') || 'Unspecified'}</td>
+            <td data-label="Email" className="p-3">{u.email}</td><td data-label="Email verified" className="p-3">{u.emailVerified ? 'Yes' : 'No'}</td>
+            {enabled && <td data-label="Evidence and church record" className="p-3">{u.evidenceHint ? <><a className="underline" href={`/api/admin/membership/${u.id}/evidence`} target="_blank" rel="noreferrer">Open private ID</a><p>{u.evidenceHint}</p>
               <label>Baptismal certificate number<input className="block border p-1" maxLength={100} value={matches[u.id] || ''} onChange={e=>setMatches({...matches,[u.id]:e.target.value})}/></label>
               <label><input type="checkbox" checked={!!checked[u.id]} onChange={e=>setChecked({...checked,[u.id]:e.target.checked})}/> I compared the ID and church record.</label></>:'Awaiting evidence'}</td>}
-            <td className="p-3"><input aria-label={`Review reason for ${u.email}`} className="rounded border p-2"
+            <td data-label="Review reason" className="p-3"><input aria-label={`Review reason for ${u.email}`} className="rounded border p-2"
               maxLength={500} value={reasons[u.id] || ''} disabled={!u.emailVerified || busy !== null}
               onChange={event => { const value = event.target.value; setReasons(previous => ({ ...previous, [u.id]: value })) }} /></td>
-            <td className="p-3 flex gap-2">
+            <td data-label="Action" className="p-3 flex gap-2">
               <button disabled={!u.emailVerified || busy !== null} onClick={() => void decide(u, 'approved')}
                 className="rounded bg-emerald-800 px-3 py-2 text-white disabled:opacity-40">Approve</button>
               <button disabled={!u.emailVerified || busy !== null} onClick={() => void decide(u, 'rejected')}

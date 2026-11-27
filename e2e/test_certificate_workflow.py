@@ -165,6 +165,7 @@ def test_registration_to_release_and_private_download(env):
     config = checked(first.get(base + "/api/portal-config", timeout=30), 200)
     purpose = next(iter(config.get("purposes", {}).get("baptismal", [])), "Personal records")
     result = checked(first.post(base + "/api/backend/api/requests", json={
+        "motherFullName": "Mara Sample", "fatherFullName": "Emil Sample",
         "sacramentType": "baptismal", "personName": name, "purpose": purpose,
         "isUrgent": False, "recordDateHint": "2015-05-17"
     }, headers={"Origin": base}, timeout=60), 201)

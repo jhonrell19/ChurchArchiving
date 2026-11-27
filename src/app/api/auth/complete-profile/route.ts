@@ -76,7 +76,6 @@ export async function PATCH(request: Request) {
         middleName: middleName || null,
         surname,
         phoneNumber: phoneNumber ?? currentUser.phoneNumber,
-        // Existing saved address stays unchanged; the user can edit it in their profile.
       },
     })
 
@@ -90,7 +89,6 @@ export async function PATCH(request: Request) {
           middleName: user.middleName,
           surname: user.surname,
           phoneNumber: user.phoneNumber,
-          address: user.address,
           email: user.email,
           role: user.role,
         },

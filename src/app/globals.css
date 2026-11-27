@@ -348,3 +348,51 @@ input::placeholder,textarea::placeholder {color:#605351;opacity:1}
 .public-nav .nav-inner {max-width:none;padding-inline:clamp(1rem,2.2vw,2.5rem)}
 .home-nav {position:sticky}
 .portal-home #parish-access,.portal-home #parish-calendar {scroll-margin-top:6.5rem}
+
+/* Parish workspaces */
+.portal-workspace-shell .workspace-bar {position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:1rem;padding:.65rem clamp(1rem,2.25vw,2rem);min-height:4.5rem}
+.workspace-bar button,.workspace-drawer button[aria-label="Close navigation"],.office-heading a,.request-search button {display:inline-flex;align-items:center;justify-content:center;gap:.5rem;min-height:44px;padding:.45rem .85rem;border:1px solid #d8c9cb;background:white;border-radius:.6rem;font-weight:650}
+.workspace-bar span {margin-left:auto;color:#51606c}
+.portal-workspace-shell .role-head h1,.office-page .office-heading h1 {margin:0;font:700 clamp(1.25rem,2.2vw,1.75rem)/1.25 var(--font-body,system-ui),sans-serif;color:#27333c}
+.portal-workspace-shell .role-content {max-width:none;margin:0}
+.workspace-drawer {position:fixed;inset:0 auto 0 0;margin:0;border:0;padding:0;width:min(19rem,90vw);height:100dvh;max-height:none;color:#27333c;transform:translateX(-100%);transition:transform .22s ease,display .22s allow-discrete,overlay .22s allow-discrete}
+.workspace-drawer[open] {transform:translateX(0)}
+@starting-style {.workspace-drawer[open] {transform:translateX(-100%)}}
+.workspace-drawer::backdrop {background:#17232d66}
+.drawer-panel {display:flex;flex-direction:column;height:100%;background:white}
+.drawer-panel header,.drawer-panel footer {padding:1rem;border-block:1px solid #e6dbd7}
+.drawer-panel header {display:flex;align-items:center;gap:.7rem;background:#f8f4ef}
+.drawer-panel header button {margin-left:auto}
+.drawer-links {overflow:auto;flex:1;padding:.75rem}
+.office-page,.parish-workspace.office-page {margin:0 auto;width:100%;max-width:84rem;padding:clamp(1rem,3vw,2.5rem);color:#27333c}
+.office-heading {display:grid;justify-items:start;gap:.8rem;margin-bottom:1rem}
+.office-page .office-heading a {color:#703440;text-decoration:none}
+.staff-management-grid {display:grid;align-items:start;gap:1rem;grid-template-columns:minmax(0,2fr) minmax(0,3fr)}
+.request-search {display:flex;align-items:end;flex-wrap:wrap;gap:.6rem;margin:1rem 0}
+.request-search label {display:grid;gap:.3rem;font-weight:600}
+.request-search input {border:1px solid #a6adb2;border-radius:.5rem;background:white;padding:.6rem}
+.request-detail-layout {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.8rem;margin-block:1rem}
+.request-detail-group,.request-history {min-width:0;padding:1rem;border:1px solid #d9dfe2;border-radius:.75rem;background:white}
+.request-detail-layout h3 {font-size:1.05rem;font-weight:700;margin:0 0 .7rem}
+.request-detail-group dl div {display:grid;grid-template-columns:minmax(6rem,2fr) 3fr;gap:.7rem;padding:.45rem 0;border-top:1px solid #e8eaeb;overflow-wrap:anywhere}
+.request-detail-group dt {color:#53616b}.request-detail-group dd {font-weight:550}
+.request-history {grid-column:1/-1}
+@media(max-width:720px){.workspace-bar span{display:none}.request-detail-layout,.staff-management-grid{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){.workspace-drawer{transition:none}}
+.comparison-chart {border:1px solid #d9dfe2;border-radius:.75rem;background:#fff;padding:1rem}
+.comparison-chart figcaption {display:flex;align-items:center;gap:.5rem;font-weight:650;margin-bottom:.7rem}
+.comparison-chart figcaption span,.comparison-chart i {display:block;background:#773c4d;border-radius:.2rem}
+.comparison-chart figcaption span {width:.8rem;height:.8rem}
+.comparison-chart li {display:grid;grid-template-columns:minmax(5rem,1fr) minmax(3rem,3fr) auto;align-items:center;gap:.7rem;margin:.45rem 0}
+.comparison-chart li>span {overflow-wrap:anywhere}
+.comparison-chart li>div {background:#f3edef;border-radius:.2rem}
+.comparison-chart i {height:.85rem}
+.comparison-chart strong {font-variant-numeric:tabular-nums}
+.staff-account-fields label:last-child {grid-column:1/-1}
+@media(max-width:720px){
+  .approval-list table,.approval-list tbody,.approval-list tr {display:block}
+  .approval-list thead {position:absolute;width:1px;height:1px;clip-path:inset(50%);overflow:hidden}
+  .approval-list tbody td {display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;overflow-wrap:anywhere}
+  .approval-list tbody td::before {content:attr(data-label);flex-basis:100%;font-size:.85rem;font-weight:650;color:#53616b}
+  .approval-list tbody input {max-width:100%}
+}

@@ -22,7 +22,7 @@ with sqlite3.connect(f'{DB.as_uri()}?mode=ro',uri=True) as c:
   if expected-tables:
     print('STOP: Missing tables:',', '.join(sorted(expected-tables)))
     sys.exit(2)
-  required={'id','firstName','middleName','surname','phoneNumber','address','email','password','role','emailVerified','googleSub','createdAt','updatedAt'}
+  required={'id','firstName','middleName','surname','phoneNumber','email','password','role','emailVerified','googleSub','createdAt','updatedAt'}
   cols={r[1] for r in c.execute('PRAGMA table_info("User")')}
   if required-cols:
     print('STOP: User columns missing:',', '.join(sorted(required-cols)))

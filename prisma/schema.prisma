@@ -28,7 +28,6 @@ model User {
 
   // Contact number only. It is not used as a login identity.
   phoneNumber String?
-  address     String?
 
   email    String @unique
   password String

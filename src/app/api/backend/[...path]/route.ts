@@ -218,10 +218,6 @@ async function forward(request: NextRequest, context: { params: Promise<{ path: 
   headers.set('x-user-name', fullName || user.email)
   headers.set('x-user-phone', user.phoneNumber || '')
 
-  headers.set(
-  'x-user-address',
-  user.address || ''
-)
 
   // Allow a free instance to wake. Restrict the deadline to interactive reads.
   const interactiveRead = request.method === 'GET' && (path.startsWith('api/archive/documents/') || [

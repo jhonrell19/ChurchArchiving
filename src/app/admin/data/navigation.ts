@@ -2,6 +2,7 @@ import type { AdminPage } from '../types.ts'
 
 export const ADMIN_NAV: { id: AdminPage; label: string; icon: string }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: 'ti-layout-dashboard' },
+  { id: 'requests', label: 'Certificate requests', icon: 'ti-file-certificate' },
   { id: 'masses', label: 'Mass Recordings', icon: 'ti-video' },
   { id: 'transcriptions', label: 'Transcriptions', icon: 'ti-file-text' },
   { id: 'announcements', label: 'Announcements', icon: 'ti-bell' },

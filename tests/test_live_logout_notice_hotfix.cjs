@@ -60,9 +60,10 @@ async function main(){
     'src/app/admin/AdminPanel.tsx','src/app/staff/page.tsx',
     'src/app/dashboard/UserDashboard.tsx']){
     const text=fs.readFileSync(page,'utf8')
-    assert.match(text,/<SignOutForm \/>/)
+    assert.match(text,/<WorkspaceShell /)
     assert.doesNotMatch(text,/fetch\(['"]\/api\/auth\/logout/)
   }
+  assert.match(fs.readFileSync('src/components/WorkspaceShell.tsx','utf8'), /<SignOutForm \/>/)
   assert.match(fs.readFileSync('src/components/auth/SignOutForm.tsx','utf8'),
     /<form method="post" action="\/api\/auth\/logout">/)
   const header=fs.readFileSync('src/app/components/Navbar.tsx','utf8')

@@ -107,7 +107,6 @@ export async function POST(req: Request) {
           middleName: user.middleName,
           surname: user.surname,
           phoneNumber: user.phoneNumber,
-          address: user.address,
           emailVerified: user.emailVerified,
         },
       },

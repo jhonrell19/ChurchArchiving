@@ -1,7 +1,7 @@
 'use client'
 
 import { useFeedback } from '@/components/ui/FeedbackProvider'
-import RequestTracking from '@/components/RequestTracking'
+import RequestDetails from '@/components/RequestDetails'
 
 import { useEffect, useState } from 'react'
 import { REQUEST_ICONS, STATUS_STYLE, inputCls } from '../data/ui'
@@ -11,7 +11,6 @@ type UserProfile = {
   fullName: string
   email: string
   phoneNumber: string | null
-  address: string | null
 }
 
 type RequestType =
@@ -37,7 +36,8 @@ type CertificateRequest = {
   requesterName: string
   requesterEmail: string
   contactNumber: string
-  requesterAddress: string | null
+  motherFullName: string | null
+  fatherFullName: string | null
   sacramentType: string
   personName: string
   purpose: string
@@ -67,7 +67,6 @@ type MeResponseUser = {
   surname?: string | null
   email: string
   phoneNumber?: string | null
-  address?: string | null
 }
 
 const INITIAL_FEES: Record<RequestType, number> = {
@@ -251,7 +250,7 @@ export default function RequestsPage() {
 
 
   const [formData, setFormData] = useState({
-    personName: '',
+    personName: '', motherFullName: '', fatherFullName: '',
     purpose: '',
     notes: '',
     recordDateHint: '',
@@ -336,7 +335,6 @@ export default function RequestsPage() {
         fullName: computedFullName,
         email: user.email,
         phoneNumber: user.phoneNumber ?? null,
-        address: user.address ?? null,
       })
     } catch (error) {
       console.warn('Profile load error:', error)
@@ -380,7 +378,7 @@ export default function RequestsPage() {
     return () => { active = false }
   }, [activeType])
 
-  const handleChange = (name: 'personName' | 'purpose' | 'notes' | 'recordDateHint' | 'recordDetails', value: string) => {
+  const handleChange = (name: 'motherFullName' | 'fatherFullName' | 'personName' | 'purpose' | 'notes' | 'recordDateHint' | 'recordDetails', value: string) => {
     setFormData(prev => ({
       ...prev,
       [name]: value,
@@ -398,6 +396,13 @@ export default function RequestsPage() {
       return
     }
 
+    for (const name of [formData.motherFullName, formData.fatherFullName]) {
+      const value = name.trim()
+      if (value.length < 2 || !/\p{L}/u.test(value) || !/^[\p{L}\p{M} .'’-]+$/u.test(value)) {
+        toast.warning('Enter both parents’ full names using letters, spaces, periods, hyphens or apostrophes.')
+        return
+      }
+    }
     if (!formData.personName.trim()) {
       toast.warning('Please enter the name on record.')
       return
@@ -433,6 +438,8 @@ if (
         body: JSON.stringify({
           sacramentType: toBackendType(activeType),
           personName: formData.personName.trim(),
+          motherFullName: formData.motherFullName.trim(),
+          fatherFullName: formData.fatherFullName.trim(),
           claimId: claimId ? Number(claimId) : undefined,
           purpose: formData.notes.trim()
             ? `${formData.purpose.trim()} | Notes: ${formData.notes.trim()}`
@@ -454,7 +461,7 @@ if (
       setSuccessMsg(`${activeType} request submitted successfully.`)
 
       setFormData({
-        personName: '',
+        personName: '', motherFullName: '', fatherFullName: '',
         purpose: '',
         notes: '',
         recordDateHint: '',
@@ -649,12 +656,11 @@ if (
                       </p>
                     </div>
 
-                    <div>
-                      <p className="text-slate-500">Address</p>
-                      <p className="text-navy-mid">
-                        {profile.address || 'Not provided'}
-                      </p>
-                    </div>
+                    {(['motherFullName', 'fatherFullName'] as const).map(key => <label key={key}>
+                      {key === 'motherFullName' ? 'Your mother’s full name (include maiden name)' : 'Your father’s full name'} *
+                      <input className={inputCls} required maxLength={150} value={formData[key]}
+                        onChange={e => handleChange(key, e.target.value)} />
+                    </label>)}
                   </div>
                 ) : (
                   <div className="rounded-lg border border-red-200 bg-red-50 p-3">
@@ -932,71 +938,7 @@ if (
                       </div>
                     </div>
 
-                    <div className="mt-4">
-                      <RequestTracking request={req} />
-                    </div>
-
-                    <div className="mt-4 pt-3 border-t border-gold/10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                      <div>
-                        <p className="font-display text-[10px] tracking-wider text-[#7890a6] uppercase">
-                          Name on Record
-                        </p>
-                        <p className="font-body text-[12px] text-navy-mid">{req.personName}</p>
-                      </div>
-
-                      <div>
-                        <p className="font-display text-[10px] tracking-wider text-[#7890a6] uppercase">
-                          Priority
-                        </p>
-                        <p className="font-body text-[12px] text-navy-mid">
-                          {req.isUrgent ? 'Urgent' : 'Regular'}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="font-display text-[10px] tracking-wider text-[#7890a6] uppercase">
-                          Total Fee
-                        </p>
-                        <p className="font-body text-[12px] text-navy-mid font-semibold">
-                          {formatPeso(req.totalFee)}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="font-display text-[10px] tracking-wider text-[#7890a6] uppercase">
-                          Payment
-                        </p>
-                        <p className="font-body text-[12px] text-navy-mid">
-                          {req.paymentStatus || 'Unpaid'}
-                          {req.paymentReference ? ` · ${req.paymentReference}` : ''}
-                        </p>
-                      </div>
-
-                      <div className="md:col-span-2">
-                        <p className="font-display text-[10px] tracking-wider text-[#7890a6] uppercase">
-                          Purpose
-                        </p>
-                        <p className="font-body text-[12px] text-navy-mid">{req.purpose}</p>
-                      </div>
-
-                      {(req.recordDateHint || req.recordDetails) && (
-                        <div className="md:col-span-2">
-                          <p className="font-display text-[10px] tracking-wider text-[#7890a6] uppercase">Record Search Details</p>
-                          <p className="font-body text-[12px] text-navy-mid">
-                            {[req.recordDateHint, req.recordDetails].filter(Boolean).join(' · ')}
-                          </p>
-                        </div>
-                      )}
-
-                      <div className="md:col-span-2">
-                        <p className="font-display text-[10px] tracking-wider text-[#7890a6] uppercase">
-                          Admin Remarks
-                        </p>
-                        <p className="font-body text-[12px] text-navy-mid">
-                          {req.remarks || 'No remarks yet'}
-                        </p>
-                      </div>
-                    </div>
+                    <RequestDetails request={req} documentType={displayType} />
 
                     <div className="mt-4 pt-3 border-t border-gold/10 flex items-center justify-between gap-3 flex-wrap">
                       <div>

@@ -37,7 +37,8 @@ try:
         "certificate_request",
         {
             "requester_user_id": "INTEGER",
-            "requester_address": "VARCHAR(500)",
+            "mother_full_name": "VARCHAR(150)",
+            "father_full_name": "VARCHAR(150)",
             "is_urgent": "BOOLEAN NOT NULL DEFAULT 0",
             "base_fee": "INTEGER NOT NULL DEFAULT 0",
             "urgent_fee": "INTEGER NOT NULL DEFAULT 0",
@@ -147,7 +148,7 @@ try:
     final_request_columns = table_columns("certificate_request")
     required_request_columns = {
         "requester_user_id",
-        "requester_address",
+        "mother_full_name", "father_full_name",
         "is_urgent",
         "base_fee",
         "urgent_fee",

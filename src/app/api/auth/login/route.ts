@@ -92,15 +92,7 @@ export async function POST(req: Request) {
         httpOnly: true, secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict', path: '/', maxAge: 0,
       })
-      response.cookies.set(MFA_PENDING_COOKIE, '', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      path: '/',
-      maxAge: 0,
-    })
-
-    response.cookies.set('token', '', {
+      response.cookies.set('token', '', {
         httpOnly: true, secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict', path: '/', maxAge: 0,
       })
@@ -149,6 +141,14 @@ export async function POST(req: Request) {
       sameSite: 'strict',
       path: '/',
       maxAge: user.role === 'USER' ? SESSION_MAX_AGE_SECONDS : STAFF_SESSION_MAX_AGE_SECONDS,
+    })
+
+    response.cookies.set(MFA_PENDING_COOKIE, '', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      path: '/',
+      maxAge: 0,
     })
 
     response.cookies.set('token', '', {

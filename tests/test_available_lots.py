@@ -51,7 +51,7 @@ class AvailableLotsTests(unittest.TestCase):
         query.filter_by.assert_not_called()
 
     def test_land_request_rechecks_selected_slot_on_server(self):
-        self.assertIn('if sacrament_type == "land_agreement":', SOURCE)
+        self.assertIn('if sacrament_type == "land_agreement" and purpose_name == "Apply for Cemetery Lot Agreement":', SOURCE)
         self.assertIn('data.get("cemeterySlotId")', SOURCE)
         self.assertIn('selected_slot.status != "AVAILABLE"', SOURCE)
         self.assertIn('selected_slot.slot_code', SOURCE)
@@ -59,7 +59,9 @@ class AvailableLotsTests(unittest.TestCase):
     def test_frontend_sends_selected_slot_not_user_supplied_status(self):
         tsx = (ROOT / "src/app/dashboard/components/RequestsPage.tsx").read_text(encoding="utf-8")
         self.assertIn('/api/backend/api/user/cemetery/available-slots', tsx)
-        self.assertIn("cemeterySlotId: activeType === 'Land Agreement' ? selectedSlotId : undefined", tsx)
+        self.assertIn("cemeterySlotId: needsAvailableCemeteryLot ? selectedSlotId : undefined", tsx)
+        self.assertIn("formData.purpose === NEW_LAND_AGREEMENT_PURPOSE", tsx)
+        self.assertIn("if (!needsAvailableCemeteryLot) return", tsx)
 
 if __name__ == "__main__":
     unittest.main()

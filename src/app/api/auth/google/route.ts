@@ -5,14 +5,17 @@ import { randomBytes } from 'node:crypto'
 import bcrypt from 'bcryptjs'
 import { OAuth2Client } from 'google-auth-library'
 import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 
 import {
   createSession,
+  destroySessionToken,
   isUserProfileComplete,
   SESSION_COOKIE,
   SESSION_MAX_AGE_SECONDS,
 } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { MFA_PENDING_COOKIE } from '@/lib/staffMfa'
 import { normalizeEmail } from '@/lib/validation'
 
 const googleClientId = process.env.GOOGLE_CLIENT_ID || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
@@ -219,6 +222,9 @@ export async function POST(request: Request) {
     const needsProfileCompletion =
       !isUserProfileComplete(user)
 
+    // Google login replaces only this browser's prior role; another browser
+    // with the same parishioner account keeps its independent valid session.
+    await destroySessionToken((await cookies()).get(SESSION_COOKIE)?.value)
     const { token } = await createSession(user.id)
 
     const response = NextResponse.json(
@@ -251,6 +257,14 @@ export async function POST(request: Request) {
       sameSite: 'strict',
       path: '/',
       maxAge: SESSION_MAX_AGE_SECONDS,
+    })
+
+    response.cookies.set(MFA_PENDING_COOKIE, '', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      path: '/',
+      maxAge: 0,
     })
 
     response.cookies.set('token', '', {

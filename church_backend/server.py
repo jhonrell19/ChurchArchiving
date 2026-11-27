@@ -235,9 +235,9 @@ def serialize_request(r):
                 "recordData": json.loads(source.record_data) if source.record_data else {},
             }
 
-    if getattr(g, "user_role", None) == "USER":
-        # A pending or approved request does not authorize reading the
-        # matching sacramental archive's personal information.
+    if getattr(g, "user_role", None) in {"USER", "ADMIN"}:
+        # Requesters and Super Admin reviewers can read request metadata,
+        # but must not receive the raw linked archive or file paths.
         matched_document = None
 
     return {
@@ -472,7 +472,19 @@ def protect_backend_boundary():
 
         return {"error": "Invalid authenticated role"}, 401
 
+    # Second authorization boundary: Super Admin is not a Staff archivist.
+    # Only aggregate counts and activity metadata remain visible to oversight.
+    if g.user_role == "ADMIN" and request.path.startswith("/api/archive/"):
+        oversight_routes = {
+            "/api/archive/stats", "/api/archive/audit-logs",
+            "/api/archive/storage-status", "/api/archive/ocr-health",
+        }
+        if request.method != "GET" or request.path not in oversight_routes:
+            return {"error": "Forbidden: archival documents are managed by Church Staff"}, 403
 
+    if (g.user_role == "ADMIN" and request.path.startswith("/api/requests/")
+            and request.path.endswith("/download")):
+        return {"error": "Forbidden: certificate downloads are managed by Church Staff"}, 403
 
     return None
 
@@ -593,46 +605,12 @@ def can_access_filepath(filepath):
         draft_request = CertificateRequest.query.filter(draft_path_matches).first()
         return draft_request is not None
 
-    # SUPER ADMIN (read-only oversight)
+    # Super Admin retains Mass/transcription media, not archive documents.
     if role == "ADMIN":
-
-        if (
+        return (
             normalized.startswith("uploads/masses/")
             or normalized.startswith("uploads/transcriptions/")
-        ):
-            return True
-
-        document = (
-            Document.query
-            .filter(document_path_matches)
-            .first()
         )
-
-        if document and document.sacrament_type in MAIN_ADMIN_TYPES + BURIAL_ADMIN_TYPES:
-            return True
-
-        release_request = (
-            CertificateRequest.query
-            .filter(
-                request_path_matches,
-                CertificateRequest.sacrament_type.in_(MAIN_ADMIN_TYPES + BURIAL_ADMIN_TYPES),
-            )
-            .first()
-        )
-
-        if release_request is not None:
-            return True
-
-        draft_request = (
-            CertificateRequest.query
-            .filter(
-                draft_path_matches,
-                CertificateRequest.sacrament_type.in_(MAIN_ADMIN_TYPES + BURIAL_ADMIN_TYPES),
-            )
-            .first()
-        )
-
-        return draft_request is not None
 
     # BURIAL ADMIN
     if role == "BURIAL_ADMIN":

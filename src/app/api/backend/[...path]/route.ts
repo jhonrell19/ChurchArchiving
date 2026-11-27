@@ -36,7 +36,15 @@ function isAllowed(role: Role, method: string, path: string) {
   }
 
   if (path.startsWith('files/') || path.startsWith('download/')) {
-    return true
+    // Super Admin oversees the parish but does not inspect archive documents
+    // or released certificates. Continue to allow the Admin's Mass media.
+    if (role === 'ADMIN') {
+      return m === 'GET' &&
+        (path.startsWith('files/uploads/masses/') ||
+         path.startsWith('files/uploads/transcriptions/'))
+    }
+    // Flask performs the final file ownership and category validation.
+    return m === 'GET'
   }
 
   if (path === 'api/appointments') return m === 'GET' || m === 'POST'
@@ -109,7 +117,7 @@ if (
   }
 
   if (/^api\/requests\/\d+\/download$/.test(path)) {
-    return m === 'GET' && ['USER', 'ADMIN', 'STAFF', 'BURIAL_ADMIN'].includes(role)
+    return m === 'GET' && ['USER', 'STAFF', 'BURIAL_ADMIN'].includes(role)
   }
 
   if (path === 'api/archive/audit-logs') {
@@ -117,10 +125,17 @@ if (
   }
 
   if (path.startsWith('api/archive/')) {
-    if (path === 'api/archive/deleted-documents') return m === 'GET' && role === 'ADMIN'
-    if (/^api\/archive\/documents\/\d+\/(delete|restore)$/.test(path))
-      return m === 'PATCH' && role === 'ADMIN'
-    if (role === 'ADMIN') return m === 'GET'
+    // Admin sees only aggregated counts and audit/health metadata, never
+    // individual archive scans, OCR contents, search results or files.
+    if (role === 'ADMIN') return m === 'GET' && new Set([
+      'api/archive/stats', 'api/archive/audit-logs',
+      'api/archive/storage-status', 'api/archive/ocr-health',
+    ]).has(path)
+    // Deletion/restoration requires a separate approved recovery policy;
+    // do not accidentally grant destructive privileges by broad prefix match.
+    if (/^api\/archive\/documents\/\d+\/(delete|restore)$/.test(path)) return false
+    if (path === 'api/archive/deleted-documents') return false
+    if (path === 'api/archive/audit-logs') return false
     return role === 'STAFF' || role === 'BURIAL_ADMIN'
   }
 

@@ -2,9 +2,11 @@ import { supervisorProvisioned } from '@/lib/staffProvisioning'
 import { evidenceEnabled, pendingEvidenceResponse } from '@/lib/membershipEvidence'
 import bcrypt from 'bcryptjs'
 import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 
 import {
   createSession,
+  destroySessionToken,
   isUserProfileComplete,
   SESSION_COOKIE,
   SESSION_MAX_AGE_SECONDS,
@@ -76,11 +78,32 @@ export async function POST(req: Request) {
         return NextResponse.json({ message: 'Staff MFA is not configured on this server. Contact the system administrator.' }, { status: 503 })
       }
       const pendingToken = await issueStaffMfaChallenge(user.id)
+      // A valid password can start MFA, but the previous ADMIN/USER cookie
+      // must not remain authorized while this browser is attempting STAFF
+      // authentication. Revoke only the cookie presented by THIS browser.
+      const previousToken = (await cookies()).get(SESSION_COOKIE)?.value
+      await destroySessionToken(previousToken)
       loginSucceeded(email)
       const response = NextResponse.json(
         { message: 'Complete authenticator verification.', mfaRequired: true },
         { headers: { 'Cache-Control': 'no-store' } }
       )
+      response.cookies.set(SESSION_COOKIE, '', {
+        httpOnly: true, secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict', path: '/', maxAge: 0,
+      })
+      response.cookies.set(MFA_PENDING_COOKIE, '', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      path: '/',
+      maxAge: 0,
+    })
+
+    response.cookies.set('token', '', {
+        httpOnly: true, secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict', path: '/', maxAge: 0,
+      })
       response.cookies.set(MFA_PENDING_COOKIE, pendingToken, {
         httpOnly: true, secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict', path: '/', maxAge: MFA_PENDING_MAX_AGE,
@@ -93,6 +116,9 @@ export async function POST(req: Request) {
       user.role === 'USER' &&
       !isUserProfileComplete(user)
 
+    // Replace this browser's previous identity without logging out the
+    // same account on a different device or normal/private browser context.
+    await destroySessionToken((await cookies()).get(SESSION_COOKIE)?.value)
     const { token } = await createSession(user.id, user.role !== 'USER')
 
     const response = NextResponse.json(

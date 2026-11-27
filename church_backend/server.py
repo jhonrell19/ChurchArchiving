@@ -373,13 +373,13 @@ def serialize_request(r):
 
         "draftFile":
 
-            r.draft_file,
+            None if getattr(g, "user_role", None) == "ADMIN" else r.draft_file,
 
 
 
         "generatedFile":
 
-            r.generated_file,
+            None if getattr(g, "user_role", None) == "ADMIN" else r.generated_file,
 
 
 

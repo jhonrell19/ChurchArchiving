@@ -673,11 +673,7 @@ if (
                       </p>
                     </div>
 
-                    {(['motherFullName', 'fatherFullName'] as const).map(key => <label key={key}>
-                      {key === 'motherFullName' ? 'Your mother’s full name (include maiden name)' : 'Your father’s full name'} *
-                      <input className={inputCls} required maxLength={150} value={formData[key]}
-                        onChange={e => handleChange(key, e.target.value)} />
-                    </label>)}
+
                   </div>
                 ) : (
                   <div className="rounded-lg border border-red-200 bg-red-50 p-3">
@@ -699,7 +695,7 @@ if (
 
                 <div className="flex justify-between border-t border-emerald-200 pt-2 font-semibold text-emerald-800">
                   <span>Estimated Request Fee</span>
-                  <span>{formatPeso(previewTotal)}</span>
+                  <span>{pricingReady && previewTotal > 0 ? formatPeso(previewTotal) : 'Parish confirmation required'}</span>
                 </div>
 
                 <p className="font-body text-[11px] text-emerald-700 mt-2">
@@ -709,15 +705,36 @@ if (
 
               <div>
                 <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1.5">
-                  {activeType === 'Certificate of Ownership' ? 'Registered Lot Holder' : activeType === 'Land Agreement' ? 'Applicant Name' : 'Name on Record'} <span className="text-gold">*</span>
+                  {activeType === 'Certificate of Ownership' ? 'Registered Lot Holder' : activeType === 'Land Agreement' ? 'Applicant / Name on Agreement' : 'Name on Church Record'} <span className="text-gold">*</span>
                 </label>
                 <input
                   value={formData.personName}
                   onChange={e => handleChange('personName', e.target.value)}
-                  placeholder={activeType === 'Certificate of Ownership' ? 'Name of registered lot holder' : 'Name written on church record'}
+                  placeholder={activeType === 'Certificate of Ownership' ? 'Name of registered lot holder' : activeType === 'Land Agreement' ? 'Name of applicant or agreement holder' : 'Name written on church record'}
                   className={inputCls}
                 />
               </div>
+
+              {needsParentNames && (
+                <div className="md:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <p className="mb-2 text-sm font-semibold text-slate-800">
+                    Parents of the person named on the church record
+                  </p>
+                  <p className="mb-3 text-xs text-slate-600">
+                    These names help staff distinguish similar records. They are not account profile details.
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {(['motherFullName', 'fatherFullName'] as const).map(key => (
+                      <label key={key} className="block text-sm font-medium text-slate-800">
+                        {key === 'motherFullName' ? 'Mother’s Full Name (including maiden name)' : 'Father’s Full Name'} *
+                        <input className={`${inputCls} mt-1.5`} required maxLength={150}
+                          autoComplete="off" value={formData[key]}
+                          onChange={e => handleChange(key, e.target.value)} />
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div>
   {process.env.NEXT_PUBLIC_PARISH_RELATIVE_CLAIMS === 'enabled' && activeType !== 'Land Agreement' && <label className="block mb-3">Approved claim number for a relative
@@ -732,7 +749,10 @@ if (
   <select
     id="request-purpose"
     value={formData.purpose}
-    onChange={(e) => handleChange('purpose', e.target.value)}
+    onChange={(e) => {
+      handleChange('purpose', e.target.value)
+      setSelectedSlotId(null)
+    }
     className={inputCls}
     required
   >
@@ -751,25 +771,27 @@ if (
                   {activeType === 'Certificate of Ownership' ? 'Agreement Date / Year (if known)' : 'Approximate Record Date / Year'}
                 </label>
                 <input
-                  type="date"
+                  type="text"
+                  maxLength={100}
+                  placeholder="e.g. 2018 or 2018-06-15 (if known)"
                   value={formData.recordDateHint}
                   onChange={e => handleChange('recordDateHint', e.target.value)}
                   className={inputCls}
                 />
               </div>
 
-              {activeType === 'Land Agreement' && (
+              {needsAvailableCemeteryLot && (
                 <div className="md:col-span-2 rounded-xl border border-sky-200 bg-sky-50 p-4">
                   <label htmlFor="cemetery-available-slot" className="block font-display text-[13px] font-semibold text-navy-mid mb-2">
                     Available Cemetery Lots <span className="text-red-600">*</span>
                   </label>
                   <p className="text-[12px] text-slate-700 mb-3">
-                    Choose a lot to inquire about. This does not reserve a lot or confirm a purchase. Burial Admin will verify availability and pricing.
+                    Select a lot for an inquiry only. This does not reserve a lot or confirm a purchase. Church Staff will independently verify availability and any agreement terms.
                   </p>
                   {slotsLoading ? <p className="text-[13px]">Loading available lots...</p> : slotsError ? (
                     <p role="alert" className="text-[13px] text-red-700">{slotsError} Refresh the page and try again.</p>
                   ) : availableSlots.length === 0 ? (
-                    <p className="text-[13px] text-amber-800">No lots are currently listed as available. Contact the Burial Office.</p>
+                    <p className="text-[13px] text-amber-800">No lots are currently listed as available. Contact the parish office.</p>
                   ) : (
                     <select
                       id="cemetery-available-slot"
@@ -792,15 +814,15 @@ if (
                 </div>
               )}
 
-              {activeType === 'Certificate of Ownership' && (
+              {['Certificate of Ownership', 'Land Agreement'].includes(activeType) && !needsAvailableCemeteryLot && (
                 <div>
                   <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1.5">
-                    Lot / Reservation Reference
+                    {activeType === 'Land Agreement' ? 'Agreement / Lot Reference (if known)' : 'Lot / Reservation Reference'}
                   </label>
                   <input
                     value={formData.recordDetails}
                     onChange={e => handleChange('recordDetails', e.target.value)}
-                    placeholder="Section, block, lot number, reservation number"
+                    placeholder="Agreement number, section, block, or lot reference (if known)"
                     className={inputCls}
                   />
                 </div>
@@ -828,7 +850,7 @@ if (
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={loading || profileLoading || !profile || (activeType === 'Land Agreement' && (slotsLoading || Boolean(slotsError) || !selectedSlotId))}
+                disabled={loading || profileLoading || !profile || (needsAvailableCemeteryLot && (slotsLoading || Boolean(slotsError) || !selectedSlotId))}
                 className="flex items-center justify-center gap-2 font-display text-[12px] tracking-wider bg-navy text-gold px-5 py-2.5 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <i className="ti ti-send text-[14px]" />

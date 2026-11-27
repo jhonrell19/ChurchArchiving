@@ -100,6 +100,10 @@ async function main() {
   assert.equal(user.body.user.role,'USER')
   assert.equal(user.cookieChanges.find(x=>x.name==='parish_session').value,'new-session-for-15')
   assert.equal(user.cookieChanges.find(x=>x.name==='parish_mfa_pending').value,'')
-  console.log('PASS independent device sessions, local-only revocation, no lingering ADMIN during STAFF MFA, role-correct login cookies')
+  const google=fs.readFileSync('src/app/api/auth/google/route.ts','utf8')
+  assert.match(google,/destroySessionToken\(\(await cookies\(\)\)\.get\(SESSION_COOKIE\)\?\.value\)/)
+  assert.match(google,/response\.cookies\.set\(MFA_PENDING_COOKIE, ''/)
+  assert.match(google,/if \(user\.role !== 'USER'\)/)
+  console.log('PASS independent device sessions, local-only revocation, no lingering ADMIN during STAFF MFA, role-correct password and Google login cookies')
 }
 main().catch(error=>{console.error(error);process.exitCode=1})

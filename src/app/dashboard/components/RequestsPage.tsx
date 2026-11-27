@@ -130,6 +130,10 @@ const PURPOSE_OPTIONS: Record<RequestType, string[]> = {
   ],
 }
 
+// Parents identify the person on the church record, not the account holder.
+const SACRAMENTAL_TYPES = new Set<RequestType>(['Baptismal', 'Confirmation', 'Marriage'])
+const NEW_LAND_AGREEMENT_PURPOSE = 'Apply for Cemetery Lot Agreement'
+
 const REQUEST_TYPE_ICONS: Record<RequestType, string> = {
   Baptismal: REQUEST_ICONS.Baptismal || 'ti-droplet',
   Confirmation: REQUEST_ICONS.Confirmation || 'ti-shield-check',
@@ -258,6 +262,10 @@ export default function RequestsPage() {
     isUrgent: false,
   })
 
+  const needsParentNames = SACRAMENTAL_TYPES.has(activeType)
+  const needsAvailableCemeteryLot = activeType === 'Land Agreement' &&
+    formData.purpose === NEW_LAND_AGREEMENT_PURPOSE
+
   const [catalog,setCatalog] = useState<Record<string,string[]>>({})
   useEffect(()=>{ fetch("/api/portal-config").then(r=>r.ok?r.json():null).then(d=>{if(d?.purposes)setCatalog(d.purposes)}).catch(()=>{}) },[])
   const purposes = catalog[toBackendType(activeType)] || PURPOSE_OPTIONS[activeType]
@@ -351,7 +359,7 @@ export default function RequestsPage() {
   }, [])
 
   useEffect(() => {
-    if (activeType !== 'Land Agreement') return
+    if (!needsAvailableCemeteryLot) return
     let active = true
     // Availability is advisory until staff independently approves a reservation.
     const load = async () => {
@@ -376,7 +384,7 @@ export default function RequestsPage() {
     }
     void load()
     return () => { active = false }
-  }, [activeType])
+  }, [needsAvailableCemeteryLot])
 
   const handleChange = (name: 'motherFullName' | 'fatherFullName' | 'personName' | 'purpose' | 'notes' | 'recordDateHint' | 'recordDetails', value: string) => {
     setFormData(prev => ({
@@ -391,16 +399,18 @@ export default function RequestsPage() {
       return
     }
 
-    if (activeType === 'Land Agreement' && !selectedSlotId) {
+    if (needsAvailableCemeteryLot && !selectedSlotId) {
       toast.warning('Please choose an available cemetery lot first.')
       return
     }
 
-    for (const name of [formData.motherFullName, formData.fatherFullName]) {
-      const value = name.trim()
-      if (value.length < 2 || !/\p{L}/u.test(value) || !/^[\p{L}\p{M} .'’-]+$/u.test(value)) {
-        toast.warning('Enter both parents’ full names using letters, spaces, periods, hyphens or apostrophes.')
-        return
+    if (needsParentNames) {
+      for (const name of [formData.motherFullName, formData.fatherFullName]) {
+        const value = name.trim()
+        if (value.length < 2 || !/\p{L}/u.test(value) || !/^[\p{L}\p{M} .'’-]+$/u.test(value)) {
+          toast.warning('Enter both parents’ full names of the person on the record using letters, spaces, periods, hyphens or apostrophes.')
+          return
+        }
       }
     }
     if (!formData.personName.trim()) {
@@ -438,16 +448,17 @@ if (
         body: JSON.stringify({
           sacramentType: toBackendType(activeType),
           personName: formData.personName.trim(),
-          motherFullName: formData.motherFullName.trim(),
-          fatherFullName: formData.fatherFullName.trim(),
+          motherFullName: needsParentNames ? formData.motherFullName.trim() : undefined,
+          fatherFullName: needsParentNames ? formData.fatherFullName.trim() : undefined,
           claimId: claimId ? Number(claimId) : undefined,
           purpose: formData.notes.trim()
             ? `${formData.purpose.trim()} | Notes: ${formData.notes.trim()}`
             : formData.purpose.trim(),
           isUrgent: false,
           recordDateHint: formData.recordDateHint.trim(),
-          recordDetails: activeType === 'Certificate of Ownership' ? formData.recordDetails.trim() : '',
-          cemeterySlotId: activeType === 'Land Agreement' ? selectedSlotId : undefined,
+          recordDetails: ['Certificate of Ownership', 'Land Agreement'].includes(activeType)
+            ? formData.recordDetails.trim() : '',
+          cemeterySlotId: needsAvailableCemeteryLot ? selectedSlotId : undefined,
         }),
       })
 
@@ -588,7 +599,13 @@ if (
   setFormData((prev) => ({
     ...prev,
     purpose: '',
+    personName: '',
+    motherFullName: '',
+    fatherFullName: '',
+    recordDetails: '',
+    recordDateHint: '',
   }))
+  setSelectedSlotId(null)
 }}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all ${
                   activeType === type

@@ -54,5 +54,6 @@ jobs:
           node tests/test_secure_session_routes.cjs
           node tests/test_secure_logout.cjs
           node tests/test_live_logout_notice_hotfix.cjs
+          node tests/test_request_form_reconciliation.cjs
       - name: HTTP E2E stays disabled without isolated clone approval
         run: python -m pytest -q e2e

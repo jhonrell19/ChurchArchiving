@@ -2511,16 +2511,7 @@ def api_create_request():
 
 
 
-        parents = {}
-        for key in ("motherFullName", "fatherFullName"):
-            raw = data.get(key)
-            name = " ".join(raw.split()) if isinstance(raw, str) else ""
-            if not (2 <= len(name) <= 150 and any(c.isalpha() for c in name)
-                    and all(c.isalpha() or unicodedata.category(c).startswith("M")
-                            or c in " .-'’" for c in name)):
-                label = "Mother’s" if key == "motherFullName" else "Father’s"
-                return {"error": f"{label} full name must contain 2–150 characters using letters, spaces, apostrophes, periods or hyphens."}, 400
-            parents[key] = name
+
 
 
 
@@ -2618,13 +2609,31 @@ def api_create_request():
 
 
 
-        if sacrament_type == "land_agreement":
-            # A user's selection is an inquiry, never an automatic reservation.
-            # The Burial Admin must independently approve and price the lot.
+        # Parent names belong to the requested sacramental record, not the
+        # account holder. Cemetery agreements and ownership records do not
+        # require parent names. Treat unused client fields as non-authoritative.
+        parents = {"motherFullName": None, "fatherFullName": None}
+        if sacrament_type in MAIN_ADMIN_TYPES:
+            for key in ("motherFullName", "fatherFullName"):
+                raw = data.get(key)
+                name = " ".join(raw.split()) if isinstance(raw, str) else ""
+                if not (2 <= len(name) <= 150 and any(c.isalpha() for c in name)
+                        and all(c.isalpha() or unicodedata.category(c).startswith("M")
+                                or c in " .-'’" for c in name)):
+                    label = "Mother’s" if key == "motherFullName" else "Father’s"
+                    return {"error": f"{label} full name of the person on the record must contain 2–150 characters using letters, spaces, apostrophes, periods or hyphens."}, 400
+                parents[key] = name
+
+        # A request for an existing land agreement/copy is not a new
+        # cemetery-lot application and MUST NOT depend on the lot-list API.
+        # New-lot inquiries remain advisory and require a currently
+        # available lot; the office alone verifies terms/approval.
+        purpose_name = purpose.split(" | Notes:", 1)[0].strip()
+        if sacrament_type == "land_agreement" and purpose_name == "Apply for Cemetery Lot Agreement":
             try:
                 requested_slot_id = int(data.get("cemeterySlotId"))
             except (TypeError, ValueError):
-                return {"error": "Select an available cemetery lot before submitting."}, 400
+                return {"error": "Choose a currently available cemetery lot for a new agreement inquiry."}, 400
             selected_slot = db.session.get(CemeterySlot, requested_slot_id)
             if not selected_slot or not selected_slot.active or selected_slot.status != "AVAILABLE":
                 return {"error": "That cemetery lot is no longer available. Refresh the list."}, 409

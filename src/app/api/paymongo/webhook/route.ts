@@ -55,7 +55,11 @@ export async function POST(req: NextRequest) {
       cache: 'no-store',
       signal: AbortSignal.timeout(12000),
     })
-    if (!upstream.ok) return response('Payment verification pending', 503)
+    if (!upstream.ok) {
+      // Only status is logged: no customer data, provider signature or API key.
+      console.warn('PayMongo signed webhook reached Flask; verification returned HTTP', upstream.status)
+      return response('Payment verification pending', 503)
+    }
     // The signed webhook is NOT the source of the payment amount or owner.
     // Flask independently verifies PayMongo and returns trusted request IDs.
     // Never block or fail webhook acknowledgement because SMS/email is down.
@@ -80,6 +84,7 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ received: true })
   } catch {
+    console.warn('PayMongo webhook: unable to complete backend payment verification.')
     return response('Payment verification pending', 503)
   }
 }

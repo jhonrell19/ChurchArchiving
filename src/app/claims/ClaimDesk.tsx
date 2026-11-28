@@ -1,5 +1,6 @@
 'use client'
 import {useEffect,useState} from 'react'
+import { sanitizePersonName } from '@/lib/fieldInput'
 type Item={id:number,owner_name:string,category:string,relationship:string,status:string,reason:string|null}
 const base='/api/backend/api/claims'
 export default function ClaimDesk({applicant}:{applicant:boolean}) {
@@ -24,7 +25,7 @@ export default function ClaimDesk({applicant}:{applicant:boolean}) {
   }
   return <>{applicant && <><p>Request permission to obtain a relative’s record. Staff compare your supporting document with the parish archive.</p>
     <form className="parish-filters" onSubmit={e=>{e.preventDefault();void submit(base,{method:'POST',body:new FormData(e.currentTarget)})}}>
-      <label>Name on record<input required name="name" minLength={2} maxLength={160}/></label>
+      <label>Name on record<input required name="name" minLength={2} maxLength={150} onInput={e => { e.currentTarget.value = sanitizePersonName(e.currentTarget.value) }}/></label>
       <label>Certificate<select name="category">{['baptismal','confirmation','marriage','ownership'].map(t=><option key={t}>{t}</option>)}</select></label>
       <label>Relationship<input required name="relationship" maxLength={80}/></label>
       <label>Proof of relationship or authorization (JPEG/PNG)<input required type="file" name="proof" accept="image/png,image/jpeg"/></label>

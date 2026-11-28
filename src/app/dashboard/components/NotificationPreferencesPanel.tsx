@@ -69,7 +69,7 @@ export default function NotificationPreferencesPanel() {
       </p>}
       <div className="mt-5 border-t border-slate-200 pt-4">
         <h4 className="text-base font-bold text-slate-900">Optional parish announcements</h4>
-        <p className="mt-1 text-sm text-slate-600">Choose whether to receive new parish event and Mass schedule notices. Both are off until you opt in.</p>
+        <p className="mt-1 text-sm text-slate-600">Choose whether to receive new parish event and Homily schedule notices. Both are off until you opt in.</p>
         <label className="mt-3 flex items-start gap-3 text-base text-slate-800">
           <input type="checkbox" checked={value.announcementEmail}
             onChange={e=>setValue(v=>v?{...v,announcementEmail:e.target.checked}:v)} className="mt-1 h-5 w-5"/>

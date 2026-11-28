@@ -26,7 +26,7 @@ const SLIDES = [
     background: 'from-[#122b46] via-[#24577f] to-[#cfaa4d]',
     image: '/slides/slide3.png',
     label: 'Worship With Us',
-    title: 'Sunday Mass Every Week',
+    title: 'Sunday Homily Every Week',
     verse: '"Where two or three gather in my name, there am I." — Matthew 18:20',
     btn:   'View Schedule',
     href:  '/services',

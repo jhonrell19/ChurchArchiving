@@ -6,6 +6,7 @@ import { isSupervisor } from '@/lib/portalConfig'
 import { prisma } from '@/lib/prisma'
 import { STAFF_PROVISIONED } from '@/lib/staffProvisioning'
 import { EMAIL_RE, normalizeEmail, validatePassword } from '@/lib/validation'
+import { isValidPersonName } from '@/lib/fieldInput'
 
 const reply = (message: string, status: number) => NextResponse.json({ message }, { status })
 
@@ -22,7 +23,7 @@ export async function POST(req: Request) {
   const email = normalizeEmail(body.email)
   const firstName = typeof body.firstName === 'string' ? body.firstName.trim() : ''
   const surname = typeof body.surname === 'string' ? body.surname.trim() : ''
-  if (action === 'create' && (!firstName || !surname || firstName.length > 100 || surname.length > 100))
+  if (action === 'create' && (!isValidPersonName(firstName, 100) || !isValidPersonName(surname, 100)))
     return reply('Enter a first name and surname of up to 100 characters each.', 400)
   let password = ''
   if (action === 'create' || action === 'credentials') {

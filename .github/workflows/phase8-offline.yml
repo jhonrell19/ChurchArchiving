@@ -41,10 +41,11 @@ jobs:
           python -m pip install -r church_backend/requirements.txt -r e2e/requirements.txt
       - name: Existing Python regressions and new isolated Phase 8 tests
         run: python -m unittest discover -s tests -v
-      - name: Proxy role matrix
+      - name: Proxy role matrix and field validation
         run: |
           node scripts/phase8_role_matrix.cjs
           node tests/test_phase8_roles.cjs
+          node tests/test_field_input_validation.cjs
       - name: PayMongo webhook and Twilio OTP mocked tests
         run: |
           node tests/test_phase8_paymongo_webhook.cjs

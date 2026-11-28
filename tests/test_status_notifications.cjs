@@ -99,6 +99,10 @@ async function main() {
   assert.equal(handlers.deriveEvent('payment', {
     ...approved, paymentStatus: 'Paid', paymentMethod: 'PAYMONGO_LIVE',
   }).kind, 'payment-confirmed')
+  const testReconciled = { ...approved, paymentStatus: 'Unpaid',
+    paymentMethod: 'PAYMONGO_TEST_RECONCILED' }
+  assert.equal(handlers.deriveEvent('payment', testReconciled).kind, 'payment-test-reconciled')
+  assert.match(handlers.deriveEvent('payment', testReconciled).text, /No real funds were received/)
   assert.equal(handlers.notificationOffice('land_agreement'), 'burial')
   assert.equal(handlers.notificationOffice('baptismal'), 'main')
 

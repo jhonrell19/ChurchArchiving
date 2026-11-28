@@ -19,12 +19,17 @@ async function officesForStaff(): Promise<('main' | 'burial')[] | null> {
 export async function GET() {
   const offices = await officesForStaff()
   if (!offices) return json({ message: 'Church Staff required.' }, 403)
-  if (!notificationFeatureEnabled()) return json({ enabled: false, pending: 0 })
+  if (!notificationFeatureEnabled()) return json({ enabled: false, pending: 0, autoSend: false })
   try {
     const pending = await prisma.notificationEvent.count({
       where: { office: { in: offices }, OR: [{ emailState: 'pending' }, { smsState: 'pending' }] },
     })
-    return json({ enabled: true, pending, offices })
+    const autoSend = process.env.PARISH_STATUS_AUTO_SEND === 'enabled'
+    const smsConfigured = process.env.PARISH_NOTIFICATION_SMS === 'enabled' &&
+      process.env.PHONE_OTP_PROVIDER === 'textbee' && Boolean(process.env.TEXTBEE_API_KEY?.trim())
+    const emailConfigured = process.env.PARISH_NOTIFICATION_EMAIL === 'enabled' &&
+      Boolean(process.env.RESEND_API_KEY?.trim())
+    return json({ enabled: true, pending, offices, autoSend, smsConfigured, emailConfigured })
   } catch {
     return json({ message: 'Notification outbox is unavailable.' }, 503)
   }

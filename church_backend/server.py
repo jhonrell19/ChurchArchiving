@@ -580,8 +580,8 @@ def readable_upload(filepath):
 
 
 def _payment_is_test_only(cert_request):
-    if os.getenv('SMART_PARISH_ENV') != 'production':
-        return False
+    # Sandbox transactions must never authorize official release on staging,
+    # development, or production even if SMART_PARISH_ENV is misconfigured.
     method = (cert_request.payment_method or '').upper()
     return method == 'DEMO' or method.startswith('PAYMONGO_TEST')
 
@@ -3244,10 +3244,10 @@ def api_update_request_status(request_id):
                     "error": "Attach the document before releasing it."
                 }, 400
 
-            if cert_request.payment_status != "Paid":
+            if cert_request.payment_status != "Paid" or cert_request.payment_method not in {"CASH", "PAYMONGO_LIVE"}:
                 return {
-                    "error": "This document cannot be released until payment is confirmed."
-                }, 400
+                    "error": "Official release requires a verified real cash receipt or live payment."
+                }, 409
 
         cert_request.status = status
 
@@ -5589,6 +5589,68 @@ def certificate_checkout(request_id):
         db.session.rollback()
         app.logger.exception("PayMongo checkout creation failed")
         return {"error": "Unable to start PayMongo checkout; contact staff."}, 502
+
+
+@app.route("/api/requests/<int:request_id>/reconcile-test-payment", methods=["POST"])
+def api_reconcile_test_payment(request_id):
+    """Audited correction of a *sandbox-only* payment, never real money.
+
+    Only authorized Church Staff may remove a test-paid status from an
+    approved, unreleased request. Historical PayMongo test ledger rows remain
+    untouched; the previous checkout reference is retained in AuditLog.
+    """
+    denied = require_roles("STAFF", "BURIAL_ADMIN")
+    if denied:
+        return denied
+    payload = request.get_json(silent=True) or {}
+    acknowledgement = payload.get("acknowledgement")
+    reason = str(payload.get("reason") or "").strip()
+    if acknowledgement != "NO_REAL_FUNDS_RECEIVED" or not 10 <= len(reason) <= 500:
+        return {"error": "Confirm no real funds were collected and record a reason of 10–500 characters."}, 400
+
+    try:
+        actor = current_user_id()
+        if not actor or int(actor) <= 0:
+            return {"error": "Authenticated Church Staff ID required."}, 403
+        cert = (CertificateRequest.query.filter_by(id=request_id)
+                .with_for_update().one_or_none())
+        if not cert:
+            return {"error": "Request not found."}, 404
+        if not staff_can_access_request(cert):
+            return {"error": "Forbidden."}, 403
+        if cert.status not in {"Approved", "Ready"}:
+            return {"error": "Only approved, unreleased requests may reconcile a test payment."}, 409
+        if cert.payment_status != "Paid" or (cert.payment_method or "").upper() not in {"PAYMONGO_TEST", "DEMO"}:
+            return {"error": "Only a recorded sandbox-only payment may be reconciled here."}, 409
+
+        previous_reference = str(cert.payment_reference or "")[:128]
+        previous_method = cert.payment_method
+        previous_remarks = str(cert.remarks or "")[:300]
+        cert.payment_status = "Unpaid"
+        cert.payment_method = "PAYMONGO_TEST_RECONCILED"
+        # Clearing the active checkout reference prevents a delayed test
+        # webhook from marking the same request Paid again.
+        cert.payment_reference = None
+        cert.paid_at = None
+        cert.remarks = ("Previous sandbox-only payment reconciled; no real money received. "
+                        "An authorized actual cash receipt or live payment is required before release.")
+        db.session.add(AuditLog(
+            user=getattr(g, "user_email", None) or str(actor),
+            action=(f"Reconciled TEST-ONLY payment request #{request_id}; "
+                    f"previous method={previous_method}; checkout={previous_reference}; "
+                    f"reason={reason[:250]}; earlier remarks={previous_remarks[:100]}"),
+            document_id=cert.matched_document_id))
+        db.session.commit()
+        return {
+            "ok": True, "requestId": request_id, "requesterUserId": getattr(cert, "requester_user_id", None),
+            "sacramentType": getattr(cert, "sacrament_type", None),
+            "paymentStatus": cert.payment_status, "paymentMethod": cert.payment_method,
+            "paymentReference": cert.payment_reference, "message": "Sandbox payment reconciled. Real payment is still required."
+        }, 200
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("Sandbox payment reconciliation failed")
+        return {"error": "Unable to reconcile this test payment. No payment status change committed."}, 500
 
 
 @app.route("/api/requests/cash-capability", methods=["GET"])

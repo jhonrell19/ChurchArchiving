@@ -21,10 +21,9 @@ class RequestIdentityTests(unittest.TestCase):
         ctx.push()
         self.addCleanup(ctx.pop)
         db.create_all()
-        # Exercise request persistence and search here; the OTP service is isolated.
+        # Exercise request persistence and search without per-request OTP.
         imports = patch.dict("sys.modules", {
             "certificate_identity": SimpleNamespace(validate_identity=validate_identity),
-            "request_codes": SimpleNamespace(consume=lambda uid,email,code: code == '235781'),
         })
         imports.start()
         self.addCleanup(imports.stop)
@@ -53,8 +52,9 @@ class RequestIdentityTests(unittest.TestCase):
     def test_required_fields_matching_and_legacy(self):
         payload = dict(personName='Ana Sample', purpose='Personal copy', sacramentType='baptismal',
                        motherFullName='Ana María Dela Cruz', fatherFullName="Emil O’Reyes")
-        payload.update(identity={'birthDate':'1990-04-12','relationship':'Self'}, verificationCode='235781')
-        self.assertEqual(self.client.post('/requests', json={**payload,'verificationCode':'000000'}).status_code,400)
+        payload.update(identity={'birthDate':'1990-04-12','relationship':'Self'})
+        # Email verification happens at account sign-in, never at each request.
+        # The backend still validates identity details and saves them for staff review.
         for key in ['motherFullName', 'fatherFullName']:
             for invalid in [None, '  ', '123', 'X' * 151]:
                 self.assertEqual(self.client.post('/requests', json={**payload, key: invalid}).status_code, 400)

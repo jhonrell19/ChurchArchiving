@@ -5427,6 +5427,18 @@ def certificate_pricing():
 
     fees = get_certificate_fees()
 
+    # Read-only readiness check: never reveal API credentials to the browser.
+    # A valid-looking test key is necessary, but does not prove PayMongo accepts it.
+    try:
+        configured_mode, configured_key = _paymongo_mode()
+        online_checkout_configured = (
+            len(configured_key) > len("sk_test_")
+            and os.getenv("APP_BASE_URL", "").startswith("https://")
+            and [item.strip() for item in os.getenv("PAYMONGO_METHODS", "qrph").split(",") if item.strip()] == ["qrph"]
+        )
+    except ValueError:
+        configured_mode, online_checkout_configured = "unavailable", False
+
     return {
         "fees": {
             code: fees[code]
@@ -5435,7 +5447,8 @@ def certificate_pricing():
         },
         "urgentFee": fees["urgent"],
         "currency": "PHP",
-        "onlinePaymentMode": os.getenv("PAYMONGO_MODE", "test"),
+        "onlinePaymentMode": configured_mode,
+        "onlineCheckoutConfigured": online_checkout_configured,
         "serviceFees": PARISH_FEES["sacramentalServices"],
         "cemeteryFees": PARISH_FEES["cemetery"],
         "note": PARISH_FEES["notes"],
@@ -5513,6 +5526,12 @@ def certificate_checkout(request_id):
         pay_mode, _ = _paymongo_mode()
     except ValueError:
         return {"error": "Online payments are not configured for this environment."}, 503
+    payload = request.get_json(silent=True) or {}
+    requested_mode = payload.get("expectedMode")
+    # Never allow a user to start a live-money checkout from a sandbox button
+    # if Render settings change between pricing lookup and the POST request.
+    if requested_mode not in ("test", "live") or requested_mode != pay_mode:
+        return {"error": "Payment mode changed or missing. Refresh the page before attempting checkout."}, 409
     if (cert.payment_reference or "").startswith("cs_"):
         # Do not overwrite possibly paid/pending sessions. Query provider first.
         try:

@@ -1,22 +1,47 @@
-// Offline regression: verify UI never presents PayMongo sandbox as live payments.
+// Offline regression: restore PayMongo sandbox demonstrations without
+// enabling real-money payments or weakening the official release guard.
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
-const view = fs.readFileSync('src/app/dashboard/components/RequestsPage.tsx','utf8')
-const backend = fs.readFileSync('church_backend/server.py','utf8')
-const tracker = fs.readFileSync('src/components/RequestTracking.tsx','utf8')
+const view = fs.readFileSync('src/app/dashboard/components/RequestsPage.tsx', 'utf8')
+const backend = fs.readFileSync('church_backend/server.py', 'utf8')
+const tracker = fs.readFileSync('src/components/RequestTracking.tsx', 'utf8')
+const release = fs.readFileSync('src/lib/certificatePayment.ts', 'utf8')
+const proxy = fs.readFileSync('src/app/api/backend/[...path]/route.ts', 'utf8')
 
-// Pricing must be confirmed as LIVE before rendering a payable online checkout.
-assert.match(view, /const canPayOnline = eligibleForPayment && pricingReady &&/)
-assert.match(view, /paymentMode === 'live' && !hasUnresolvedCheckout/)
-assert.match(view, /const hasUnresolvedCheckout = Boolean\(req\.paymentReference\?\.startsWith\('cs_'\)\)/)
+// The pricing endpoint must not leak keys. A backend readiness flag is required
+// for EITHER mode to display a checkout button.
+assert.match(backend, /"onlineCheckoutConfigured": online_checkout_configured/)
+assert.match(backend, /configured_mode, configured_key = _paymongo_mode\(\)/)
+assert.match(view, /const \[paymentMode, setPaymentMode\] = useState<'test' \| 'live' \| 'unavailable'>\('unavailable'\)/)
+assert.match(view, /setCheckoutConfigured\(data\.onlineCheckoutConfigured === true\)/)
+assert.match(view, /const canStartCheckout = eligibleForPayment && pricingReady &&\s+checkoutConfigured && !hasUnresolvedCheckout/)
+assert.match(view, /const canPayOnline = canStartCheckout && paymentMode === 'live'/)
+assert.match(view, /const canSimulateTest = canStartCheckout && paymentMode === 'test' &&/)
+assert.match(view, /req\.paymentMethod !== 'PAYMONGO_TEST_RECONCILED'/)
+assert.match(view, /PAYMONGO_\(TEST\|LIVE\)_PENDING/)
+assert.match(view, /canSimulateTest && \(\s*<button/)
+assert.match(view, /Simulate Test Payment \{formatPeso\(req\.totalFee\)\} — No real money/)
 assert.match(view, /canPayOnline && \(\s*<button/)
 assert.match(view, /Pay Online \{formatPeso\(req\.totalFee\)\}/)
-assert.match(view, /Online payment is not available; coordinate actual payment with the parish office/)
-assert.match(view, /Pay the authorized parish cashier in person and obtain an official receipt/)
+assert.match(view, /expectedMode === 'test' && !\(await confirmAction\(/)
+assert.match(view, /body: JSON\.stringify\(\{ expectedMode \}\)/)
+assert.match(view, /payMongoCheckout\(req\.id, 'live'\)/)
+assert.match(view, /payMongoCheckout\(req\.id, 'test'\)/)
+
+// Stale client views cannot accidentally create a live checkout from the
+// SANDBOX button if the deployment's PAYMONGO_MODE changes.
+assert.match(backend, /requested_mode = payload\.get\("expectedMode"\)/)
+assert.match(backend, /requested_mode not in \("test", "live"\) or requested_mode != pay_mode/)
+assert.match(backend, /"Payment mode changed or missing\. Refresh the page before attempting checkout\."/)
+
+// Unresolved and reconciled requests are never automatically reused or paid.
+assert.match(view, /hasUnresolvedCheckout/)
 assert.match(view, /A previous checkout is awaiting verification\. Do not attempt another payment/)
 assert.match(view, /The previous sandbox transaction was reconciled; no real money was received/)
 assert.match(view, /This is a test payment, not real money/)
-assert.match(tracker, /Test payment recorded — no real funds collected/)
 assert.match(backend, /Prior checkout may be paid\. Await payment confirmation; do not retry/)
+assert.match(tracker, /Test payment recorded — no real funds collected/)
+assert.match(release, /\['CASH', 'PAYMONGO_LIVE'\]/)
 assert.match(backend, /Official release requires a verified real cash receipt or live payment/)
-console.log('PASS: live-only online checkout, no sandbox payment CTA, safe pending-session messaging and cash-office instructions')
+
+console.log('PASS: labeled PayMongo sandbox checkout restored with read-only readiness, mode agreement, existing-checkout protection and live-only official release')

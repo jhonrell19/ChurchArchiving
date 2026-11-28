@@ -2597,7 +2597,19 @@ def api_create_request():
 
         ).strip()
 
-        record_date_hint = (data.get("recordDateHint") or "").strip()[:100] or None
+        raw_record_date_hint = data.get("recordDateHint") or ""
+        if not isinstance(raw_record_date_hint, str):
+            return {"error": "Choose a valid record date from the calendar."}, 400
+        record_date_hint = raw_record_date_hint.strip() or None
+        if record_date_hint:
+            from datetime import date
+            try:
+                parsed_hint = date.fromisoformat(record_date_hint)
+                if (parsed_hint.isoformat() != record_date_hint or
+                        parsed_hint > datetime.now(ZoneInfo("Asia/Manila")).date()):
+                    raise ValueError()
+            except ValueError:
+                return {"error": "Choose a valid past date from the calendar (YYYY-MM-DD)."}, 400
         record_details = (data.get("recordDetails") or "").strip()[:500] or None
 
         if data.get("isUrgent") is True:
@@ -2618,15 +2630,10 @@ def api_create_request():
 
 
 
-        if not person_name:
-
-            return {
-
-                "error":
-
-                    "Name on record is required."
-
-            }, 400
+        if not (2 <= len(person_name) <= 150 and any(c.isalpha() for c in person_name)
+                and all(c.isalpha() or unicodedata.category(c).startswith("M")
+                        or c in " .-'’" for c in person_name)):
+            return {"error": "Enter a valid name on record using letters, spaces, apostrophes, periods or hyphens."}, 400
 
 
 

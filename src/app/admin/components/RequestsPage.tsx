@@ -113,7 +113,6 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
   const { toast, confirmAction } = useFeedback()
   const [requests, setRequests] = useState<CertificateRequest[]>([])
   const [filter, setFilter] = useState<ReqStatus>('All')
-  const [expanded, setExpanded] = useState<number | null>(null)
   const [activeStep, setActiveStep] = useState<{ requestId: number; step: RequestWorkflowStep } | null>(null)
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<number | null>(null)
@@ -162,19 +161,6 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
     queueMicrotask(() => void loadRequests())
     return () => { serial.current++ }
   }, [urgentOnly, page, filter, query])
-
-  const toggleExpanded = (item: CertificateRequest) => {
-    const opening = expanded !== item.id
-    setExpanded(opening ? item.id : null)
-    setActiveStep(null)
-
-    if (opening) {
-      setSearchTerms(prev => ({
-        ...prev,
-        [item.id]: prev[item.id] ?? item.personName,
-      }))
-    }
-  }
 
   const searchArchive = async (item: CertificateRequest) => {
     const query = (searchTerms[item.id] ?? item.personName).trim()
@@ -531,28 +517,20 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => toggleExpanded(item)}
-                    className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
-                    aria-expanded={expanded === item.id}
-                    aria-label={`${expanded === item.id ? 'Hide' : 'Open'} workflow for request IFI-REQ-${String(item.id).padStart(4, '0')}`}
-                  >
-                    {expanded === item.id ? 'Hide steps' : 'Open steps'}
-                    <i className={`ti ${expanded === item.id ? 'ti-chevron-up' : 'ti-chevron-down'}`} aria-hidden="true" />
-                  </button>
                 </div>
 
-                {expanded === item.id && (
-                  <div className="border-t border-slate-100 px-5 py-5 bg-slate-50/60 space-y-4">
+                <div className="border-t border-slate-100 px-5 py-5 bg-slate-50/60 space-y-4">
 
                     {/* Only the four colored milestones are visible until staff opens a step. */}
                     <RequestTracking
                       request={item}
                       selectedStep={activeStep?.requestId === item.id ? activeStep.step : null}
-                      onStepSelect={step => setActiveStep(prev =>
-                        prev?.requestId === item.id && prev.step === step ? null : { requestId: item.id, step }
-                      )}
+                      onStepSelect={step => {
+                        setSearchTerms(prev => ({ ...prev, [item.id]: prev[item.id] ?? item.personName }))
+                        setActiveStep(prev =>
+                          prev?.requestId === item.id && prev.step === step ? null : { requestId: item.id, step }
+                        )
+                      }}
                     />
                     {activeStep?.requestId === item.id && (
                       <section
@@ -851,8 +829,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
                         )}
                       </section>
                     )}
-                  </div>
-                )}
+                </div>
               </div>
             )
           })

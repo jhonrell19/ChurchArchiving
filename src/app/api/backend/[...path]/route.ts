@@ -39,6 +39,8 @@ function isAllowed(role: Role, method: string, path: string) {
     return true
   }
 
+  if (/^api\/requests\/\d+\/identity-proof$/.test(path)) return m === 'GET' && ['STAFF','BURIAL_ADMIN'].includes(role)
+  if (/^api\/requests\/\d+\/payment-result$/.test(path)) return m === 'POST' && role === 'USER'
   if (path === 'api/appointments') return m === 'GET' || m === 'POST'
   if (path === 'api/claims') return m === 'GET' || (m === 'POST' && role === 'USER')
   if (/^api\/claims\/\d+\/proof$/.test(path)) return m === 'GET' && role !== 'USER'
@@ -112,20 +114,15 @@ if (
     return m === 'GET' && ['USER', 'ADMIN', 'STAFF', 'BURIAL_ADMIN'].includes(role)
   }
 
-  if (path === 'api/archive/audit-logs') {
-    return m === 'GET' && role === 'ADMIN'
-  }
-
+  if (path === 'api/office/audit-logs') return m === 'GET' && role === 'ADMIN'
   if (path.startsWith('api/archive/')) {
-    if (path === 'api/archive/deleted-documents') return m === 'GET' && role === 'ADMIN'
-    if (/^api\/archive\/documents\/\d+\/(delete|restore)$/.test(path))
-      return m === 'PATCH' && role === 'ADMIN'
-    if (role === 'ADMIN') return m === 'GET'
+    if (['api/archive/deleted-documents', 'api/archive/audit-logs'].includes(path)) return false
+    if (/\/(delete|restore)$/.test(path)) return false
     return role === 'STAFF' || role === 'BURIAL_ADMIN'
   }
 
   if (path === 'api/masses') {
-    if (m === 'GET') return role === 'USER' || role === 'ADMIN'
+    if (m === 'GET') return ['USER', 'ADMIN', 'STAFF', 'BURIAL_ADMIN'].includes(role)
     return role === 'ADMIN'
   }
 
@@ -173,6 +170,9 @@ async function forward(request: NextRequest, context: { params: Promise<{ path: 
   }
 
   const { path: segments } = await context.params
+  if (segments.some(segment => !segment || segment === '.' || segment === '..' || /[\\/%?#]/.test(segment))) {
+    return NextResponse.json({error:'Invalid path'}, {status:400})
+  }
   const path = segments.join('/')
 
   if (!isAllowed(user.role, request.method, path)) {

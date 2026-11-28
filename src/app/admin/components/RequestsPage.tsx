@@ -26,6 +26,8 @@ type ArchiveDocument = {
 
 type CertificateRequest = {
   id: number
+  identity?:Record<string,string|boolean>
+  history?: {status:string;at:string}[]
   requesterUserId: number | null
   requesterName: string
   requesterEmail: string
@@ -313,6 +315,13 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
     }
 
     const formData = new FormData()
+    if (item.identity) {
+      const reviewed = await confirmAction(item.identity.unredacted
+        ? 'Have you reviewed the ID or authorization document and confirmed that this requester may receive the unredacted copy?'
+        : 'Have you checked the final file and redacted private information for this copy?')
+      if (!reviewed) return
+      formData.append('reviewed_copy', item.identity.unredacted ? 'unredacted' : 'redacted')
+    }
     formData.append('file', file)
 
     try {
@@ -490,7 +499,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-display text-navy-mid text-base font-semibold">
-                          {item.personName}
+                          {item.requesterName || 'Requester unavailable'}
                         </p>
                         <span className="font-display text-xs tracking-wider text-slate-500">
                           IFI-REQ-{item.id.toString().padStart(4, '0')}
@@ -538,11 +547,17 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
 
                 {expanded === item.id && (
                   <div className="border-t border-slate-100 px-5 py-5 bg-slate-50/60 space-y-4">
-                    <RequestDetails request={item} documentType={toDisplayType(item.sacramentType)} />
-
-                    {!readOnly && <>
-                    <section className="rounded-xl border border-blue-200 bg-blue-50/50 p-4">
-                      <StepTitle number="1" title="Find and verify the archive source record" />
+                    <details className="role-card"><summary>Request details</summary><RequestDetails office={!readOnly} request={item} documentType={toDisplayType(item.sacramentType)} /></details>
+                    <section className="role-card"><h3>Status</h3><p>{item.status}</p>
+                    {!readOnly && <div className="flex flex-wrap gap-2">
+                      {item.status==='Pending' && <>
+                        <button className="portal-primary-btn" disabled={isBusy || !item.matchedDocumentId} onClick={()=>void updateStatus(item,'Approved')}>Approve</button>
+                        <button className="portal-secondary-btn" disabled={isBusy} onClick={()=>void updateStatus(item,'Rejected')}>Reject</button>
+                      </>}
+                      {item.status==='Approved' && item.paymentStatus!=='Paid' && <button className="portal-secondary-btn" disabled={isBusy} onClick={()=>void updateStatus(item,'Rejected')}>Reject</button>}
+                      {canRelease && <button className="portal-primary-btn" disabled={isBusy} onClick={()=>void updateStatus(item,'Released')}>Release</button>}
+                    </div>}
+                    {!readOnly && item.status==='Pending' && <details><summary>Verify source record to approve</summary>
 
                       {item.matchedDocument ? (
                         <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 mb-3">
@@ -575,8 +590,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
                         </p>
                       )}
 
-                      {item.status !== 'Released' && item.status !== 'Rejected' && (
-                        <>
+                      <>
                           <div className="flex items-center gap-2 flex-wrap">
                             <input
                               type="text"
@@ -641,44 +655,8 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
                             </p>
                           )}
                         </>
-                      )}
-                    </section>
-
-                    <section className="rounded-xl border border-slate-200 bg-white p-4">
-                      <StepTitle number="2" title="Approve the verified request" />
-                      {item.status === 'Pending' ? (
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <button
-                            type="button"
-                            disabled={isBusy || !item.matchedDocumentId}
-                            onClick={() => void updateStatus(item, 'Approved')}
-                            className="font-display text-xs tracking-wider bg-blue-600 text-white px-3 py-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
-                          >
-                            Approve Verified Request
-                          </button>
-                          <button
-                            type="button"
-                            disabled={isBusy}
-                            onClick={() => void updateStatus(item, 'Rejected')}
-                            className="font-display text-xs tracking-wider bg-white text-red-700 border border-red-200 px-3 py-2 rounded-lg disabled:opacity-50"
-                          >
-                            Reject Request
-                          </button>
-                          {!item.matchedDocumentId && (
-                            <span className="font-body text-sm text-amber-700">
-                              Select the source record first.
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        <p className="font-body text-sm text-slate-600">
-                          Current request status: <strong>{item.status}</strong>
-                        </p>
-                      )}
-                    </section>
-
-                    <section className="rounded-xl border border-violet-200 bg-violet-50/40 p-4">
-                      <StepTitle number="3" title="Prepare the final release document" />
+                    </details>}
+                    {!readOnly && ['Approved','Ready'].includes(item.status) && <details><summary>Prepare reviewed document for release</summary>
 
                       {item.draftFile && (
                         <div className="rounded-lg border border-blue-200 bg-white p-3 mb-3 flex items-center justify-between gap-3 flex-wrap">
@@ -763,7 +741,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
                             onClick={() => void uploadReleaseDocument(item)}
                             className="font-display text-xs tracking-wider bg-violet-600 text-white px-3 py-2 rounded-lg disabled:opacity-40"
                           >
-                            {item.generatedFile ? 'Replace Final Document' : 'Upload Final Document'}
+                            {item.generatedFile ? 'Replace final document' : 'Mark ready with reviewed file'}
                           </button>
                           <span className="font-body text-sm text-slate-500">
                             PDF is recommended. DOCX/JPG/PNG are also accepted.
@@ -779,37 +757,14 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
                               : 'No final document can be uploaded for this request.'}
                         </p>
                       )}
+
+                    </details>}
+                    {!readOnly && item.status==='Ready' && !canRelease && <p>Release requires a verified source, final document and confirmed payment.</p>}
                     </section>
-
-                    <section className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4">
-                      <StepTitle number="4" title="Release to the parishioner" />
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-                        <CheckRow label="Source record verified" ok={Boolean(item.matchedDocumentId)} />
-                        <CheckRow label="Final document prepared" ok={Boolean(item.generatedFile)} />
-                        <CheckRow label="Payment confirmed" ok={item.paymentStatus === 'Paid'} />
-                      </div>
-
-                      {canRelease ? (
-                        <button
-                          type="button"
-                          disabled={isBusy}
-                          onClick={() => void updateStatus(item, 'Released')}
-                          className="font-display text-xs tracking-wider bg-emerald-600 text-white px-4 py-2 rounded-lg disabled:opacity-50"
-                        >
-                          Release Document to User
-                        </button>
-                      ) : item.status === 'Released' ? (
-                        <p className="font-body text-sm text-emerald-700">
-                          Released. The request owner can now download the final document.
-                        </p>
-                      ) : (
-                        <p className="font-body text-sm text-amber-700">
-                          Release becomes available only when the request is Ready, the final document exists, and payment is Paid.
-                        </p>
-                      )}
+                    <section className="role-card"><h3>History</h3>
+                      {item.history?.length ? <ol>{item.history.map((event,i)=><li key={i}><strong>{event.status}</strong> · {new Date(event.at).toLocaleString('en-PH',{timeZone:'Asia/Manila'})}</li>)}</ol>
+                      : <p>Current status: {item.status}. Earlier transitions were not recorded.</p>}
                     </section>
-
-                    </>}
                   </div>
                 )}
               </div>
@@ -817,28 +772,6 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
           })
         )}
       </div>
-    </div>
-  )
-}
-
-function StepTitle({ number, title }: { number: string; title: string }) {
-  return (
-    <div className="flex items-center gap-2 mb-3">
-      <span className="w-6 h-6 rounded-full bg-navy text-white font-display text-xs flex items-center justify-center">
-        {number}
-      </span>
-      <p className="font-display text-sm tracking-wider text-navy-mid font-semibold">{title}</p>
-    </div>
-  )
-}
-
-function CheckRow({ label, ok }: { label: string; ok: boolean }) {
-  return (
-    <div className={`rounded-lg border p-3 ${ok ? 'bg-white border-emerald-200' : 'bg-white border-amber-200'}`}>
-      <p className={`font-body text-sm ${ok ? 'text-emerald-700' : 'text-amber-700'}`}>
-        <i className={`ti ${ok ? 'ti-circle-check' : 'ti-clock'} mr-1`} />
-        {label}
-      </p>
     </div>
   )
 }

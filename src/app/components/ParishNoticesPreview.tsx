@@ -34,6 +34,6 @@ export default function ParishNoticesPreview() {
           {notice.media?.[0]?.type==='video' && <video src={notice.media[0].url} controls preload="metadata" className="mb-3 mt-2 h-44 w-full rounded-lg object-cover"/>}
           <h3>{notice.title}</h3><p>{notice.body}</p>
         </article>)}
-      </div>:<p>No public announcements have been posted yet. Check the calendar for Mass schedules and events.</p>}
+      </div>:<p>No public announcements have been posted yet. Check the calendar for Homily schedules and events.</p>}
   </section>
 }

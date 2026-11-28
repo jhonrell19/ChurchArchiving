@@ -4,7 +4,7 @@ const SACRAMENTS = [
   { title: 'Baptism',            desc: 'The sacrament of initiation into the Christian faith. Contact the parish office to schedule and learn about preparation requirements.' },
   { title: 'Matrimony',          desc: 'A sacred covenant before God and the community. Couples are encouraged to inquire at least three months in advance.' },
   { title: 'Confirmation',       desc: 'The strengthening of baptismal grace through the Holy Spirit. Classes and preparation schedules are announced annually.' },
-  { title: 'Holy Eucharist',     desc: 'The central act of Christian worship. Celebrated every Sunday at our scheduled masses, open to all baptized members.' },
+  { title: 'Holy Eucharist',     desc: 'The central act of Christian worship. Celebrated every Sunday at our scheduled services, open to all baptized members.' },
   { title: 'Burial & Last Rites',desc: 'In times of loss, the Church accompanies families with prayer, comfort, and the celebration of the departed\'s life.' },
   { title: 'Special Blessings',  desc: 'House blessings, vehicle blessings, and other special rites may be arranged by contacting the parish priest directly.' },
 ]
@@ -32,7 +32,7 @@ type Description = {title:string;desc:string}
 export type SiteContent = {title:string; introduction:string; photo:string; services:Service[]; sacraments:Description[]; ministries:Description[];story:string[];address:string;hours:string;email:string}
 export const defaultContent: SiteContent = {
   title:'Welcome to our parish.',
-  introduction:'Find Mass times and parish notices, or sign in to request a certificate.',
+  introduction:'Find Homily times and parish notices, or sign in to request a certificate.',
   photo:parishPhotos[0], services:SCHEDULE, sacraments:SACRAMENTS, ministries:MINISTRIES, story:STORY,
   address:'Poblacion 2-B, Maragondon, Cavite, Philippines',hours:'Monday – Friday, 8:00 AM – 5:00 PM',email:'',
 }

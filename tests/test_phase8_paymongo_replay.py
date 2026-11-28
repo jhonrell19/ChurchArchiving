@@ -51,6 +51,7 @@ class PaymentReplayTests(unittest.TestCase):
             "_paymongo_api": lambda method, path: {"data": {"attributes": self.actual}},
             "app": SimpleNamespace(logger=Mock()),
         }
+        isolate("reconcile_checkout", self.namespace)
         self.confirm = isolate("paymongo_confirm_internal", self.namespace)
 
     def execute(self, statement, params):

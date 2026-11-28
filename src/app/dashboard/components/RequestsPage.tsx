@@ -3,6 +3,7 @@
 import { useFeedback } from '@/components/ui/FeedbackProvider'
 import RequestDetails from '@/components/RequestDetails'
 
+import identityConfig from '../../../../config/certificate_identity.json'
 import { useEffect, useState } from 'react'
 import { REQUEST_ICONS, STATUS_STYLE, inputCls } from '../data/ui'
 
@@ -211,6 +212,24 @@ const formatPeso = (amount: number | null | undefined) =>
 
 export default function RequestsPage() {
   const { toast, confirmAction } = useFeedback()
+  const [paymentNotice,setPaymentNotice] = useState('')
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const id = params.get('requestId')
+    if (!id || !/^\d+$/.test(id)) return
+    if (params.get('checkout')==='cancelled') { setPaymentNotice('Checkout cancelled.'); return }
+    if (params.get('checkout')!=='returned') return
+    const abort = new AbortController()
+    setPaymentNotice('Checking the payment with PayMongo…')
+    fetch('/api/backend/api/requests/'+id+'/payment-result',{method:'POST',signal:abort.signal})
+      .then(async res => {
+        const data = await res.json()
+        if (abort.signal.aborted) return
+        setPaymentNotice(res.ok && data.paymentStatus==='Paid' ? 'Payment confirmed for request #'+id : 'Payment confirmation pending. Refresh tracking before paying again.')
+        if (res.ok && data.paymentStatus==='Paid') void loadRequests()
+      }).catch(()=>{if (!abort.signal.aborted) setPaymentNotice('Payment confirmation unavailable. Refresh tracking before paying again.')})
+    return () => abort.abort()
+  }, [])
   const [activeType, setActiveType] = useState<RequestType>('Baptismal')
   const [view, setView] = useState<'form' | 'history'>('history')
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
@@ -262,7 +281,28 @@ export default function RequestsPage() {
     isUrgent: false,
   })
 
-  const needsParentNames = SACRAMENTAL_TYPES.has(activeType)
+  const isSacrament = SACRAMENTAL_TYPES.has(activeType)
+  const needsParentNames = isSacrament && activeType !== 'Marriage'
+  const [identity, setIdentity] = useState<Record<string,string>>({})
+  const [code,setCode] = useState('')
+  const [unredacted,setUnredacted] = useState(false)
+  const [proof,setProof] = useState<File|null>(null)
+  const [identityMessage,setIdentityMessage] = useState('')
+  const [sending,setSending] = useState(false)
+  const specs: {key:string;label:string;kind:string;required:boolean;options?:string[]}[] =
+    identityConfig[toBackendType(activeType) as keyof typeof identityConfig] || []
+  async function sendCode() {
+    setSending(true)
+    try {
+      const res = await fetch('/api/requests/verification',{method:'POST'})
+      const data = await res.json()
+      setIdentityMessage(data.message || data.error || 'Email service unavailable.')
+    } catch { setIdentityMessage('Email service unavailable. Please try again.') }
+    finally { setSending(false) }
+  }
+  function clearIdentity() {
+    setIdentity({}); setCode(''); setProof(null); setUnredacted(false); setIdentityMessage('')
+  }
   const needsAvailableCemeteryLot = activeType === 'Land Agreement' &&
     formData.purpose === NEW_LAND_AGREEMENT_PURPOSE
 
@@ -404,16 +444,26 @@ export default function RequestsPage() {
       return
     }
 
+    if (isSacrament) {
+      const missing = specs.find(field => field.required && !identity[field.key]?.trim())
+      if (missing) { setIdentityMessage('Enter ' + missing.label + '.'); return }
+      if (!/^\d{6}$/.test(code)) { setIdentityMessage('Enter the six-digit code from your account email.'); return }
+      if (unredacted && (!proof || proof.size > 3*1024*1024)) {
+        setIdentityMessage('Attach a PDF, JPG or PNG up to 3 MB for an unredacted copy.'); return
+      }
+    }
     if (needsParentNames) {
       for (const name of [formData.motherFullName, formData.fatherFullName]) {
         const value = name.trim()
         if (value.length < 2 || !/\p{L}/u.test(value) || !/^[\p{L}\p{M} .'’-]+$/u.test(value)) {
+          setIdentityMessage('Enter valid full names for both parents.')
           toast.warning('Enter both parents’ full names of the person on the record using letters, spaces, periods, hyphens or apostrophes.')
           return
         }
       }
     }
     if (!formData.personName.trim()) {
+      setIdentityMessage('Enter the full name on the record.')
       toast.warning('Please enter the name on record.')
       return
     }
@@ -440,12 +490,23 @@ if (
     try {
       setLoading(true)
 
+      let proofBase64: string | undefined
+      if (isSacrament && unredacted && proof) {
+        proofBase64 = await new Promise<string>((resolve,reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(String(reader.result).split(',')[1])
+          reader.onerror = () => reject(new Error('Cannot read proof file'))
+          reader.readAsDataURL(proof)
+        })
+      }
       const res = await fetch('/api/backend/api/requests', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          identity: isSacrament ? {...identity,unredacted} : undefined,
+          verificationCode:isSacrament ? code : undefined, proofBase64,
           sacramentType: toBackendType(activeType),
           personName: formData.personName.trim(),
           motherFullName: needsParentNames ? formData.motherFullName.trim() : undefined,
@@ -465,10 +526,12 @@ if (
       const data = await res.json().catch(() => ({}))
 
       if (!res.ok) {
+        setIdentityMessage(data.error || 'Request submission failed.')
         toast.error(data.error || 'Request submission failed.')
         return
       }
 
+      clearIdentity()
       setSuccessMsg(`${activeType} request submitted successfully.`)
 
       setFormData({
@@ -537,6 +600,7 @@ if (
         </section>
       )}
 
+      {paymentNotice && <p role="status" className="role-card">{paymentNotice}</p>}
       {successMsg && (
         <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-start gap-3 mb-6">
           <i className="ti ti-circle-check text-green-600 text-[18px] mt-0.5 flex-shrink-0" />
@@ -594,6 +658,7 @@ if (
                 type="button"
                 key={type}
                 onClick={() => {
+  clearIdentity()
   setActiveType(type)
 
   setFormData((prev) => ({
@@ -705,7 +770,7 @@ if (
 
               <div>
                 <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1.5">
-                  {activeType === 'Certificate of Ownership' ? 'Registered Lot Holder' : activeType === 'Land Agreement' ? 'Applicant / Name on Agreement' : 'Name on Church Record'} <span className="text-gold">*</span>
+                  {activeType === 'Certificate of Ownership' ? 'Registered Lot Holder' : activeType === 'Land Agreement' ? 'Applicant / Name on Agreement' : activeType === 'Marriage' ? 'Groom’s full name' : 'Full name on the church record'} <span className="text-gold">*</span>
                 </label>
                 <input
                   value={formData.personName}
@@ -715,6 +780,21 @@ if (
                 />
               </div>
 
+              {isSacrament && <section className="md:col-span-2 grid gap-3 sm:grid-cols-2">
+                {specs.map(field => <label key={field.key}>{field.label} {field.required ? '*' : '(optional)'}
+                  {field.options ? <select className={inputCls} value={identity[field.key]||''} onChange={e=>setIdentity({...identity,[field.key]:e.target.value})}>
+                    <option value="">Select relationship</option>{field.options.map(v=><option key={v}>{v}</option>)}</select>
+                  : <input required={field.required} maxLength={180} type={field.kind==='date'?'date':'text'} className={inputCls}
+                    placeholder={field.kind==='yearDate'?'YYYY or YYYY-MM-DD':undefined}
+                    value={identity[field.key]||''} onChange={e=>setIdentity({...identity,[field.key]:e.target.value})}/>}
+                </label>)}
+                <label><input type="checkbox" checked={unredacted} onChange={e=>{setUnredacted(e.target.checked);setProof(null)}}/> Request an unredacted copy</label>
+                {unredacted && <label>Valid ID or authorization document (up to 3 MB)<input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={e=>setProof(e.target.files?.[0]||null)}/></label>}
+                <label>Email verification code<input className={inputCls} inputMode="numeric" autoComplete="one-time-code" maxLength={6}
+                  value={code} onChange={e=>setCode(e.target.value)}/></label>
+                <button type="button" disabled={sending} onClick={()=>void sendCode()} className="portal-secondary-btn">{sending?'Sending…':'Email me a code'}</button>
+                <p role="status" className="sm:col-span-2">{identityMessage}</p>
+              </section>}
               {needsParentNames && (
                 <div className="md:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-4">
                   <p className="mb-2 text-sm font-semibold text-slate-800">
@@ -950,7 +1030,7 @@ if (
                           </div>
 
                           <p className="font-body text-[#7890a6] text-[11px] mt-0.5">
-                            Ref: IFI-REQ-{req.id.toString().padStart(4, '0')}
+                            Requester: {req.requesterName || 'Unavailable'} · IFI-REQ-{req.id.toString().padStart(4, '0')}
                             {req.createdAt ? ` · Submitted ${req.createdAt.slice(0, 10)}` : ''}
                           </p>
                         </div>
@@ -977,7 +1057,7 @@ if (
                       </div>
                     </div>
 
-                    <RequestDetails request={req} documentType={displayType} />
+                    <details><summary>Request details</summary><RequestDetails request={req} documentType={displayType} /></details>
 
                     <div className="mt-4 pt-3 border-t border-gold/10 flex items-center justify-between gap-3 flex-wrap">
                       <div>

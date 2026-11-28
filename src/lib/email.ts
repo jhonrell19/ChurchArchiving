@@ -8,6 +8,10 @@ type SendEmailInput = {
 
 /** Account verification must be real email delivery, even during ngrok testing. */
 export function isTransactionalEmailConfigured() {
+  if (process.env.EMAIL_TRANSPORT === 'gmail-api') {
+    return ['GMAIL_SEND_CLIENT_ID', 'GMAIL_SEND_CLIENT_SECRET', 'GMAIL_SEND_REFRESH_TOKEN']
+      .every(key => Boolean(process.env[key]?.trim()))
+  }
   if (process.env.EMAIL_TRANSPORT === 'gmail-smtp') {
     return Boolean(/^[^@\s]+@gmail\.com$/i.test(process.env.GMAIL_SMTP_USER || '') &&
       process.env.GMAIL_SMTP_APP_PASSWORD?.replace(/\s/g, '').length === 16)
@@ -20,6 +24,37 @@ export function isTransactionalEmailConfigured() {
 }
 
 export async function sendTransactionalEmail(input: SendEmailInput) {
+  if (process.env.EMAIL_TRANSPORT === 'gmail-api') {
+    if (!isTransactionalEmailConfigured()) {
+      console.error('Gmail verification sender credentials are missing')
+      return { sent: false, reason: 'Parish email delivery is unavailable. Contact the parish office.' }
+    }
+    try {
+      const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(10000),
+        body: new URLSearchParams({
+          grant_type: 'refresh_token', refresh_token: process.env.GMAIL_SEND_REFRESH_TOKEN!,
+          client_id: process.env.GMAIL_SEND_CLIENT_ID!, client_secret: process.env.GMAIL_SEND_CLIENT_SECRET!,
+        }),
+      })
+      if (!tokenResponse.ok) throw new Error('token HTTP ' + tokenResponse.status)
+      const { access_token } = await tokenResponse.json()
+      if (typeof access_token !== 'string' || /[\r\n]/.test(input.to)) throw new Error('invalid sender inputs')
+      const raw = ['To: ' + input.to, 'Subject: =?UTF-8?B?' + Buffer.from(input.subject).toString('base64') + '?=',
+        'MIME-Version: 1.0', 'Content-Type: text/html; charset=UTF-8', 'Content-Transfer-Encoding: base64',
+        '', Buffer.from(input.html).toString('base64')].join('\r\n')
+      const reply = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+        method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(10000),
+        headers: {Authorization: 'Bearer ' + access_token, 'Content-Type': 'application/json'},
+        body: JSON.stringify({raw: Buffer.from(raw).toString('base64url')}),
+      })
+      if (!reply.ok) throw new Error('send HTTP ' + reply.status)
+      return { sent: true }
+    } catch (error) {
+      console.error('Gmail API delivery failed', error instanceof Error ? error.message : 'unknown error')
+      return { sent: false, reason: 'Email could not be sent. Try again or contact the parish office.' }
+    }
+  }
   // Optional no-domain test alternative. Use an app password, NEVER the Google login password.
   // For production, prefer Resend with a parish-controlled and verified sender domain.
   if (process.env.EMAIL_TRANSPORT === 'gmail-smtp') {

@@ -70,7 +70,7 @@ export default function DashboardHome({ setPage,openArchive,manageWebsite }: { s
       const [statsResult, requestsResult, massesResult] = await Promise.allSettled([
         readDashboardJson<ArchiveStats>('/api/backend/api/archive/stats', 'Archive statistics'),
         readDashboardJson<{ requests: CertificateRequest[] }>('/api/backend/api/requests?page=1', 'Certificate requests'),
-        readDashboardJson<{ masses: MassRecord[] }>('/api/backend/api/masses', 'Mass recordings'),
+        readDashboardJson<{ masses: MassRecord[] }>('/api/backend/api/masses', 'Homily recordings'),
       ])
 
       setStats(statsResult.status === 'fulfilled' ? statsResult.value : null)
@@ -234,7 +234,7 @@ export default function DashboardHome({ setPage,openArchive,manageWebsite }: { s
         <div className="bg-white border border-gold/20 rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-display text-navy-mid text-[14px] font-semibold">
-              Masses Pending Transcription
+              Homilies Pending Transcription
             </h3>
 
             <button

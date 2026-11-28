@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Page } from './types'
 import type { Service } from '@/lib/siteContent'
 import WorkspaceShell from '@/components/WorkspaceShell'
@@ -13,6 +13,10 @@ import ProfilePage from './components/ProfilePage'
 
 export default function UserDashboard({services}:{services:Service[]}) {
   const [page,setPage]=useState<Page>('home')
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (['returned','cancelled'].includes(params.get('checkout') || '')) setPage('requests')
+  }, [])
   const navigate=(value:Page)=>{setPage(value)}
   return <WorkspaceShell title={USER_NAV.find(item=>item.id===page)?.label || 'Smart Parish'} role="Parishioner" navigation={<>
         <p className="px-3 py-2 text-sm font-bold uppercase text-slate-500">My parish services</p>

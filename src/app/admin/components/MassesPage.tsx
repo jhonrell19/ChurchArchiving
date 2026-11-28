@@ -25,7 +25,7 @@ type MassRecord = {
 
 export default function MassesPage({ initialTranscript }: { initialTranscript: number | null }) {
   const { toast, confirmAction } = useFeedback()
-  const [playing, setPlaying] = useState<{ title: string; filepath: string } | null>(null)
+  const [playing, setPlaying] = useState<MassRecord | null>(null)
   const [masses, setMasses] = useState<MassRecord[]>([])
   const [filterStatus, setFilter] = useState<'All' | MassStatus>('All')
   const [search, setSearch] = useState('')
@@ -57,11 +57,11 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
   const transcribeInWebsite = async (massId: number) => {
     const recording = cloudRecording[massId]
     if (!recording) {
-      toast.warning('Select a recorded Mass audio or video file.')
+      toast.warning('Select a recorded Homily audio or video file.')
       return
     }
     if (recording.size > 23 * 1024 * 1024) {
-      toast.warning('First release supports files smaller than 23 MB. Larger Masses need chunked processing.')
+      toast.warning('First release supports files smaller than 23 MB. Larger Homilies need chunked processing.')
       return
     }
     if (!cloudAuthorized[massId]) {
@@ -143,7 +143,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
     e.preventDefault()
 
     if (!form.title.trim()) {
-      toast.error('Mass title is required.')
+      toast.error('Homily title is required.')
       return
     }
 
@@ -176,7 +176,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
         return
       }
 
-      toast.success('Mass record added successfully.')
+      toast.success('Homily record added successfully.')
 
       setForm({
         title: '',
@@ -278,21 +278,27 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
     }
   }
 
-  const filtered = masses.filter(m =>
+  const [term, setTerm] = useState('')
+  const [date, setDate] = useState('')
+  useEffect(() => {
+    const timer = window.setTimeout(() => setTerm(search.trim().toLowerCase()), 250)
+    return () => window.clearTimeout(timer)
+  }, [search])
+  const filtered = masses.filter(m => (!date || m.date === date) &&
     (filterStatus === 'All' || m.status === filterStatus) &&
     (
-      m.title?.toLowerCase().includes(search.toLowerCase()) ||
-      m.priest?.toLowerCase().includes(search.toLowerCase()) ||
-      m.category?.toLowerCase().includes(search.toLowerCase())
+      m.title?.toLowerCase().includes(term) ||
+      m.priest?.toLowerCase().includes(term) ||
+      m.category?.toLowerCase().includes(term)
     )
   )
 
   return (
     <div>
-      {playing && <MassMediaPlayer title={playing.title} filepath={playing.filepath} onClose={() => setPlaying(null)} />}
+      {playing?.filepath && <MassMediaPlayer transcript={playing.transcriptText} summary={playing.summaryText} title={playing.title} filepath={playing.filepath} onClose={() => setPlaying(null)} />}
       <div className="flex items-center justify-between mb-1">
         <h2 className="font-display text-emerald-950 text-xl font-semibold">
-          Mass Recordings
+          Homily Recordings
         </h2>
 
         <button
@@ -300,12 +306,12 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
           className="flex items-center gap-1.5 font-display text-sm tracking-wider bg-emerald-900 text-white px-4 py-2 rounded-lg"
         >
           <i className="ti ti-upload text-base" />
-          {showForm ? 'Close Form' : 'Upload Mass'}
+          {showForm ? 'Close Form' : 'Upload Homily'}
         </button>
       </div>
 
       <p className="font-body text-slate-700 text-[14px] mb-6">
-        Manage Mass video links and locally reviewed transcription drafts.
+        Manage Homily video links and locally reviewed transcription drafts.
       </p>
 
       <p role="status" className="mb-4 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-950">
@@ -319,19 +325,19 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
           className="bg-white border border-emerald-200 rounded-xl p-5 mb-6"
         >
           <p className="font-display text-emerald-950 text-base font-semibold mb-4">
-            Add Mass Record
+            Add Homily Record
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
               <label className="block font-display text-sm tracking-wider text-emerald-950 mb-1">
-                Mass Title *
+                Homily Title *
               </label>
               <input
                 name="title"
                 value={form.title}
                 onChange={handleChange}
-                placeholder="Sunday High Mass"
+                placeholder="Sunday High Homily"
                 className={inputCls}
                 required
               />
@@ -360,9 +366,9 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
                 onChange={handleChange}
                 className={`${selectCls} w-full`}
               >
-                <option value="High Mass">High Mass</option>
-                <option value="Morning Mass">Morning Mass</option>
-                <option value="Special Mass">Special Mass</option>
+                <option value="High Mass">High Homily</option>
+                <option value="Morning Mass">Morning Homily</option>
+                <option value="Special Mass">Special Homily</option>
                 <option value="Bible Study">Bible Study</option>
                 <option value="Prayer Service">Prayer Service</option>
               </select>
@@ -370,7 +376,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
 
             <div>
               <label className="block font-display text-sm tracking-wider text-emerald-950 mb-1">
-                Mass Date
+                Homily Date
               </label>
               <input
                 type="date"
@@ -412,7 +418,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
 
             <div className="md:col-span-3">
               <label htmlFor="mass-video-url" className="mb-1 block text-sm font-semibold text-emerald-950">
-                YouTube Mass video link (recommended for Render Free)
+                YouTube Homily video link (recommended for Render Free)
               </label>
               <input id="mass-video-url" type="url" value={videoUrl}
                 onChange={event => setVideoUrl(event.target.value)}
@@ -437,7 +443,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
 
           <div className="flex gap-3 mt-4">
             <button className="font-display text-sm tracking-wider bg-emerald-900 text-white px-4 py-2 rounded-lg">
-              Save Mass Record
+              Save Homily Record
             </button>
 
             <button
@@ -471,6 +477,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
           </button>
         ))}
 
+        <label className="block">Recording date<input type="date" className={inputCls} value={date} onChange={e => setDate(e.target.value)} /></label>
         <div className="relative ml-auto">
           <i className="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-600 text-[14px]" />
           <input
@@ -488,7 +495,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
           <thead>
             <tr className="border-b border-emerald-100 bg-emerald-50">
               <th className="font-display text-xs tracking-widest uppercase text-slate-600 text-left px-5 py-3">
-                Mass Title
+                Homily Title
               </th>
               <th className="font-display text-xs tracking-widest uppercase text-slate-600 text-left px-5 py-3 hidden md:table-cell">
                 Date
@@ -526,7 +533,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
                       {m.title}
                     </p>
                     <p className="font-body text-slate-600 text-sm">
-                      {m.category || 'No category'} · {m.duration || 'No duration'}
+                      {m.category?.replace(/\bMass\b/g,'Homily') || 'No category'} · {m.duration || 'No duration'}
                     </p>
                   </td>
 
@@ -563,7 +570,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
                       </button>
 
                       {m.filepath && (
-                        <button type="button" onClick={() => setPlaying({ title: m.title, filepath: m.filepath! })}
+                        <button type="button" onClick={() => setPlaying(m)}
                           aria-label={`Play ${m.title}`}
                           className="p-1.5 rounded-lg border border-emerald-200 text-slate-700"
                         >
@@ -589,7 +596,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
                             Tagalog and English are transcribed in their recognized spoken language; review errors before publishing.
                           </p>
                           <label className="block text-sm font-semibold text-slate-800">
-                            Mass recording (up to 23 MB)
+                            Homily recording (up to 23 MB)
                             <input
                               type="file"
                               accept=".mp3,.m4a,.wav,.mp4,.flac,.ogg,.webm,.mpeg,.mpga,audio/*,video/mp4"
@@ -616,7 +623,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
                               disabled={cloudBusy !== null || !cloudRecording[m.id] || !cloudAuthorized[m.id]}
                               onClick={() => void transcribeInWebsite(m.id)}
                               className="min-h-11 rounded-lg bg-emerald-900 px-4 py-2 font-semibold text-white disabled:opacity-50">
-                              {cloudBusy === m.id ? 'Transcribing in the cloud…' : 'Transcribe Mass in Website'}
+                              {cloudBusy === m.id ? 'Transcribing in the cloud…' : 'Transcribe Homily in Website'}
                             </button>
                             <span className="text-xs text-slate-600">
                               First release: keep this page open while processing. Long recordings need the next queued/chunked upgrade.

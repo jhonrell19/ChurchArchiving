@@ -18,8 +18,8 @@ assert.doesNotMatch(account, /motherFullName|fatherFullName|Your mother|Your fat
   'Requester account summary must never ask for parents')
 
 const record = userPage.slice(
-  userPage.indexOf('Name on Church Record'),
-  userPage.indexOf('Notes', userPage.indexOf('Name on Church Record')),
+  userPage.indexOf('Full name on the church record'),
+  userPage.indexOf('Notes', userPage.indexOf('Full name on the church record')),
 )
 assert.match(record, /\{needsParentNames && \(/)
 assert.match(record, /Mother’s Full Name \(including maiden name\)/)

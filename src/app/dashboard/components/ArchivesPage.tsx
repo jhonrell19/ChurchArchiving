@@ -20,7 +20,7 @@ type MassRecord = {
 }
 
 export default function ArchivesPage() {
-  const [playing, setPlaying] = useState<{ title: string; filepath: string } | null>(null)
+  const [playing, setPlaying] = useState<MassRecord | null>(null)
   const [search, setSearch] = useState('')
   const [priest, setPriest] = useState('All Priests')
   const [category, setCategory] = useState('All Categories')
@@ -34,13 +34,13 @@ export default function ArchivesPage() {
       const res = await fetch('/api/backend/api/masses')
 
       if (!res.ok) {
-        throw new Error('Failed to load mass archives')
+        throw new Error('Failed to load homily recordings')
       }
 
       const data = await res.json()
       setMasses(data.masses || [])
     } catch (err) {
-      console.warn('Mass archive load error:', err)
+      console.warn('Homily archive load error:', err)
       setMasses([])
     } finally {
       setLoading(false)
@@ -75,28 +75,37 @@ export default function ArchivesPage() {
     return ['All Categories', ...uniqueCategories]
   }, [masses])
 
-  const filtered = masses.filter(m =>
+  const [status,setStatus] = useState('')
+  const [term, setTerm] = useState('')
+  const [date, setDate] = useState('')
+  useEffect(() => {
+    const timer = window.setTimeout(() => setTerm(search.trim().toLowerCase()), 250)
+    return () => window.clearTimeout(timer)
+  }, [search])
+  const filtered = masses.filter(m => (!date || m.date === date) && (!status || m.status === status) &&
     (priest === 'All Priests' || m.priest === priest) &&
     (category === 'All Categories' || m.category === category) &&
     (
-      m.title?.toLowerCase().includes(search.toLowerCase()) ||
-      m.priest?.toLowerCase().includes(search.toLowerCase()) ||
-      m.category?.toLowerCase().includes(search.toLowerCase())
+      m.title?.toLowerCase().includes(term) ||
+      m.priest?.toLowerCase().includes(term) ||
+      m.category?.toLowerCase().includes(term)
     )
   )
 
   return (
     <div>
-      {playing && <MassMediaPlayer title={playing.title} filepath={playing.filepath} onClose={() => setPlaying(null)} />}
+      {playing?.filepath && <MassMediaPlayer transcript={playing.transcriptText} summary={playing.summaryText} title={playing.title} filepath={playing.filepath} onClose={() => setPlaying(null)} />}
       <h2 className="font-display text-navy-mid text-xl font-semibold mb-1">
-        Mass Archives
+        Homily Archives
       </h2>
 
       <p className="font-body text-[#6b8caa] text-[14px] mb-6">
-        Browse and watch all archived masses and church services uploaded by the parish admin.
+        Browse and watch all archived homilies and church services uploaded by the parish admin.
       </p>
 
       <div className="flex flex-col md:flex-row gap-3 mb-6">
+        <label>Status<select className={inputCls} value={status} onChange={e=>setStatus(e.target.value)}><option value="">All statuses</option>{[...new Set(masses.map(m=>m.status))].map(value=><option key={value}>{value}</option>)}</select></label>
+        <label className="block">Recording date<input type="date" className={inputCls} value={date} onChange={e => setDate(e.target.value)} /></label>
         <div className="relative flex-1">
           <i
             className="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-[#9ab0c4] text-[16px]"
@@ -136,17 +145,17 @@ export default function ArchivesPage() {
       {loading ? (
         <div className="bg-white border border-gold/20 rounded-xl p-12 text-center">
           <p className="font-body text-[#9ab0c4] text-[14px]">
-            Loading mass archives...
+            Loading homily recordings...
           </p>
         </div>
       ) : filtered.length === 0 ? (
         <div className="bg-white border border-gold/20 rounded-xl p-12 text-center">
           <i className="ti ti-video-off text-gold/30 text-5xl mb-3 block" />
           <p className="font-display text-navy-mid text-[14px] font-semibold mb-1">
-            No mass archives found
+            No homily recordings found
           </p>
           <p className="font-body text-[#9ab0c4] text-[13px]">
-            Mass recordings will appear here after the admin uploads them.
+            Homily recordings will appear here after the admin uploads them.
           </p>
         </div>
       ) : (
@@ -157,7 +166,7 @@ export default function ArchivesPage() {
               className="bg-white border border-gold/20 rounded-xl overflow-hidden"
             >
               <div className="h-32 bg-navy flex items-center justify-center relative">
-                {m.filepath ? <button type="button" aria-label={`Play ${m.title}`} onClick={() => setPlaying({ title: m.title, filepath: m.filepath! })} className="text-gold"><i className="ti ti-player-play text-3xl" /></button> : <i className="ti ti-video-off text-gold text-3xl" />}
+                {m.filepath ? <button type="button" aria-label={`Play ${m.title}`} onClick={() => setPlaying(m)} className="text-gold"><i className="ti ti-player-play text-3xl" /></button> : <i className="ti ti-video-off text-gold text-3xl" />}
 
                 {m.hasTranscript && (
                   <span className="absolute top-3 right-3 font-display text-[10px] tracking-wider bg-gold text-navy px-2 py-1 rounded-full">
@@ -181,7 +190,7 @@ export default function ArchivesPage() {
 
                 <div className="flex items-center justify-between gap-2 mb-3">
                   <span className="font-display text-[10px] tracking-wider border border-gold/25 text-gold bg-gold/10 px-2 py-0.5 rounded-full">
-                    {m.category || 'General'}
+                    {m.category?.replace(/\bMass\b/g,'Homily') || 'General'}
                   </span>
 
                   <span className="font-body text-[11px] text-[#9ab0c4]">
@@ -191,7 +200,7 @@ export default function ArchivesPage() {
 
                 <div className="flex gap-2 flex-wrap">
                   {m.filepath ? (
-                    <button type="button" onClick={() => setPlaying({ title: m.title, filepath: m.filepath! })}
+                    <button type="button" onClick={() => setPlaying(m)}
                       className="inline-flex items-center gap-1.5 font-display text-[10px] tracking-wider text-gold border border-gold/30 px-3 py-1.5 rounded-lg bg-gold/5"
                     >
                       <i className="ti ti-player-play text-[13px]" />

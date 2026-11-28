@@ -76,7 +76,7 @@ export default function TranscriptionsPage({ openMass }: { openMass: (id: number
             </p>
 
             <p className="font-body text-[#9ab0c4] text-[13px]">
-              <button className="underline" onClick={() => openMass(null)}>Open Mass Recordings to prepare a transcript</button>
+              <button className="underline" onClick={() => openMass(null)}>Open Homily Recordings to prepare a transcript</button>
             </p>
           </div>
         ) : (

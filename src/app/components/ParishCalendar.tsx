@@ -22,7 +22,7 @@ function noticeEnd(end:string,today:string) {
 }
 
 export default function ParishCalendar({notices:provided,services:schedule=SCHEDULE}:{notices?:Notice[],services?:typeof SCHEDULE}) {
-  const weekly=dayNames.map(day=>schedule.filter(s=>s.day.startsWith(day)).map(s=>s.time+' · '+s.tag))
+  const weekly=dayNames.map(day=>schedule.filter(s=>s.day.startsWith(day)).map(s=>s.time+' · '+s.tag.replace(/\bMass\b/g,'Homily')))
   const [today,setToday] = useState('')
   const [selected,setSelected] = useState('')
   const [remote,setRemote] = useState<Notice[]>([])

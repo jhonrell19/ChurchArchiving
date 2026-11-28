@@ -42,20 +42,15 @@ export default async function ServicesPage() {
           </div>
           <div className="max-w-2xl mx-auto border border-gold/20 rounded-xl overflow-hidden">
             {!services.length && <p className="p-5 text-white">Contact the parish office for current service times.</p>}
-            {services.map(({ day, time, tag }, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between px-7 py-5
-                  border-b border-gold/10 last:border-b-0"
-              >
-                <span className="font-display text-gold text-sm tracking-wide w-32">{day}</span>
-                <span className="font-body text-txt-md text-[15px] flex-1 text-center">{time}</span>
-                <span className="font-display text-[10px] tracking-widest uppercase
-                  bg-gold/15 text-gold border border-gold/30 px-4 py-1 rounded-full">
-                  {tag}
-                </span>
-              </div>
-            ))}
+            {services.length > 0 && <table className="w-full table-fixed text-left text-base">
+              <caption className="sr-only">Weekly parish services</caption>
+              <thead><tr>{['Day', 'Time', 'Service'].map(label => <th key={label} scope="col" className="p-2 sm:p-4">{label}</th>)}</tr></thead>
+              <tbody>{services.map(({ day, time, tag }, i) => <tr key={i} className="border-t border-gold/20">
+                <th scope="row" className="break-words p-2 align-top sm:p-4">{day}</th>
+                <td className="break-words p-2 align-top sm:p-4">{time}</td>
+                <td className="break-words p-2 align-top sm:p-4">{tag.replace(/\bMass\b/g,'Homily')}</td>
+              </tr>)}</tbody>
+            </table>}
           </div>
         </div>
       </section>

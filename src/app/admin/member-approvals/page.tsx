@@ -57,7 +57,7 @@ export default function MemberApprovalsPage() {
     } finally { setBusy(null) }
   }
 
-  return <main className="office-page">
+  return <main className="office-page administration-photo">
     <div className="office-inner">
       <OfficeHeading title="Parish membership approvals"/>
       <p className="mb-4">Only accounts with a verified email can be approved or rejected.</p>

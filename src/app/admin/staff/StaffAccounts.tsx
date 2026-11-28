@@ -75,7 +75,7 @@ export default function StaffAccounts() {
     } finally { setBusy(false) }
   }
 
-  return <main className="office-page">
+  return <main className="office-page administration-photo">
     <div className="office-inner space-y-6">
       <OfficeHeading title="Church Staff Accounts"/>
       <p className="text-base text-slate-600">Assign a login email and password. Each staff member pairs their own authenticator when they first sign in.</p>

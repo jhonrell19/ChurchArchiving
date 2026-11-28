@@ -14,8 +14,8 @@ export default async function ContactPage() {
         <h2>Office hours</h2><p>{hours}</p>
         {email && <><h2>Email the office</h2><a href={'mailto:'+email}>{email}</a></>}
       </section>
-      <section><h2>Sunday Mass</h2>
-        {sunday.length?sunday.map((s,i)=><p key={i}>{s.time} · {s.tag}</p>):<p>Contact the office for current Mass times.</p>}
+      <section><h2>Sunday Homily</h2>
+        {sunday.length?sunday.map((s,i)=><p key={i}>{s.time} · {s.tag}</p>):<p>Contact the office for current Homily times.</p>}
         <Link href="/#parish-calendar">View parish calendar →</Link>
         <h2>Certificate requests</h2><Link href="/login">Sign in to request a certificate →</Link>
       </section>

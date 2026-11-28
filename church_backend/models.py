@@ -304,3 +304,20 @@ class BurialRecord(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     slot = db.relationship("CemeterySlot", backref=db.backref("burials", lazy=True))
+
+
+class CertificateIdentity(db.Model):
+    request_id = db.Column(db.Integer, db.ForeignKey("certificate_request.id"), primary_key=True)
+    fields = db.Column(db.JSON, nullable=False)
+    proof = db.Column(db.LargeBinary)
+    proof_type = db.Column(db.Text)
+    verified_email = db.Column(db.Text, nullable=False)
+    verified_at = db.Column(db.DateTime(timezone=True), server_default=db.func.now(), nullable=False)
+
+
+class CertificateStatusHistory(db.Model):
+    id = db.Column(db.BigInteger, primary_key=True)
+    request_id = db.Column(db.Integer, db.ForeignKey("certificate_request.id"), nullable=False)
+    status = db.Column(db.Text, nullable=False)
+    changed_at = db.Column(db.DateTime(timezone=True), server_default=db.func.now(), nullable=False)
+    actor = db.Column(db.Text)

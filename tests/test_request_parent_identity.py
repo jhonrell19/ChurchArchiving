@@ -3,10 +3,12 @@ import os
 import unittest
 import unicodedata
 from unittest.mock import patch
+from types import SimpleNamespace
+from church_backend.certificate_identity import validate_identity
 
 from flask import Flask, g, request
 from sqlalchemy import func, or_
-from church_backend.models import CertificateRequest, CemeterySlot, AuditLog, db
+from church_backend.models import CertificateIdentity, CertificateStatusHistory, CertificateRequest, CemeterySlot, AuditLog, db
 from test_phase8_certificate_access import load_function
 
 
@@ -19,7 +21,14 @@ class RequestIdentityTests(unittest.TestCase):
         ctx.push()
         self.addCleanup(ctx.pop)
         db.create_all()
-        scope = dict(request=request, g=g, db=db, func=func, or_=or_,
+        # Exercise request persistence and search here; the OTP service is isolated.
+        imports = patch.dict("sys.modules", {
+            "certificate_identity": SimpleNamespace(validate_identity=validate_identity),
+            "request_codes": SimpleNamespace(consume=lambda uid,email,code: code == '235781'),
+        })
+        imports.start()
+        self.addCleanup(imports.stop)
+        scope = dict(CertificateIdentity=CertificateIdentity, CertificateStatusHistory=CertificateStatusHistory, request=request, g=g, db=db, func=func, or_=or_,
                      os=os, unicodedata=unicodedata, CertificateRequest=CertificateRequest,
                      AuditLog=AuditLog, CemeterySlot=CemeterySlot,
                      MAIN_ADMIN_TYPES=['baptismal'], BURIAL_ADMIN_TYPES=['burial', 'land_agreement', 'ownership'],
@@ -27,6 +36,7 @@ class RequestIdentityTests(unittest.TestCase):
                      current_user_id=lambda: g.user_id, relative_claims_enabled=lambda: False,
                      allowed_types_for_current_role=lambda: ['burial'] if g.user_role == 'BURIAL_ADMIN' else ['baptismal'],
                      get_certificate_fees=lambda: {'baptismal': 100, 'ownership': 0, 'land_agreement': 0, 'urgent': 0})
+        load_function('request_metadata', scope)
         load_function('serialize_request', scope)
         app.add_url_rule('/requests', methods=['GET'], view_func=load_function('api_get_requests', scope))
         app.add_url_rule('/requests', methods=['POST'], view_func=load_function('api_create_request', scope))
@@ -36,12 +46,15 @@ class RequestIdentityTests(unittest.TestCase):
 
         @app.before_request
         def identity():
+            g.user_email = 'requester@example.invalid'
             g.user_role, g.user_id, g.user_name = self.role, self.uid, 'Ana Sample'
 
     @patch.dict(os.environ, PARISH_PORTAL_SETTINGS='disabled')
     def test_required_fields_matching_and_legacy(self):
         payload = dict(personName='Ana Sample', purpose='Personal copy', sacramentType='baptismal',
                        motherFullName='Ana María Dela Cruz', fatherFullName="Emil O’Reyes")
+        payload.update(identity={'birthDate':'1990-04-12','relationship':'Self'}, verificationCode='235781')
+        self.assertEqual(self.client.post('/requests', json={**payload,'verificationCode':'000000'}).status_code,400)
         for key in ['motherFullName', 'fatherFullName']:
             for invalid in [None, '  ', '123', 'X' * 151]:
                 self.assertEqual(self.client.post('/requests', json={**payload, key: invalid}).status_code, 400)

@@ -30,7 +30,7 @@ export default function ReportView({ officeHome, burial, supervisor }: { officeH
   const chartTitle = byPayment ? 'Collections by certificate (PHP)' : 'Requests by certificate'
   const categories = new Map<string, number>()
   for (const row of rows) categories.set(row.type, (categories.get(row.type) || 0) + (byPayment ? row.collected : row.requests))
-  return <main className="office-page parish-workspace">
+  return <main className={'office-page parish-workspace' + (officeHome==='/admin'?' administration-photo':'')}>
     <OfficeHeading title="Certificate activity" home={officeHome}/>
     <p>Choose the request date or the recorded payment date. Payment totals include cash and verified live PayMongo payments. Entries without a payment date are excluded from the payment-date view.</p>
     <form className="parish-filters" onSubmit={e => {

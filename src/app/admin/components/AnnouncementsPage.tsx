@@ -188,7 +188,7 @@ export default function AnnouncementsPage(){
         <form onSubmit={save} className="grid gap-4">
           <label className="grid gap-1 font-semibold" htmlFor="notice-title">Title *
             <input id="notice-title" className={fieldClass} maxLength={180} required value={form.title}
-              onChange={e=>change('title',e.target.value)} placeholder="e.g. Sunday Mass schedule"/>
+              onChange={e=>change('title',e.target.value)} placeholder="e.g. Sunday Homily schedule"/>
           </label>
           <label className="grid gap-1 font-semibold" htmlFor="notice-body">Announcement details *
             <textarea id="notice-body" className={fieldClass} rows={4} maxLength={2000} required value={form.body}

@@ -30,7 +30,7 @@ export default function AnnouncementsPage({services}:{services:Service[]}){
   return <div className="max-w-6xl space-y-6 text-slate-900">
     <div className="role-banner">
       <p className="portal-eyebrow">Parish community</p>
-      <h2>Mass schedules and announcements</h2>
+      <h2>Homily schedules and announcements</h2>
       <p>View upcoming services and official notices from the parish. Expired notices are removed automatically.</p>
     </div>
     <ParishCalendar services={services} notices={active.map(n=>({

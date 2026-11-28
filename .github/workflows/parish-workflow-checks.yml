@@ -25,6 +25,14 @@ jobs:
           python-version: '3.12'
       - run: python -m compileall -q church_backend
       - run: PYTHONPATH=church_backend python -m unittest discover -s church_backend/tests -p test_certificate_identity_fields.py
+      - name: Apply migration twice and check status history on a disposable PostgreSQL instance
+        run: |
+          sudo systemctl start postgresql
+          sudo -u postgres createdb parish_workflow_ci
+          sudo -u postgres psql -v ON_ERROR_STOP=1 parish_workflow_ci -c 'CREATE SCHEMA parish_private; CREATE ROLE anon; CREATE ROLE authenticated; CREATE TABLE parish_private.certificate_request(id integer PRIMARY KEY, status text);'
+          for pass in 1 2; do sudo -u postgres psql -v ON_ERROR_STOP=1 parish_workflow_ci < deploy/migrations/20261128_certificate_workflow.sql; done
+          sudo -u postgres psql -v ON_ERROR_STOP=1 parish_workflow_ci -c "INSERT INTO parish_private.certificate_request VALUES (1,'Pending'); UPDATE parish_private.certificate_request SET status='Approved' WHERE id=1;"
+          test "$(sudo -u postgres psql -At parish_workflow_ci -c 'SELECT count(*) FROM parish_private.certificate_status_history')" = 2
       - run: npm ci
       - run: npx prisma generate
       - run: node tests/test_phase8_roles.cjs

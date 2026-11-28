@@ -456,12 +456,14 @@ export default function RequestsPage() {
       for (const name of [formData.motherFullName, formData.fatherFullName]) {
         const value = name.trim()
         if (value.length < 2 || !/\p{L}/u.test(value) || !/^[\p{L}\p{M} .'’-]+$/u.test(value)) {
+          setIdentityMessage('Enter valid full names for both parents.')
           toast.warning('Enter both parents’ full names of the person on the record using letters, spaces, periods, hyphens or apostrophes.')
           return
         }
       }
     }
     if (!formData.personName.trim()) {
+      setIdentityMessage('Enter the full name on the record.')
       toast.warning('Please enter the name on record.')
       return
     }

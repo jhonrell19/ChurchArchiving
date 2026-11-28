@@ -589,8 +589,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
                         </p>
                       )}
 
-                      {item.status !== 'Released' && item.status !== 'Rejected' && (
-                        <>
+                      <>
                           <div className="flex items-center gap-2 flex-wrap">
                             <input
                               type="text"

@@ -5591,6 +5591,16 @@ def certificate_checkout(request_id):
         return {"error": "Unable to start PayMongo checkout; contact staff."}, 502
 
 
+@app.route("/api/requests/cash-capability", methods=["GET"])
+def api_cash_receipt_capability():
+    """Read-only Staff capability check. No receipt or database state is changed."""
+    denied = require_roles("STAFF", "BURIAL_ADMIN")
+    if denied:
+        return denied
+    enabled = os.getenv("PARISH_CASH_RECEIPTS") == "enabled"
+    return {"enabled": enabled}, 200
+
+
 @app.route("/api/requests/<int:request_id>/cash-receipt", methods=["POST"])
 def api_record_cash_receipt(request_id):
     """Opt-in, office-scoped, append-only full cash receipts and reversals.

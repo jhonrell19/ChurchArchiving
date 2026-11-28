@@ -108,7 +108,7 @@ if (
     return m === 'GET' && ['STAFF', 'BURIAL_ADMIN'].includes(role)
   }
 
-  if (/^api\/requests\/\d+\/cash-receipt$/.test(path)) {
+  if (/^api\/requests\/\d+\/(cash-receipt|reconcile-test-payment)$/.test(path)) {
     return m === 'POST' && ['STAFF', 'BURIAL_ADMIN'].includes(role)
   }
 
@@ -310,7 +310,7 @@ async function forward(request: NextRequest, context: { params: Promise<{ path: 
         (path === 'api/requests' && method === 'POST') ? 'submitted' :
         (/^api\/requests\/\d+\/status$/.test(path) && method === 'PATCH') ? 'status' :
         (/^api\/requests\/\d+\/release-document$/.test(path) && method === 'POST') ? 'ready' :
-        (/^api\/requests\/\d+\/cash-receipt$/.test(path) && method === 'POST') ? 'payment' :
+        (/^api\/requests\/\d+\/(cash-receipt|reconcile-test-payment)$/.test(path) && method === 'POST') ? 'payment' :
         (/^api\/requests\/\d+\/cancel$/.test(path) && method === 'POST') ? 'cancelled' :
         null
       if (eventAction) {

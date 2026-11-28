@@ -22,6 +22,7 @@ class CheckoutResumeTest(unittest.TestCase):
         self.prior = dict(status='active', livemode=False, checkout_url=self.url, payments=[])
         self.provider.return_value = {'data': {'attributes': self.prior}}
         scope = dict(require_roles=lambda *_: None, current_user_id=lambda: 7, db=self.db,
+                     request=SimpleNamespace(get_json=lambda silent=True: {'expectedMode': 'test'}),
                      CertificateRequest=object, _paymongo_mode=lambda: ('test', 'fixture'),
                      _paymongo_api=self.provider, os=os)
         exec(compile(ast.Module([function], []), str(path), 'exec'), scope)

@@ -2615,7 +2615,8 @@ def api_create_request():
             return {"error": "Choose a valid record date from the calendar."}, 400
         record_date_hint = raw_record_date_hint.strip() or None
         if record_date_hint:
-            from datetime import date
+            from datetime import date, datetime
+            from zoneinfo import ZoneInfo
             try:
                 parsed_hint = date.fromisoformat(record_date_hint)
                 if (parsed_hint.isoformat() != record_date_hint or

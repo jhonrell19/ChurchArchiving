@@ -247,7 +247,8 @@ export default function RequestsPage() {
   const [selectedSlotId, setSelectedSlotId] = useState<number | null>(null)
   const [parishFees, setParishFees] = useState(INITIAL_FEES)
   const [pricingReady, setPricingReady] = useState(false)
-  const [paymentMode, setPaymentMode] = useState('test')
+  const [paymentMode, setPaymentMode] = useState<'test' | 'live' | 'unavailable'>('unavailable')
+  const [checkoutConfigured, setCheckoutConfigured] = useState(false)
   const [serviceFees, setServiceFees] = useState<Record<string, number>>({})
   const [cemeteryFees, setCemeteryFees] = useState<Record<string, number>>({})
   useEffect(() => {
@@ -264,12 +265,18 @@ export default function RequestsPage() {
           'Certificate of Ownership': Number(f.ownership) || 0,
           'Land Agreement': Number(f.land_agreement) || 0,
         })
-        setPaymentMode(data.onlinePaymentMode === 'live' ? 'live' : 'test')
+        setPaymentMode(data.onlinePaymentMode === 'live' ? 'live'
+          : data.onlinePaymentMode === 'test' ? 'test' : 'unavailable')
+        setCheckoutConfigured(data.onlineCheckoutConfigured === true)
         setServiceFees(data.serviceFees || {})
         setCemeteryFees(data.cemeteryFees || {})
         setPricingReady(true)
       })
-      .catch(() => { if (active) setPricingReady(false) })
+      .catch(() => { if (active) {
+        setPricingReady(false)
+        setCheckoutConfigured(false)
+        setPaymentMode('unavailable')
+      } })
     return () => { active = false }
   }, [])
 
@@ -565,9 +572,16 @@ if (
     }
   }
 
-  const payMongoCheckout = async (requestId: number) => {
+  const payMongoCheckout = async (requestId: number, expectedMode: 'test' | 'live') => {
+    if (expectedMode === 'test' && !(await confirmAction(
+      'Start a PayMongo SANDBOX checkout? This is a simulated transaction and collects NO real money. A successful test payment cannot release an official certificate.'
+    ))) return
     try {
-      const res = await fetch(`/api/backend/api/requests/${requestId}/paymongo-checkout`, { method: 'POST' })
+      const res = await fetch(`/api/backend/api/requests/${requestId}/paymongo-checkout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expectedMode }),
+      })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) { toast.error(data.error || 'Checkout unavailable.'); return }
       if (!data.checkoutUrl?.startsWith('https://checkout.paymongo.com/')) {
@@ -773,7 +787,11 @@ if (
                 </div>
 
                 <p className="font-body text-[11px] text-emerald-700 mt-2">
-                  {paymentMode === 'live' ? 'Final payment is collected securely through the parish PayMongo checkout after approval.' : 'Test checkout mode. No real money is charged; prices must be approved by the parish.'}
+                  {paymentMode === 'live' && checkoutConfigured
+                    ? 'Live PayMongo checkout is available only for approved requests with confirmed fees.'
+                    : paymentMode === 'test' && checkoutConfigured
+                      ? 'Sandbox demonstration is available for approved requests. NO real money is collected and official certificates cannot be released using a test payment.'
+                      : 'Online checkout is not configured. Contact the parish office for approved payment arrangements.'}
                 </p>
               </div>
 
@@ -1004,12 +1022,14 @@ if (
                   req.paymentStatus !== 'Paid' &&
                   req.totalFee > 0 &&
                   (req.status === 'Approved' || req.status === 'Ready')
-                const hasUnresolvedCheckout = Boolean(req.paymentReference?.startsWith('cs_')) &&
+                const hasUnresolvedCheckout = (Boolean(req.paymentReference?.startsWith('cs_')) &&
+                  req.paymentMethod !== 'PAYMONGO_TEST_RECONCILED') ||
+                  /^PAYMONGO_(TEST|LIVE)_PENDING$/.test(req.paymentMethod || '')
+                const canStartCheckout = eligibleForPayment && pricingReady &&
+                  checkoutConfigured && !hasUnresolvedCheckout
+                const canPayOnline = canStartCheckout && paymentMode === 'live'
+                const canSimulateTest = canStartCheckout && paymentMode === 'test' &&
                   req.paymentMethod !== 'PAYMONGO_TEST_RECONCILED'
-                // Never offer a real-money-looking checkout when only PayMongo
-                // sandbox is configured or the live pricing mode is unavailable.
-                const canPayOnline = eligibleForPayment && pricingReady &&
-                  paymentMode === 'live' && !hasUnresolvedCheckout
 
                 const canDownload =
                   Boolean(req.generatedFile) &&
@@ -1098,7 +1118,9 @@ if (
                               ? 'A previous checkout is awaiting verification. Do not attempt another payment; contact the parish office.'
                               : canPayOnline
                                 ? 'Your request is approved. Verified PayMongo live checkout is available.'
-                                : 'Your request is approved. Online payment is not available; coordinate actual payment with the parish office.'}
+                                : canSimulateTest
+                                  ? 'Sandbox testing is available. This simulates a payment only; NO real money is received and official release remains blocked.'
+                                  : 'Your request is approved. Online payment is not available; coordinate actual payment with the parish office.'}
                           </p>
                         )}
 
@@ -1114,7 +1136,9 @@ if (
                               ? 'Your document is prepared, but an earlier checkout is still unverified. Do not retry payment; contact parish staff.'
                               : canPayOnline
                                 ? 'Your document is prepared. Complete the approved live payment before release.'
-                                : 'Your document is prepared. Pay the authorized parish cashier in person and obtain an official receipt before release. Online payment is unavailable.'}
+                                : canSimulateTest
+                                  ? 'Document prepared. You may simulate a sandbox checkout, but TEST Paid is not a real payment and will NOT authorize certificate release.'
+                                  : 'Your document is prepared. Pay the authorized parish cashier in person and obtain an official receipt before release. Online payment is unavailable.'}
                           </p>
                         )}
 
@@ -1168,10 +1192,22 @@ if (
                             Hide From My History
                           </button>
                         )}
+                        {canSimulateTest && (
+                          <button
+                            type="button"
+                            onClick={() => void payMongoCheckout(req.id, 'test')}
+                            className="inline-flex min-h-11 items-center gap-2 rounded-lg border-2 border-amber-600 bg-amber-50 px-4 py-2 font-display text-[12px] font-semibold text-amber-950 hover:bg-amber-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700"
+                            aria-label={`Simulate test payment for request IFI-REQ-${String(req.id).padStart(4, '0')}; no real money`}
+                          >
+                            <i className="ti ti-flask text-[16px]" aria-hidden="true" />
+                            Simulate Test Payment {formatPeso(req.totalFee)} — No real money
+                          </button>
+                        )}
+
                         {canPayOnline && (
                           <button
                             type="button"
-                            onClick={() => void payMongoCheckout(req.id)}
+                            onClick={() => void payMongoCheckout(req.id, 'live')}
                             className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-display text-[11px] tracking-wider px-4 py-2 rounded-lg transition-colors"
                           >
                             <i className="ti ti-credit-card text-[14px]" />

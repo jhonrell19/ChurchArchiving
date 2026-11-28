@@ -815,7 +815,7 @@ if (
                         field.kind === 'name' ? sanitizePersonName(e.target.value)
                         : ['page', 'line'].includes(field.key) ? digitsOnly(e.target.value, 12)
                         : e.target.value,
-                    }))}/>}</label>
+                    }))}/>
                 </label>)}
                 <label><input type="checkbox" checked={unredacted} onChange={e=>{setUnredacted(e.target.checked);setProof(null)}}/> Request an unredacted copy</label>
                 {unredacted && <label>Valid ID or authorization document (up to 3 MB)<input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={e=>setProof(e.target.files?.[0]||null)}/></label>}

@@ -5638,7 +5638,7 @@ def api_reconcile_test_payment(request_id):
             user=getattr(g, "user_email", None) or str(actor),
             action=(f"Reconciled TEST-ONLY payment request #{request_id}; "
                     f"previous method={previous_method}; checkout={previous_reference}; "
-                    f"reason={reason[:250]}; earlier remarks={previous_remarks[:100]}"),
+                    f"reason={reason[:200]}; earlier remarks={previous_remarks[:60]}")[:490],
             document_id=cert.matched_document_id))
         db.session.commit()
         return {

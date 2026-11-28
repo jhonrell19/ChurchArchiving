@@ -81,6 +81,7 @@ export async function POST(req: Request) {
         { message: 'Complete authenticator verification.', mfaRequired: true },
         { headers: { 'Cache-Control': 'no-store' } }
       )
+      response.cookies.delete(SESSION_COOKIE)
       response.cookies.set(MFA_PENDING_COOKIE, pendingToken, {
         httpOnly: true, secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict', path: '/', maxAge: MFA_PENDING_MAX_AGE,
@@ -117,6 +118,7 @@ export async function POST(req: Request) {
       }
     )
 
+    response.cookies.delete(MFA_PENDING_COOKIE)
     response.cookies.set(SESSION_COOKIE, token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',

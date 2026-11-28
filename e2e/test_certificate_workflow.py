@@ -6,6 +6,8 @@ Required env:
  PARISH_E2E_DSN=<TLS verified psycopg DSN of clone>
  PARISH_E2E_BASE_URL=http://127.0.0.1:3000
  PARISH_E2E_ADMIN_ID=<synthetic, email-verified ADMIN in clone>
+ PARISH_E2E_STAFF_ID=<synthetic verified STAFF in the same clone>
+ FLASK_INTERNAL_KEY=<disposable clone key>
  PARISH_E2E_CONFIRM_APP_USES_CLONE=YES
 
 The test substitutes one email token in its disposable clone because it cannot
@@ -15,6 +17,7 @@ It uses opt-in synthetic CASH receipts; the cash-ledger migration/flag must
 be active on the clone, not on the actual parish deployment.
 """
 import hashlib
+import hmac
 import io
 import os
 from pathlib import Path
@@ -47,10 +50,10 @@ def env():
     return base, dsn, int(os.environ["PARISH_E2E_ADMIN_ID"])
 
 
-def fictional_png():
+def fictional_png(label='FICTIONAL TEST ID - NOT A REAL RECORD'):
     from PIL import Image, ImageDraw
     image = Image.new("RGB", (450, 180), "white")
-    ImageDraw.Draw(image).text((18, 55), "FICTIONAL TEST ID - NOT A REAL RECORD", fill="black")
+    ImageDraw.Draw(image).text((18, 55), label, fill="black")
     buffer = io.BytesIO()
     image.save(buffer, "PNG")
     return buffer.getvalue()
@@ -71,13 +74,13 @@ def checked(response, code):
     return response.json() if "json" in response.headers.get("content-type", "") else response.content
 
 
-def session_for_admin(base, dsn, admin_id):
+def office_session(base, dsn, admin_id, role):
     # Synthetic admin created in the isolated clone. This fixture intentionally
     # bypasses MFA *setup*; staff MFA must have its own acceptance test.
-    token = secrets.token_urlsafe(48)
+    token = secrets.token_urlsafe(32)
     with psycopg.connect(dsn) as db:
         user = db.execute('SELECT role FROM parish_auth."User" WHERE id=%s', (admin_id,)).fetchone()
-        assert user and user[0] == "ADMIN", "Synthetic test admin is missing"
+        assert user and user[0] == role, "Synthetic office account role mismatch"
         db.execute('INSERT INTO parish_auth."Session"("tokenHash","userId","expiresAt") '
                    "VALUES(%s,%s,now()+interval '2 hours')",
                    (hashlib.sha256(token.encode()).hexdigest(), admin_id))
@@ -89,6 +92,7 @@ def session_for_admin(base, dsn, admin_id):
 def register_verify(base, dsn, display):
     email = "phase8-" + uuid.uuid4().hex + "@example.test"
     client = requests.Session()
+    client.headers.update({"Origin":base})
     config = checked(client.get(base + "/api/portal-config", timeout=30), 200)
     fields = dict(firstName="Fictional", surname=display, email=email,
                   password="Sample#Only2026Strong!", confirmPassword="Sample#Only2026Strong!",
@@ -123,7 +127,7 @@ def archive_fictional_scan(admin, base, person):
         "runOcr": "false", "review_confirmed": "true",
     }
     result = checked(admin.post(base + "/api/backend/api/archive/upload",
-        data=payload, files={"file": ("fictional.png", fictional_png(), "image/png")},
+        data=payload, files={"file": ("fictional.png", fictional_png(person), "image/png")},
         headers={"Origin": base}, timeout=90), 201)
     return result["document"]
 
@@ -152,39 +156,45 @@ def approve_member(client, admin, base, user_id, certificate):
 def test_registration_to_release_and_private_download(env):
     base, dsn, admin_id = env
     assert checked(requests.get(base + "/api/ready", timeout=60), 200) == b"ready"
-    admin = session_for_admin(base, dsn, admin_id)
+    admin = office_session(base, dsn, admin_id, 'ADMIN')
+    staff = office_session(base, dsn, int(os.environ['PARISH_E2E_STAFF_ID']), 'STAFF')
     first, first_id, first_email, name = register_verify(base, dsn, "Testerone")
     first.test_email = first_email
-    first_archive = archive_fictional_scan(admin, base, name)
+    first_archive = archive_fictional_scan(staff, base, name)
     approve_member(first, admin, base, first_id, first_archive["certificateNumber"])
     second, second_id, second_email, second_name = register_verify(base, dsn, "Testertwo")
     second.test_email = second_email
-    second_archive = archive_fictional_scan(admin, base, second_name)
+    second_archive = archive_fictional_scan(staff, base, second_name)
     approve_member(second, admin, base, second_id, second_archive["certificateNumber"])
 
     config = checked(first.get(base + "/api/portal-config", timeout=30), 200)
     purpose = next(iter(config.get("purposes", {}).get("baptismal", [])), "Personal records")
+    code = f"{secrets.randbelow(1000000):06d}"
+    digest = hmac.new(os.environ["FLASK_INTERNAL_KEY"].encode(), f"certificate:{first_id}:{first_email}:{code}".encode(), "sha256").hexdigest()
+    with psycopg.connect(dsn) as db:
+        db.execute("INSERT INTO parish_private.certificate_otp(user_id,email,digest) VALUES(%s,%s,%s)", (first_id,first_email,digest))
     result = checked(first.post(base + "/api/backend/api/requests", json={
+        "identity":{"birthDate":"2008-04-21","relationship":"Self"}, "verificationCode":code,
         "motherFullName": "Mara Sample", "fatherFullName": "Emil Sample",
         "sacramentType": "baptismal", "personName": name, "purpose": purpose,
         "isUrgent": False, "recordDateHint": "2015-05-17"
     }, headers={"Origin": base}, timeout=60), 201)
     request_id = result["request"]["id"]
-    checked(admin.patch(base + f"/api/backend/api/requests/{request_id}/select-record",
+    checked(staff.patch(base + f"/api/backend/api/requests/{request_id}/select-record",
         json={"documentId": first_archive["id"]}, headers={"Origin": base}, timeout=60), 200)
-    checked(admin.patch(base + f"/api/backend/api/requests/{request_id}/status",
+    checked(staff.patch(base + f"/api/backend/api/requests/{request_id}/status",
         json={"status": "Approved"}, headers={"Origin": base}, timeout=60), 200)
-    checked(admin.post(base + f"/api/backend/api/requests/{request_id}/generate-document",
+    checked(staff.post(base + f"/api/backend/api/requests/{request_id}/generate-document",
         headers={"Origin": base}, timeout=60), 200)
-    checked(admin.post(base + f"/api/backend/api/requests/{request_id}/release-document",
-        files={"file": ("fictional-signed.pdf", fictional_pdf(), "application/pdf")},
+    checked(staff.post(base + f"/api/backend/api/requests/{request_id}/release-document",
+        data={"reviewed_copy":"redacted"}, files={"file": ("fictional-signed.pdf", fictional_pdf(), "application/pdf")},
         headers={"Origin": base}, timeout=60), 200)
     # Cash only on disposable clone, with opt-in immutable ledger enabled.
     cash_ref = "E2E-" + uuid.uuid4().hex[:16].upper()
-    checked(admin.post(base + f"/api/backend/api/requests/{request_id}/cash-receipt",
+    checked(staff.post(base + f"/api/backend/api/requests/{request_id}/cash-receipt",
         json={"action": "record", "receiptNumber": cash_ref, "reason": "Synthetic E2E cash settlement"},
         headers={"Origin": base}, timeout=60), 200)
-    checked(admin.patch(base + f"/api/backend/api/requests/{request_id}/status",
+    checked(staff.patch(base + f"/api/backend/api/requests/{request_id}/status",
         json={"status": "Released"}, headers={"Origin": base}, timeout=60), 200)
     certificate_bytes = checked(first.get(base + f"/api/backend/api/requests/{request_id}/download", timeout=60), 200)
     assert certificate_bytes.startswith(b"%PDF-")

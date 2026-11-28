@@ -27,6 +27,8 @@ from models import (
     Document,
     AuditLog,
     CertificateRequest,
+    CertificateIdentity,
+    CertificateStatusHistory,
     MassRecord,
     Announcement,
     CemeterySlot,
@@ -220,11 +222,13 @@ def current_user_id():
 def request_metadata(ids):
     if not ids:
         return {}, {}
-    identities = dict(db.session.execute(text("""SELECT request_id, fields FROM certificate_identity
-        WHERE request_id=ANY(:ids)"""), {"ids":ids}).all())
+    identities = dict(db.session.query(CertificateIdentity.request_id, CertificateIdentity.fields)
+                      .filter(CertificateIdentity.request_id.in_(ids)).all())
     histories = {}
-    for rid, status, at in db.session.execute(text("""SELECT request_id,status,changed_at
-        FROM certificate_status_history WHERE request_id=ANY(:ids) ORDER BY id"""), {"ids":ids}):
+    transitions = db.session.query(CertificateStatusHistory.request_id, CertificateStatusHistory.status,
+                                   CertificateStatusHistory.changed_at).filter(
+        CertificateStatusHistory.request_id.in_(ids)).order_by(CertificateStatusHistory.id)
+    for rid, status, at in transitions:
         histories.setdefault(rid, []).append({"status":status,"at":at.isoformat()})
     return identities, histories
 
@@ -2839,11 +2843,8 @@ def api_create_request():
         db.session.add(new_request)
         if identity is not None:
             db.session.flush()
-            db.session.execute(text("""INSERT INTO certificate_identity
-                (request_id, fields, proof, proof_type, verified_email) VALUES
-                (:id, CAST(:fields AS jsonb), :proof, :mime, :email)"""),
-                {"id":new_request.id, "fields":json.dumps(identity), "proof":proof,
-                 "mime":identity.get("proofType"), "email":requester_email})
+            db.session.add(CertificateIdentity(request_id=new_request.id, fields=identity,
+                proof=proof, proof_type=identity.get("proofType"), verified_email=requester_email))
             db.session.add(AuditLog(user=requester_email, action=f"Email OTP verified for request #{new_request.id}"))
         if claim_id:
             db.session.flush()

@@ -1,3 +1,4 @@
+import { MFA_PENDING_COOKIE } from '@/lib/staffMfa'
 import {registerWithPolicy,PolicyChanged} from '@/lib/portalConfig'
 import { evidenceEnabled, pendingEvidenceResponse } from '@/lib/membershipEvidence'
 import { randomBytes } from 'node:crypto'
@@ -245,6 +246,7 @@ export async function POST(request: Request) {
       }
     )
 
+    response.cookies.delete(MFA_PENDING_COOKIE)
     response.cookies.set(SESSION_COOKIE, token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',

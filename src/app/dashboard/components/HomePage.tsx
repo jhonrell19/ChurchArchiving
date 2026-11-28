@@ -5,10 +5,10 @@ import MassMediaPlayer from '../../components/MassMediaPlayer'
 import TrackingDashboardCard from './TrackingDashboardCard'
 import StatusNotificationInbox from './StatusNotificationInbox'
 
-type Mass = {id:number;title:string;priest:string;filepath:string|null}
+type Homily = {id:number;title:string;priest:string;filepath:string|null}
 type Notice = {id:number;title:string;body:string;date:string}
 type Summary = {
-  recentMasses:Mass[]; announcements:Notice[]
+  recentMasses:Homily[]; announcements:Notice[]
 }
 
 export default function HomePage({setPage}:{setPage:(p:Page)=>void}) {
@@ -45,10 +45,10 @@ export default function HomePage({setPage}:{setPage:(p:Page)=>void}) {
           <i className="ti ti-file-plus" aria-hidden="true"/>
         </button>
         <button type="button" className="role-action" onClick={()=>setPage('announcements')}>
-          <span>Mass schedule and notices</span><i className="ti ti-calendar" aria-hidden="true"/>
+          <span>Homily schedule and notices</span><i className="ti ti-calendar" aria-hidden="true"/>
         </button>
         <button type="button" className="role-action" onClick={()=>setPage('archives')}>
-          <span>Watch recorded Mass</span><i className="ti ti-video" aria-hidden="true"/>
+          <span>Watch recorded Homily</span><i className="ti ti-video" aria-hidden="true"/>
         </button>
       </div>
     </section>
@@ -67,15 +67,15 @@ export default function HomePage({setPage}:{setPage:(p:Page)=>void}) {
         <article className="role-card">
           <p className="portal-eyebrow">Announcement</p>
           <h4 className="text-xl font-bold">{notice?.title||'Parish announcements'}</h4>
-          <p className="my-3 text-slate-600">{notice?.body?.slice(0,240) || (loading?'Loading…':'See the calendar for the latest Mass schedules and announcements.')}</p>
+          <p className="my-3 text-slate-600">{notice?.body?.slice(0,240) || (loading?'Loading…':'See the calendar for the latest Homily schedules and announcements.')}</p>
           <button className="portal-secondary-btn" onClick={()=>setPage('announcements')}>View notices and calendar</button>
         </article>
         <article className="role-card">
-          <p className="portal-eyebrow">Latest Mass</p>
-          <h4 className="text-xl font-bold">{mass?.title||'Recorded Masses'}</h4>
-          <p className="my-3 text-slate-600">{mass?.priest|| (loading?'Loading…':'Watch published Mass recordings and read available homily transcripts.')}</p>
+          <p className="portal-eyebrow">Latest Homily</p>
+          <h4 className="text-xl font-bold">{mass?.title||'Recorded Homilies'}</h4>
+          <p className="my-3 text-slate-600">{mass?.priest|| (loading?'Loading…':'Watch published Homily recordings and read available homily transcripts.')}</p>
           {mass?.filepath ? <button className="portal-secondary-btn" onClick={()=>setPlaying({title:mass.title,filepath:mass.filepath!})}>Play recording</button>
-            : <button className="portal-secondary-btn" onClick={()=>setPage('archives')}>Browse Mass recordings</button>}
+            : <button className="portal-secondary-btn" onClick={()=>setPage('archives')}>Browse Homily recordings</button>}
         </article>
       </div>
     </section>

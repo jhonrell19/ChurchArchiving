@@ -219,7 +219,7 @@ def current_user_id():
 def serialize_request(r):
     matched_document = None
 
-    if r.matched_document_id:
+    if r.matched_document_id and getattr(g, 'user_role', None) in {'STAFF', 'BURIAL_ADMIN'}:
         source = db.session.get(Document, r.matched_document_id)
         if source:
             matched_document = {
@@ -450,6 +450,9 @@ def protect_backend_boundary():
 
     g.user_role = request.headers.get("X-User-Role")
 
+    if g.user_role == "ADMIN" and request.path.startswith("/api/archive/"):
+        return {"error": "Forbidden"}, 403
+
     g.user_email = request.headers.get("X-User-Email")
 
     g.user_name = request.headers.get("X-User-Name")
@@ -582,6 +585,9 @@ def can_access_filepath(filepath):
         func.replace(CertificateRequest.draft_file, "\\", "/") == normalized
     )
 
+    if role in {"STAFF", "BURIAL_ADMIN"} and normalized.startswith("uploads/masses/"):
+        return MassRecord.query.filter_by(filepath=normalized, active=True).first() is not None
+
     # Staff retrieves protected records across both old offices, but not Mass assets.
     if role == "STAFF":
         document = Document.query.filter(document_path_matches).first()
@@ -600,15 +606,6 @@ def can_access_filepath(filepath):
             normalized.startswith("uploads/masses/")
             or normalized.startswith("uploads/transcriptions/")
         ):
-            return True
-
-        document = (
-            Document.query
-            .filter(document_path_matches)
-            .first()
-        )
-
-        if document and document.sacrament_type in MAIN_ADMIN_TYPES + BURIAL_ADMIN_TYPES:
             return True
 
         release_request = (
@@ -2407,6 +2404,7 @@ def api_archive_documents_by_type(sacrament_type):
 
 
 
+@app.route("/api/office/audit-logs", methods=["GET"])
 @app.route("/api/archive/audit-logs")
 
 def api_audit_logs():
@@ -3494,7 +3492,7 @@ def download_file(filepath):
 
 def api_get_masses():
 
-    denied = require_roles("USER", "ADMIN")
+    denied = require_roles("USER", "ADMIN", "STAFF", "BURIAL_ADMIN")
 
     if denied:
 
@@ -5464,8 +5462,8 @@ def certificate_checkout(request_id):
         return {"error": "This request has no approved payable fee."}, 409
     body = {"data": {"attributes": {
         "billing": {"email": cert.requester_email, "name": cert.requester_name},
-        "cancel_url": public_url + "/dashboard",
-        "success_url": public_url + "/dashboard",
+        "cancel_url": f"{public_url}/dashboard?checkout=cancelled&requestId={cert.id}",
+        "success_url": f"{public_url}/dashboard?checkout=returned&requestId={cert.id}",
         "description": "Smart Parish certificate request #" + str(cert.id),
         "reference_number": "PARISH-CERT-" + str(cert.id),
         "line_items": [{"name": "Certificate request #"+str(cert.id), "quantity": 1, "currency": "PHP", "amount": total*100}],

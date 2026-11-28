@@ -112,20 +112,15 @@ if (
     return m === 'GET' && ['USER', 'ADMIN', 'STAFF', 'BURIAL_ADMIN'].includes(role)
   }
 
-  if (path === 'api/archive/audit-logs') {
-    return m === 'GET' && role === 'ADMIN'
-  }
-
+  if (path === 'api/office/audit-logs') return m === 'GET' && role === 'ADMIN'
   if (path.startsWith('api/archive/')) {
-    if (path === 'api/archive/deleted-documents') return m === 'GET' && role === 'ADMIN'
-    if (/^api\/archive\/documents\/\d+\/(delete|restore)$/.test(path))
-      return m === 'PATCH' && role === 'ADMIN'
-    if (role === 'ADMIN') return m === 'GET'
+    if (['api/archive/deleted-documents', 'api/archive/audit-logs'].includes(path)) return false
+    if (/\/(delete|restore)$/.test(path)) return false
     return role === 'STAFF' || role === 'BURIAL_ADMIN'
   }
 
   if (path === 'api/masses') {
-    if (m === 'GET') return role === 'USER' || role === 'ADMIN'
+    if (m === 'GET') return ['USER', 'ADMIN', 'STAFF', 'BURIAL_ADMIN'].includes(role)
     return role === 'ADMIN'
   }
 

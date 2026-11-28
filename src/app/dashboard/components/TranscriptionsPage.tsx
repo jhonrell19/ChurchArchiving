@@ -52,7 +52,7 @@ export default function TranscriptionsPage() {
       </h2>
 
       <p className="font-body text-[#6b8caa] text-[14px] mb-6">
-        AI-generated transcriptions and sermon summaries from archived masses.
+        AI-generated transcriptions and sermon summaries from archived homilies.
       </p>
 
       {loading ? (

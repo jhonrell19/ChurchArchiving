@@ -5,7 +5,6 @@ import { ADMIN_NAV } from './data/navigation'
 import type { AdminPage } from './types.ts'
 import SuperAdminOverview from './components/SuperAdminOverview'
 import MassesPage from './components/MassesPage'
-import TranscriptionsPage from './components/TranscriptionsPage'
 import AnnouncementsPage from './components/AnnouncementsPage'
 import RequestsPage from './components/RequestsPage'
 import SettingsPage from './components/SettingsPage'
@@ -14,7 +13,6 @@ export default function AdminPanel({accountEmail,initialPage="dashboard",manageP
   accountEmail:string;initialPage?:'settings'|'dashboard';managePolicy?:boolean;manageWebsite?:boolean;manageStaff?:boolean
 }) {
   const [page,setPage]=useState<AdminPage>(initialPage)
-  const [transcriptId,setTranscriptId]=useState<number|null>(null)
   const navigate=(next:AdminPage)=>{setPage(next)}
   const label=ADMIN_NAV.find(item=>item.id===page)?.label||'Super Admin'
   const links=[
@@ -36,8 +34,7 @@ export default function AdminPanel({accountEmail,initialPage="dashboard",manageP
 
         {page==='dashboard' && <SuperAdminOverview manageStaff={manageStaff} manageWebsite={manageWebsite}
           onOpenMasses={()=>navigate('masses')} onOpenNotices={()=>navigate('announcements')} onOpenSettings={()=>navigate('settings')}/>}
-        {page==='masses' && <MassesPage initialTranscript={transcriptId}/>}
-        {page==='transcriptions' && <TranscriptionsPage openMass={id=>{setTranscriptId(id);navigate('masses')}}/>}
+        {page==='masses' && <MassesPage initialTranscript={null}/>}
         {page==='announcements' && <AnnouncementsPage/>}
         {page==='requests' && <RequestsPage readOnly/>}
         {page==='settings' && <SettingsPage manageWebsite={manageWebsite} managePolicy={managePolicy} accountEmail={accountEmail}/>}

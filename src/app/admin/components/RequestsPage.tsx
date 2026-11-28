@@ -490,7 +490,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-display text-navy-mid text-base font-semibold">
-                          {item.personName}
+                          {item.requesterName || 'Requester unavailable'}
                         </p>
                         <span className="font-display text-xs tracking-wider text-slate-500">
                           IFI-REQ-{item.id.toString().padStart(4, '0')}

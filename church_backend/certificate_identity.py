@@ -2,7 +2,8 @@ import base64
 import binascii
 import json
 import unicodedata
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
 
 FIELDS = json.loads((Path(__file__).resolve().parents[1] / "config" / "certificate_identity.json").read_text(encoding="utf-8"))
@@ -28,13 +29,15 @@ def validate_identity(category, data, person_name):
         kind = spec["kind"]
         if not value or (kind == "name" and not valid_name(value)) or (kind == "choice" and value not in spec["options"]):
             raise ValueError("Check " + spec["label"])
+        if spec["key"] in {"page", "line"} and value and (not value.isascii() or not value.isdecimal()):
+            raise ValueError("Enter numbers only for " + spec["label"])
         if kind in {"date", "yearDate"}:
             try:
                 when = date(int(value), 1, 1) if kind == "yearDate" and len(value) == 4 else date.fromisoformat(value)
-                if when > date.today() or (len(value) != 4 and when.isoformat() != value):
+                if when > datetime.now(ZoneInfo("Asia/Manila")).date() or (len(value) != 4 and when.isoformat() != value):
                     raise ValueError()
             except ValueError:
-                raise ValueError("Enter a valid past date or permitted year for " + spec["label"])
+                raise ValueError("Select a valid past calendar date for " + spec["label"])
         fields[spec["key"]] = value
     fields["unredacted"] = source.get("unredacted") is True
     if not fields["unredacted"]:

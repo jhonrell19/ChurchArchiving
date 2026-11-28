@@ -3,6 +3,7 @@
 import { useFeedback } from '@/components/ui/FeedbackProvider'
 import RequestDetails from '@/components/RequestDetails'
 import RequestTracking from '@/components/RequestTracking'
+import { certificatePaymentLabel, isConfirmedCertificatePayment, isTestCertificatePayment } from '@/lib/certificatePayment'
 import NotificationOutboxControl from './NotificationOutboxControl'
 
 import { useEffect, useRef, useState } from 'react'
@@ -259,8 +260,12 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
         toast.warning('The final release document must be prepared first.')
         return
       }
-      if (item.paymentStatus !== 'Paid') {
-        toast.warning('Payment must be confirmed before the document can be released.')
+      if (isTestCertificatePayment(item.paymentMethod)) {
+        toast.warning('This was a test transaction; no real payment was received. Reconcile payment through the parish office before releasing.')
+        return
+      }
+      if (!isConfirmedCertificatePayment(item.paymentStatus, item.paymentMethod)) {
+        toast.warning('A verified live payment or official cash receipt is required before release.')
         return
       }
       if (!item.generatedFile) {
@@ -473,7 +478,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
             const canAutoGenerate = ['baptismal', 'confirmation', 'marriage'].includes(item.sacramentType)
             const canRelease =
               item.status === 'Ready' &&
-              item.paymentStatus === 'Paid' &&
+              isConfirmedCertificatePayment(item.paymentStatus, item.paymentMethod) &&
               Boolean(item.generatedFile)
 
             return (
@@ -530,12 +535,12 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
                     </span>
                     <span
                       className={`font-display text-xs tracking-wider border px-2.5 py-0.5 rounded-full ${
-                        item.paymentStatus === 'Paid'
+                        isConfirmedCertificatePayment(item.paymentStatus, item.paymentMethod)
                           ? 'bg-green-50 text-green-700 border-green-200'
-                          : 'bg-amber-50 text-amber-700 border-amber-200'
+                          : 'bg-amber-50 text-amber-800 border-amber-200'
                       }`}
                     >
-                      {item.paymentStatus || 'Unpaid'}
+                      {certificatePaymentLabel(item.paymentStatus, item.paymentMethod)}
                     </span>
                     <button
                       type="button"
@@ -762,7 +767,11 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
                       )}
 
                     </details>}
-                    {!readOnly && item.status==='Ready' && !canRelease && <p>Release requires a verified source, final document and confirmed payment.</p>}
+                    {!readOnly && item.status==='Ready' && !canRelease && <p role="status" className="text-sm text-amber-800">
+                      {isTestCertificatePayment(item.paymentMethod)
+                        ? 'A simulated payment is recorded. No real funds were received. Do not release or mark this request paid again; ask the parish office to reconcile it before arranging a real payment.'
+                        : 'Release requires a verified source, final document and confirmed live or official cash payment.'}
+                    </p>}
                     </section>
                     <section className="role-card">
                       <button

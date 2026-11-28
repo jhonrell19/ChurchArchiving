@@ -2,6 +2,7 @@
 
 import { useFeedback } from '@/components/ui/FeedbackProvider'
 import RequestDetails from '@/components/RequestDetails'
+import { certificatePaymentLabel, isConfirmedCertificatePayment, isTestCertificatePayment } from '@/lib/certificatePayment'
 
 import identityConfig from '../../../../config/certificate_identity.json'
 import { digitsOnly, isValidPastCalendarDate, isValidPersonName, philippineToday, sanitizePersonName } from '@/lib/fieldInput'
@@ -226,7 +227,7 @@ export default function RequestsPage() {
       .then(async res => {
         const data = await res.json()
         if (abort.signal.aborted) return
-        setPaymentNotice(res.ok && data.paymentStatus==='Paid' ? 'Payment confirmed for request #'+id : 'Payment confirmation pending. Refresh tracking before paying again.')
+        setPaymentNotice(res.ok && data.paymentStatus==='Paid' ? 'Payment recorded for request #'+id+'. Check the tracking details to see whether this was a test or live payment.' : 'Payment confirmation pending. Refresh tracking before paying again.')
         if (res.ok && data.paymentStatus==='Paid') void loadRequests()
       }).catch(()=>{if (!abort.signal.aborted) setPaymentNotice('Payment confirmation unavailable. Refresh tracking before paying again.')})
     return () => abort.abort()
@@ -997,6 +998,8 @@ if (
             <div className="space-y-4">
               {requests.map(req => {
                 const displayType = toDisplayType(req.sacramentType)
+                const testPayment = req.paymentStatus === 'Paid' && isTestCertificatePayment(req.paymentMethod)
+                const confirmedPayment = isConfirmedCertificatePayment(req.paymentStatus, req.paymentMethod)
                 const canPayOnline =
                   req.paymentStatus !== 'Paid' &&
                   req.totalFee > 0 &&
@@ -1005,7 +1008,7 @@ if (
                 const canDownload =
                   Boolean(req.generatedFile) &&
                   req.status === 'Released' &&
-                  req.paymentStatus === 'Paid'
+                  confirmedPayment
 
                 return (
                   <div
@@ -1063,12 +1066,12 @@ if (
 
                         <span
                           className={`flex-shrink-0 font-display text-[10px] tracking-wider border px-2.5 py-0.5 rounded-full ${
-                            req.paymentStatus === 'Paid'
+                            confirmedPayment
                               ? 'bg-green-50 text-green-700 border-green-200'
-                              : 'bg-amber-50 text-amber-700 border-amber-200'
+                              : 'bg-amber-50 text-amber-800 border-amber-200'
                           }`}
                         >
-                          {req.paymentStatus || 'Unpaid'}
+                          {certificatePaymentLabel(req.paymentStatus, req.paymentMethod)}
                         </span>
                       </div>
                     </div>
@@ -1089,7 +1092,7 @@ if (
                           </p>
                         )}
 
-                        {req.status === 'Approved' && req.paymentStatus === 'Paid' && (
+                        {req.status === 'Approved' && confirmedPayment && (
                           <p className="font-body text-[12px] text-green-700">
                             Payment confirmed. Waiting for the parish staff to prepare your document.
                           </p>
@@ -1101,15 +1104,21 @@ if (
                           </p>
                         )}
 
-                        {req.status === 'Ready' && req.paymentStatus === 'Paid' && (
+                        {req.status === 'Ready' && confirmedPayment && (
                           <p className="font-body text-[12px] text-blue-700">
                             Paid and ready. Waiting for the parish staff to release the document.
                           </p>
                         )}
 
-                        {req.status === 'Released' && req.paymentStatus === 'Paid' && (
+                        {req.status === 'Released' && confirmedPayment && (
                           <p className="font-body text-[12px] text-green-700">
                             Your document has been released and is available for download.
+                          </p>
+                        )}
+
+                        {testPayment && ['Approved', 'Ready', 'Released'].includes(req.status) && (
+                          <p role="status" className="font-body text-[12px] text-amber-800">
+                            This is a test payment, not real money. Your certificate cannot be released until the parish office verifies real payment or an official receipt. Please contact staff before attempting another checkout.
                           </p>
                         )}
 

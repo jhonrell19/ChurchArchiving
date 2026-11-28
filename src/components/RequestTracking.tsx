@@ -1,5 +1,7 @@
 'use client'
 
+import { isConfirmedCertificatePayment, isTestCertificatePayment } from '@/lib/certificatePayment'
+
 /**
  * The request API is the sole source of truth. This component derives milestones
  * from persisted request status; it does NOT invent historical transition dates,
@@ -54,9 +56,10 @@ export default function RequestTracking({
   const approved = ['Approved', 'Ready', 'Released'].includes(status)
   const prepared = ['Ready', 'Released'].includes(status) && !!request.generatedFile
   const released = status === 'Released'
-  const paid = request.paymentStatus === 'Paid'
   const method = request.paymentMethod || ''
-  const isSandbox = method === 'PAYMONGO_TEST' || method === 'PAYMONGO_TEST_PENDING'
+  const isSandbox = isTestCertificatePayment(method)
+  const recordedTestPayment = request.paymentStatus === 'Paid' && isSandbox
+  const paid = isConfirmedCertificatePayment(request.paymentStatus, method)
   const checkoutPending = method.startsWith('PAYMONGO_') && method.endsWith('_PENDING') && !paid
   const reversed = method === 'CASH_REVERSED'
   const steps = [
@@ -66,13 +69,14 @@ export default function RequestTracking({
     { name: 'Office release', done: released, detail: 'Release recorded by authorized parish staff' },
   ]
   const nextIndex = steps.findIndex(step => !step.done)
-  const paymentLabel = paid
-    ? isSandbox ? 'Test payment recorded — no real funds collected' : 'Payment confirmed'
+  const paymentLabel = recordedTestPayment
+    ? 'Test payment recorded — no real funds collected'
+    : paid ? 'Payment confirmed'
     : reversed ? 'Cash receipt reversed — payment required'
       : checkoutPending ? 'Checkout started — awaiting verified payment'
         : 'Payment not yet confirmed'
   const paymentType = method === 'CASH' ? 'Cash recorded by staff'
-    : method === 'PAYMONGO_TEST' ? 'PayMongo test environment'
+    : isSandbox ? 'PayMongo sandbox / demonstration'
       : method === 'PAYMONGO_LIVE' ? 'PayMongo verified online'
         : checkoutPending ? 'PayMongo checkout initiated'
           : reversed ? 'Cash receipt reversed'
@@ -81,6 +85,8 @@ export default function RequestTracking({
     ? status === 'Rejected'
       ? 'This request was declined. Contact the parish office for details or a new request.'
       : 'This request was cancelled. The audit and payment records remain on file.'
+    : recordedTestPayment
+      ? 'Only a simulated payment is recorded. No real funds were received, so the parish cannot release this certificate. Contact staff to reconcile the request and arrange a verified live payment or official receipt; do not retry payment until they confirm.'
     : released
       ? 'Release has been recorded. Arrange collection of the official signed copy with the parish office; online release is not proof of physical pickup.'
       : status === 'Ready'
@@ -143,8 +149,8 @@ export default function RequestTracking({
             {request.paymentReference && (
               <div><dt className="font-medium">Payment / checkout reference</dt><dd className="break-all font-mono text-xs">{request.paymentReference}</dd></div>
             )}
-            {paid && request.paidAt && (
-              <div><dt className="font-medium">Recorded payment date</dt><dd>{formatManilaTime(request.paidAt)}</dd></div>
+            {(paid || recordedTestPayment) && request.paidAt && (
+              <div><dt className="font-medium">{recordedTestPayment ? 'Recorded test transaction date' : 'Recorded payment date'}</dt><dd>{formatManilaTime(request.paidAt)}</dd></div>
             )}
           </dl>
           {isSandbox && <p className="mt-2 text-sm font-semibold text-amber-900">

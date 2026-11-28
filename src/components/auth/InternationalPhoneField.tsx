@@ -1,6 +1,7 @@
 'use client'
 
 import { getCountries, getCountryCallingCode, type CountryCode } from 'libphonenumber-js/max'
+import { phoneCharactersOnly } from '@/lib/fieldInput'
 
 const englishNames = new Intl.DisplayNames(['en'], { type: 'region' })
 const countries = getCountries()
@@ -26,7 +27,7 @@ export default function InternationalPhoneField({ country, phoneNumber, onCountr
       </select>
       <label htmlFor="registration-phone" className="block text-sm font-semibold text-navy-mid">Mobile / contact number {required ? '*' : '(optional)'}</label>
       <input id="registration-phone" type="tel" value={phoneNumber} required={required} maxLength={40}
-        onChange={event => onPhoneChange(event.target.value)} autoComplete="tel" inputMode="tel"
+        onChange={event => onPhoneChange(phoneCharactersOnly(event.target.value))} autoComplete="tel" inputMode="tel"
         placeholder={country === 'PH' ? '09171234567' : `+${selected?.dial || ''} ...`}
         className={inputClass} />
       <p className="text-xs text-slate-500">Country-specific number format is checked. SMS ownership verification is not yet enabled.</p>

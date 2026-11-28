@@ -2,12 +2,12 @@
 
 import { useFeedback } from '@/components/ui/FeedbackProvider'
 import RequestDetails from '@/components/RequestDetails'
-import RequestTracking from '@/components/RequestTracking'
-import { certificatePaymentLabel, isConfirmedCertificatePayment, isTestCertificatePayment } from '@/lib/certificatePayment'
+import RequestTracking, { type RequestWorkflowStep } from '@/components/RequestTracking'
+import { isConfirmedCertificatePayment, isTestCertificatePayment } from '@/lib/certificatePayment'
 import NotificationOutboxControl from './NotificationOutboxControl'
 
 import { useEffect, useRef, useState } from 'react'
-import { CERT_ICONS, STATUS_STYLE } from '../data/ui'
+import { CERT_ICONS } from '../data/ui'
 
 type ReqStatus = 'All' | 'Pending' | 'Approved' | 'Rejected' | 'Ready' | 'Released'
 
@@ -90,9 +90,6 @@ const toDisplayType = (type: string) => {
 const getRequestIcon = (type: string) =>
   CERT_ICONS[toDisplayType(type)] || CERT_ICONS[type] || 'ti-file-certificate'
 
-const getStatusStyle = (status: string) =>
-  STATUS_STYLE[status] || 'bg-slate-50 text-slate-600 border-slate-200'
-
 const formatPeso = (amount: number | null | undefined) =>
   `₱${Number(amount || 0).toLocaleString('en-PH')}`
 
@@ -117,7 +114,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
   const [requests, setRequests] = useState<CertificateRequest[]>([])
   const [filter, setFilter] = useState<ReqStatus>('All')
   const [expanded, setExpanded] = useState<number | null>(null)
-  const [trackingOpen, setTrackingOpen] = useState<number | null>(null)
+  const [activeStep, setActiveStep] = useState<{ requestId: number; step: RequestWorkflowStep } | null>(null)
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<number | null>(null)
   const [searchingId, setSearchingId] = useState<number | null>(null)
@@ -169,7 +166,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
   const toggleExpanded = (item: CertificateRequest) => {
     const opening = expanded !== item.id
     setExpanded(opening ? item.id : null)
-    setTrackingOpen(null)
+    setActiveStep(null)
 
     if (opening) {
       setSearchTerms(prev => ({
@@ -525,47 +522,56 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
-                    <span
-                      className={`font-display text-xs tracking-wider border px-2.5 py-0.5 rounded-full ${getStatusStyle(
-                        item.status
-                      )}`}
-                    >
-                      {item.status}
-                    </span>
-                    <span
-                      className={`font-display text-xs tracking-wider border px-2.5 py-0.5 rounded-full ${
-                        isConfirmedCertificatePayment(item.paymentStatus, item.paymentMethod)
-                          ? 'bg-green-50 text-green-700 border-green-200'
-                          : 'bg-amber-50 text-amber-800 border-amber-200'
-                      }`}
-                    >
-                      {certificatePaymentLabel(item.paymentStatus, item.paymentMethod)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => toggleExpanded(item)}
-                      className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"
-                      aria-label="Expand request"
-                    >
-                      <i className={`ti ${expanded === item.id ? 'ti-chevron-up' : 'ti-chevron-down'} text-[14px]`} />
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => toggleExpanded(item)}
+                    className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+                    aria-expanded={expanded === item.id}
+                    aria-label={`${expanded === item.id ? 'Hide' : 'Open'} workflow for request IFI-REQ-${String(item.id).padStart(4, '0')}`}
+                  >
+                    {expanded === item.id ? 'Hide steps' : 'Open steps'}
+                    <i className={`ti ${expanded === item.id ? 'ti-chevron-up' : 'ti-chevron-down'}`} aria-hidden="true" />
+                  </button>
                 </div>
 
                 {expanded === item.id && (
                   <div className="border-t border-slate-100 px-5 py-5 bg-slate-50/60 space-y-4">
-                    <details className="role-card"><summary>Request details</summary><RequestDetails office={!readOnly} request={item} documentType={toDisplayType(item.sacramentType)} /></details>
-                    <section className="role-card"><h3>Status</h3><p>{item.status}</p>
-                    {!readOnly && <div className="flex flex-wrap gap-2">
-                      {item.status==='Pending' && <>
-                        <button className="portal-primary-btn" disabled={isBusy || !item.matchedDocumentId} onClick={()=>void updateStatus(item,'Approved')}>Approve</button>
-                        <button className="portal-secondary-btn" disabled={isBusy} onClick={()=>void updateStatus(item,'Rejected')}>Reject</button>
-                      </>}
-                      {item.status==='Approved' && item.paymentStatus!=='Paid' && <button className="portal-secondary-btn" disabled={isBusy} onClick={()=>void updateStatus(item,'Rejected')}>Reject</button>}
-                      {canRelease && <button className="portal-primary-btn" disabled={isBusy} onClick={()=>void updateStatus(item,'Released')}>Release</button>}
-                    </div>}
-                    {!readOnly && item.status==='Pending' && <details><summary>Verify source record to approve</summary>
+
+                    {/* Only the four colored milestones are visible until staff opens a step. */}
+                    <RequestTracking
+                      request={item}
+                      selectedStep={activeStep?.requestId === item.id ? activeStep.step : null}
+                      onStepSelect={step => setActiveStep(prev =>
+                        prev?.requestId === item.id && prev.step === step ? null : { requestId: item.id, step }
+                      )}
+                    />
+                    {activeStep?.requestId === item.id && (
+                      <section
+                        id={`staff-workflow-panel-${item.id}`}
+                        aria-label={`Open workflow step: ${activeStep.step}`}
+                        className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm"
+                      >
+                        {activeStep.step === 'submitted' && (
+                          <div className="space-y-3">
+                            <h3 className="text-lg font-semibold text-slate-900">Step 1 — Request submitted</h3>
+                            <p className="text-sm text-slate-600">Check the requester's information and the certificate details before verifying the archive.</p>
+                            <RequestDetails office={!readOnly} request={item} documentType={toDisplayType(item.sacramentType)} />
+                          </div>
+                        )}
+
+                        {activeStep.step === 'verify' && (
+                          <div className="space-y-4">
+                            <h3 className="text-lg font-semibold text-slate-900">Step 2 — Staff verification</h3>
+                            {item.matchedDocument && (
+                              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+                                Matching archive: <strong>{item.matchedDocument.personName}</strong>
+                                <a href={backendFileUrl(item.matchedDocument.filepath)} target="_blank" rel="noopener noreferrer" className="ml-3 underline">Preview source record</a>
+                              </div>
+                            )}
+                            {!readOnly && item.status === 'Pending' ? (
+                              <>
+                                <p className="text-sm text-slate-700">Find and verify the matching church record before approving. If you need the request details, click Step 1.</p>
+                                <div className="space-y-4">
 
                       {item.matchedDocument ? (
                         <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 mb-3">
@@ -663,8 +669,34 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
                             </p>
                           )}
                         </>
-                    </details>}
-                    {!readOnly && ['Approved','Ready'].includes(item.status) && <details><summary>Prepare reviewed document for release</summary>
+                                </div>
+                                <div className="flex flex-wrap gap-3 border-t border-slate-200 pt-4">
+                                  <button type="button" className="portal-primary-btn" disabled={isBusy || !item.matchedDocumentId}
+                                    onClick={() => void updateStatus(item, 'Approved')}>Approve verified request</button>
+                                  <button type="button" className="portal-secondary-btn" disabled={isBusy}
+                                    onClick={() => void updateStatus(item, 'Rejected')}>Reject request</button>
+                                </div>
+                              </>
+                            ) : (
+                              <p className="text-sm text-slate-700">
+                                {item.status === 'Pending' ? 'Staff must verify the source record.' :
+                                  item.status === 'Rejected' ? 'This request was rejected and cannot be processed further.' :
+                                  item.status === 'Cancelled' ? 'This request was cancelled.' :
+                                  'The verification stage has already been completed.'}
+                              </p>
+                            )}
+                            {!readOnly && item.status === 'Approved' && !isConfirmedCertificatePayment(item.paymentStatus, item.paymentMethod) && (
+                              <button type="button" className="portal-secondary-btn" disabled={isBusy}
+                                onClick={() => void updateStatus(item, 'Rejected')}>Reject approved unpaid request</button>
+                            )}
+                          </div>
+                        )}
+
+                        {activeStep.step === 'prepare' && (
+                          <div className="space-y-4">
+                            <h3 className="text-lg font-semibold text-slate-900">Step 3 — Document preparation</h3>
+                            {!readOnly && ['Approved', 'Ready'].includes(item.status) ? (
+                              <div className="space-y-4">
 
                       {item.draftFile && (
                         <div className="rounded-lg border border-blue-200 bg-white p-3 mb-3 flex items-center justify-between gap-3 flex-wrap">
@@ -765,42 +797,47 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
                               : 'No final document can be uploaded for this request.'}
                         </p>
                       )}
+                              </div>
+                            ) : <p className="text-sm text-slate-700">
+                              {item.status === 'Released' ? 'The final document has already been released.' : 'Staff must approve a verified request before preparing the final document.'}
+                            </p>}
+                          </div>
+                        )}
 
-                    </details>}
-                    {!readOnly && item.status==='Ready' && !canRelease && <p role="status" className="text-sm text-amber-800">
-                      {isTestCertificatePayment(item.paymentMethod)
-                        ? 'A simulated payment is recorded. No real funds were received. Do not release or mark this request paid again; ask the parish office to reconcile it before arranging a real payment.'
-                        : 'Release requires a verified source, final document and confirmed live or official cash payment.'}
-                    </p>}
-                    </section>
-                    <section className="role-card">
-                      <button
-                        type="button"
-                        className="flex w-full min-h-11 items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-left text-sm font-semibold text-slate-800 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2"
-                        aria-expanded={trackingOpen === item.id}
-                        aria-controls={`staff-tracking-${item.id}`}
-                        onClick={() => setTrackingOpen(open => open === item.id ? null : item.id)}
-                      >
-                        <span><i className="ti ti-list-check mr-2" aria-hidden="true" />View status, payment &amp; history</span>
-                        <i className={`ti ${trackingOpen === item.id ? 'ti-chevron-up' : 'ti-chevron-down'}`} aria-hidden="true" />
-                      </button>
-                      <div id={`staff-tracking-${item.id}`} hidden={trackingOpen !== item.id} className="mt-4 space-y-4">
-                        <RequestTracking request={item} />
-                        <section className="rounded-lg border border-slate-200 bg-white p-4">
-                          <h4 className="text-base font-semibold text-slate-900">Recorded status changes</h4>
-                          {item.history?.length ? (
-                            <ol className="mt-3 space-y-2 border-l-2 border-slate-200 pl-4 text-sm text-slate-700">
-                              {item.history.map((event, i) => (
-                                <li key={i}>
-                                  <strong>{event.status}</strong>
-                                  <span className="ml-2">{new Date(event.at).toLocaleString('en-PH', { timeZone: 'Asia/Manila' })}</span>
-                                </li>
-                              ))}
-                            </ol>
-                          ) : <p className="mt-2 text-sm text-slate-600">Current status: {item.status}. Earlier transitions were not recorded.</p>}
-                        </section>
-                      </div>
-                    </section>
+                        {activeStep.step === 'release' && (
+                          <div className="space-y-4">
+                            <h3 className="text-lg font-semibold text-slate-900">Step 4 — Payment and office release</h3>
+                            <RequestTracking request={item} paymentOnly />
+                            {!readOnly && item.status === 'Ready' && (
+                              canRelease ? (
+                                <button type="button" className="portal-primary-btn min-h-11" disabled={isBusy}
+                                  onClick={() => void updateStatus(item, 'Released')}>Release verified certificate</button>
+                              ) : (
+                                <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                                  {isTestCertificatePayment(item.paymentMethod)
+                                    ? 'A simulated payment is recorded, but no real money was received. Do not release this certificate. Contact the parish office to reconcile it before another payment.'
+                                    : 'Release requires a verified source record, reviewed final document and confirmed live payment or official cash receipt.'}
+                                </p>
+                              )
+                            )}
+                            {item.status === 'Released' && <p className="text-sm font-semibold text-emerald-800">Release completed and recorded by parish staff.</p>}
+                            <section className="border-t border-slate-200 pt-4">
+                              <h4 className="text-base font-semibold text-slate-900">Recorded status changes</h4>
+                              {item.history?.length ? (
+                                <ol className="mt-3 space-y-2 border-l-2 border-slate-200 pl-4 text-sm text-slate-700">
+                                  {item.history.map((event, i) => (
+                                    <li key={i}>
+                                      <strong>{event.status}</strong>
+                                      <span className="ml-2">{new Date(event.at).toLocaleString('en-PH', { timeZone: 'Asia/Manila' })}</span>
+                                    </li>
+                                  ))}
+                                </ol>
+                              ) : <p className="mt-2 text-sm text-slate-600">Current status: {item.status}. Earlier transitions were not recorded.</p>}
+                            </section>
+                          </div>
+                        )}
+                      </section>
+                    )}
                   </div>
                 )}
               </div>

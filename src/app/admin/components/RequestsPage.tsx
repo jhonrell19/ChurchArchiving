@@ -655,8 +655,6 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
                             </p>
                           )}
                         </>
-                      )}
-
                     </details>}
                     {!readOnly && ['Approved','Ready'].includes(item.status) && <details><summary>Prepare reviewed document for release</summary>
 

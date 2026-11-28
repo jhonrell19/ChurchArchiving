@@ -6,7 +6,6 @@ import type { AdminPage } from './types.ts'
 import SuperAdminOverview from './components/SuperAdminOverview'
 import MassesPage from './components/MassesPage'
 import AnnouncementsPage from './components/AnnouncementsPage'
-import RequestsPage from './components/RequestsPage'
 import SettingsPage from './components/SettingsPage'
 
 export default function AdminPanel({accountEmail,initialPage="dashboard",managePolicy=false,manageWebsite=false,manageStaff=false}:{
@@ -36,7 +35,6 @@ export default function AdminPanel({accountEmail,initialPage="dashboard",manageP
           onOpenMasses={()=>navigate('masses')} onOpenNotices={()=>navigate('announcements')} onOpenSettings={()=>navigate('settings')}/>}
         {page==='masses' && <MassesPage initialTranscript={null}/>}
         {page==='announcements' && <AnnouncementsPage/>}
-        {page==='requests' && <RequestsPage readOnly/>}
         {page==='settings' && <SettingsPage manageWebsite={manageWebsite} managePolicy={managePolicy} accountEmail={accountEmail}/>}
   </WorkspaceShell>
 }

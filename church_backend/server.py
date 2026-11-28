@@ -608,8 +608,8 @@ def can_access_filepath(filepath):
         func.replace(CertificateRequest.draft_file, "\\", "/") == normalized
     )
 
-    if role in {"STAFF", "BURIAL_ADMIN"} and normalized.startswith("uploads/masses/"):
-        return MassRecord.query.filter_by(filepath=normalized, active=True).first() is not None
+    if role in {"STAFF", "BURIAL_ADMIN"} and normalized.startswith(("uploads/masses/", "uploads/transcriptions/")):
+        return False
 
     # Staff retrieves protected records across both old offices, but not Mass assets.
     if role == "STAFF":
@@ -622,37 +622,9 @@ def can_access_filepath(filepath):
         draft_request = CertificateRequest.query.filter(draft_path_matches).first()
         return draft_request is not None
 
-    # SUPER ADMIN (read-only oversight)
+    # Super Admin may access Homily media only, never certificate files.
     if role == "ADMIN":
-
-        if (
-            normalized.startswith("uploads/masses/")
-            or normalized.startswith("uploads/transcriptions/")
-        ):
-            return True
-
-        release_request = (
-            CertificateRequest.query
-            .filter(
-                request_path_matches,
-                CertificateRequest.sacrament_type.in_(MAIN_ADMIN_TYPES + BURIAL_ADMIN_TYPES),
-            )
-            .first()
-        )
-
-        if release_request is not None:
-            return True
-
-        draft_request = (
-            CertificateRequest.query
-            .filter(
-                draft_path_matches,
-                CertificateRequest.sacrament_type.in_(MAIN_ADMIN_TYPES + BURIAL_ADMIN_TYPES),
-            )
-            .first()
-        )
-
-        return draft_request is not None
+        return normalized.startswith(("uploads/masses/", "uploads/transcriptions/"))
 
     # BURIAL ADMIN
     if role == "BURIAL_ADMIN":
@@ -2996,8 +2968,6 @@ def api_get_requests():
 
         elif role in {
 
-            "ADMIN",
-
             "BURIAL_ADMIN",
 
             "STAFF",
@@ -3177,7 +3147,7 @@ def api_get_single_request(request_id):
         if cert_request.requester_user_id != user_id:
             return {"error": "Forbidden"}, 403
 
-    elif role in {"ADMIN", "STAFF", "BURIAL_ADMIN"}:
+    elif role in {"STAFF", "BURIAL_ADMIN"}:
         if not staff_can_access_request(cert_request):
             return {"error": "Forbidden"}, 403
 
@@ -3552,7 +3522,7 @@ def api_download_request_document(request_id):
             return {"error": "Forbidden"}, 403
         if cert_request.status != "Released" or cert_request.payment_status != "Paid" or _payment_is_test_only(cert_request):
             return {"error": "This document is not available for download yet."}, 403
-    elif role in {"ADMIN", "STAFF", "BURIAL_ADMIN"}:
+    elif role in {"STAFF", "BURIAL_ADMIN"}:
         if not staff_can_access_request(cert_request):
             return {"error": "Forbidden"}, 403
     else:
@@ -3601,7 +3571,7 @@ def download_file(filepath):
 
 def api_get_masses():
 
-    denied = require_roles("USER", "ADMIN", "STAFF", "BURIAL_ADMIN")
+    denied = require_roles("USER", "ADMIN")
 
     if denied:
 

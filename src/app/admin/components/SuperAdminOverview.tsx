@@ -1,8 +1,6 @@
 'use client'
 import { useCallback, useEffect, useState } from 'react'
 
-type Request = { id: number; status: string; sacramentType: string; requesterName: string; createdAt?: string }
-type RequestList = { requests: Request[]; counts?: Record<string, number> }
 type MonthPoint = {month:string;total:number}
 type Overview = {
   parishioners:number;staff:number;disabledStaff:number;
@@ -45,7 +43,6 @@ export default function SuperAdminOverview({
 }) {
   const [overview,setOverview] = useState<Overview|null>(null)
 
-  const [requests,setRequests] = useState<RequestList|null>(null)
   const [audit,setAudit] = useState<Audit[]>([])
   const [error,setError] = useState(false)
   const [loading,setLoading] = useState(true)
@@ -53,20 +50,16 @@ export default function SuperAdminOverview({
     setLoading(true);setError(false)
     const results = await Promise.allSettled([
       read<Overview>('/api/admin/overview'),
-
-      read<RequestList>('/api/backend/api/requests?page=1'),
       read<{logs:Audit[]}>('/api/backend/api/office/audit-logs'),
     ])
-    const [users,reqs,auditList] = results
+    const [users,auditList] = results
     setOverview(users.status==='fulfilled'?users.value:null)
 
-    setRequests(reqs.status==='fulfilled'?reqs.value:null)
     setAudit(auditList.status==='fulfilled'&&Array.isArray(auditList.value.logs)?auditList.value.logs:[])
     setError(results.some(x=>x.status==='rejected'))
     setLoading(false)
   },[])
   useEffect(()=>{void load()},[load])
-  const pending=requests?.counts?.Pending
 
   return <section className="space-y-6">
     <div className="role-banner">
@@ -82,7 +75,7 @@ export default function SuperAdminOverview({
       <h3 className="role-subtitle mb-3">At a glance</h3>
       <div className="grid gap-3 sm:grid-cols-2">
 
-        <Tile label="Pending certificate requests" value={pending ?? (loading?'…':'—')} note="Across all document categories"/>
+        <Tile label="Church staff accounts" value={overview?.staff ?? (loading?'…':'—')} note="Manage staff from Administration"/>
         <Tile label="Registered parishioners" value={overview?.parishioners ?? (loading?'…':'—')}/>
 
       </div>

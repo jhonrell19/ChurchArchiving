@@ -185,6 +185,16 @@ async function forward(request: NextRequest, context: { params: Promise<{ path: 
     return NextResponse.json({ message: 'Forbidden.' }, { status: 403 })
   }
 
+  // The account must have verified its email at sign-up; no extra code is
+  // required for each new certificate request.
+  if (path === 'api/requests' && request.method.toUpperCase() === 'POST' &&
+      user.role === 'USER' && !user.emailVerified) {
+    return NextResponse.json(
+      { message: 'Verify your account email before requesting a certificate.' },
+      { status: 403 }
+    )
+  }
+
   const flaskBase = process.env.FLASK_API_URL
   const internalKey = process.env.FLASK_INTERNAL_KEY
 

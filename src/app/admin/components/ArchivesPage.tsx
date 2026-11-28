@@ -4,6 +4,7 @@ import { useFeedback } from '@/components/ui/FeedbackProvider'
 
 import { useEffect, useRef, useState } from 'react'
 import { inputCls } from '../data/ui'
+import { philippineToday, sanitizePersonName } from '@/lib/fieldInput'
 import BatchArchive from './BatchArchive'
 import TemplateDataFields, { type TemplateRecordData } from './TemplateDataFields'
 
@@ -223,7 +224,8 @@ export default function ArchivesPage({initialTab='baptismal'}:{initialTab?:strin
     setOcrReviewed(false)
     setForm(prev => ({
       ...prev,
-      [e.target.name]: e.target.value,
+      [e.target.name]: ['person_name', 'priest'].includes(e.target.name)
+        ? sanitizePersonName(e.target.value) : e.target.value,
     }))
   }
 
@@ -467,6 +469,7 @@ const records = documents
               </label>
               <input
                 name="person_name"
+                maxLength={150}
                 value={form.person_name}
                 onChange={handleChange}
                 required
@@ -498,7 +501,7 @@ const records = documents
                 Date of Record
               </label>
               <input
-                type="date"
+                type="date" max={philippineToday()}
                 name="date_of_record"
                 value={form.date_of_record}
                 onChange={handleChange}

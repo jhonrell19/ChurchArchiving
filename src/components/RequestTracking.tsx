@@ -7,6 +7,8 @@ import { isConfirmedCertificatePayment, isTestCertificatePayment } from '@/lib/c
  * from persisted request status; it does NOT invent historical transition dates,
  * SMS deliveries, or a physical collection event.
  */
+export type RequestWorkflowStep = 'submitted' | 'verify' | 'prepare' | 'release'
+
 export type TrackingRequest = {
   id: number
   status: string
@@ -47,9 +49,17 @@ const badge = (done: boolean, current: boolean) =>
 export default function RequestTracking({
   request,
   compact = false,
+  paymentOnly = false,
+  selectedStep = null,
+  onStepSelect,
 }: {
   request: TrackingRequest
   compact?: boolean
+  /** Staff workflow: show payment details only when the Release stage is opened. */
+  paymentOnly?: boolean
+  /** Staff workflow: make the four colored milestones the actual navigation. */
+  selectedStep?: RequestWorkflowStep | null
+  onStepSelect?: (step: RequestWorkflowStep) => void
 }) {
   const status = request.status || 'Pending'
   const stopped = status === 'Rejected' || status === 'Cancelled'
@@ -63,10 +73,10 @@ export default function RequestTracking({
   const checkoutPending = method.startsWith('PAYMONGO_') && method.endsWith('_PENDING') && !paid
   const reversed = method === 'CASH_REVERSED'
   const steps = [
-    { name: 'Request submitted', done: true, detail: 'Received by the parish portal' },
-    { name: 'Staff verification', done: approved, detail: 'Parish staff reviews the matching record and request eligibility' },
-    { name: 'Document prepared', done: prepared, detail: 'Final document attached by authorized parish staff' },
-    { name: 'Office release', done: released, detail: 'Release recorded by authorized parish staff' },
+    { key: 'submitted' as const, name: 'Request submitted', done: true, detail: 'View the submitted request and certificate details' },
+    { key: 'verify' as const, name: 'Staff verification', done: approved, detail: 'Verify the matching record and approve or reject' },
+    { key: 'prepare' as const, name: 'Document prepared', done: prepared, detail: 'Generate, review and attach the final document' },
+    { key: 'release' as const, name: 'Office release', done: released, detail: 'Check payment and history, then release when eligible' },
   ]
   const nextIndex = steps.findIndex(step => !step.done)
   const paymentLabel = recordedTestPayment
@@ -99,10 +109,46 @@ export default function RequestTracking({
             : 'Your request was approved. Complete the applicable payment or coordinate with parish staff.'
           : 'Waiting for parish staff to verify your request and the correct sacramental record.'
 
+  if (onStepSelect) {
+    return (
+      <nav aria-label={`Certificate workflow for IFI-REQ-${String(request.id).padStart(4, '0')}`}>
+        <ol className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {steps.map((step, index) => {
+            const isCurrent = !stopped && index === nextIndex
+            const isSelected = selectedStep === step.key
+            return (
+              <li key={step.key}>
+                <button
+                  type="button"
+                  onClick={() => onStepSelect(step.key)}
+                  aria-expanded={isSelected}
+                  aria-controls={`staff-workflow-panel-${request.id}`}
+                  aria-current={isCurrent ? 'step' : undefined}
+                  className={`flex min-h-40 w-full flex-col rounded-xl border-2 p-4 text-left transition-all hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 ${badge(step.done, isCurrent)} ${isSelected ? 'ring-2 ring-blue-600 ring-offset-2' : ''}`}
+                >
+                  <span className="flex items-center gap-2 text-base font-semibold">
+                    <span aria-hidden="true" className="inline-flex size-7 shrink-0 items-center justify-center rounded-full border border-current/30 text-sm font-bold">
+                      {step.done ? '✓' : index + 1}
+                    </span>
+                    {step.name}
+                  </span>
+                  <span className="mt-2 text-sm leading-relaxed">{step.detail}</span>
+                  <span className="mt-auto pt-3 text-sm font-semibold">
+                    {isSelected ? 'Close this step ↑' : step.done ? 'Completed · Open step →' : isCurrent ? 'Current step · Open →' : 'View step →'}
+                  </span>
+                </button>
+              </li>
+            )
+          })}
+        </ol>
+      </nav>
+    )
+  }
+
   return (
     <section aria-label={`Tracking for request IFI-REQ-${String(request.id).padStart(4, '0')}`}
       className="rounded-xl border border-emerald-200 bg-white p-4 sm:p-5">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
+      {!paymentOnly && <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h3 className="text-lg font-semibold text-slate-900">Request &amp; payment tracking</h3>
           <p className="mt-1 text-sm text-slate-600">
@@ -112,9 +158,9 @@ export default function RequestTracking({
         <span className={`rounded-full border px-3 py-1 text-sm font-semibold ${stopped ? 'border-rose-200 bg-rose-50 text-rose-800' : released ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-slate-50 text-slate-700'}`}>
           {status}
         </span>
-      </div>
+      </div>}
 
-      <ol className={`mt-4 grid gap-2 ${compact ? 'sm:grid-cols-2' : 'sm:grid-cols-2 xl:grid-cols-4'}`}>
+      {!paymentOnly && <ol className={`mt-4 grid gap-2 ${compact ? 'sm:grid-cols-2' : 'sm:grid-cols-2 xl:grid-cols-4'}`}>
         {steps.map((step, index) => {
           const isCurrent = !stopped && index === nextIndex
           return (
@@ -133,13 +179,13 @@ export default function RequestTracking({
             </li>
           )
         })}
-      </ol>
+      </ol>}
 
-      {stopped && <div role="status" className="mt-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">
+      {stopped && !paymentOnly && <div role="status" className="mt-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">
         Request {status.toLowerCase()}. Previous completed stages cannot be reconstructed from the current status alone.
       </div>}
 
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
+      <div className={`${paymentOnly ? '' : 'mt-4'} grid gap-3 md:grid-cols-2`}>
         <section aria-label="Payment verification" className={`rounded-lg border p-4 ${paid ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
           <h4 className="text-base font-semibold text-slate-900">Payment tracking</h4>
           <p className="mt-1 text-sm font-semibold text-slate-900">{paymentLabel}</p>

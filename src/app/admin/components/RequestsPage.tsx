@@ -2,6 +2,7 @@
 
 import { useFeedback } from '@/components/ui/FeedbackProvider'
 import RequestDetails from '@/components/RequestDetails'
+import RequestTracking from '@/components/RequestTracking'
 import NotificationOutboxControl from './NotificationOutboxControl'
 
 import { useEffect, useRef, useState } from 'react'
@@ -115,6 +116,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
   const [requests, setRequests] = useState<CertificateRequest[]>([])
   const [filter, setFilter] = useState<ReqStatus>('All')
   const [expanded, setExpanded] = useState<number | null>(null)
+  const [trackingOpen, setTrackingOpen] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<number | null>(null)
   const [searchingId, setSearchingId] = useState<number | null>(null)
@@ -166,6 +168,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
   const toggleExpanded = (item: CertificateRequest) => {
     const opening = expanded !== item.id
     setExpanded(opening ? item.id : null)
+    setTrackingOpen(null)
 
     if (opening) {
       setSearchTerms(prev => ({
@@ -761,9 +764,33 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
                     </details>}
                     {!readOnly && item.status==='Ready' && !canRelease && <p>Release requires a verified source, final document and confirmed payment.</p>}
                     </section>
-                    <section className="role-card"><h3>History</h3>
-                      {item.history?.length ? <ol>{item.history.map((event,i)=><li key={i}><strong>{event.status}</strong> · {new Date(event.at).toLocaleString('en-PH',{timeZone:'Asia/Manila'})}</li>)}</ol>
-                      : <p>Current status: {item.status}. Earlier transitions were not recorded.</p>}
+                    <section className="role-card">
+                      <button
+                        type="button"
+                        className="flex w-full min-h-11 items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-left text-sm font-semibold text-slate-800 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2"
+                        aria-expanded={trackingOpen === item.id}
+                        aria-controls={`staff-tracking-${item.id}`}
+                        onClick={() => setTrackingOpen(open => open === item.id ? null : item.id)}
+                      >
+                        <span><i className="ti ti-list-check mr-2" aria-hidden="true" />View status, payment &amp; history</span>
+                        <i className={`ti ${trackingOpen === item.id ? 'ti-chevron-up' : 'ti-chevron-down'}`} aria-hidden="true" />
+                      </button>
+                      <div id={`staff-tracking-${item.id}`} hidden={trackingOpen !== item.id} className="mt-4 space-y-4">
+                        <RequestTracking request={item} />
+                        <section className="rounded-lg border border-slate-200 bg-white p-4">
+                          <h4 className="text-base font-semibold text-slate-900">Recorded status changes</h4>
+                          {item.history?.length ? (
+                            <ol className="mt-3 space-y-2 border-l-2 border-slate-200 pl-4 text-sm text-slate-700">
+                              {item.history.map((event, i) => (
+                                <li key={i}>
+                                  <strong>{event.status}</strong>
+                                  <span className="ml-2">{new Date(event.at).toLocaleString('en-PH', { timeZone: 'Asia/Manila' })}</span>
+                                </li>
+                              ))}
+                            </ol>
+                          ) : <p className="mt-2 text-sm text-slate-600">Current status: {item.status}. Earlier transitions were not recorded.</p>}
+                        </section>
+                      </div>
                     </section>
                   </div>
                 )}

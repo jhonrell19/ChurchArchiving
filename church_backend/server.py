@@ -5597,8 +5597,21 @@ def api_cash_receipt_capability():
     denied = require_roles("STAFF", "BURIAL_ADMIN")
     if denied:
         return denied
-    enabled = os.getenv("PARISH_CASH_RECEIPTS") == "enabled"
-    return {"enabled": enabled}, 200
+    if os.getenv("PARISH_CASH_RECEIPTS") != "enabled":
+        return {"enabled": False}, 200
+    # Do not enable the Staff button if the SQL table or role migration is absent.
+    try:
+        actor_check = db.session.execute(text("""
+            SELECT pg_get_constraintdef(oid)
+            FROM pg_constraint
+            WHERE conrelid = to_regclass('parish_private.cash_receipt_ledger')
+              AND conname = 'cash_receipt_ledger_actor_role_check'
+        """)).scalar()
+        return {"enabled": bool(actor_check and "'STAFF'" in actor_check)}, 200
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("Cash ledger capability check failed")
+        return {"enabled": False}, 200
 
 
 @app.route("/api/requests/<int:request_id>/cash-receipt", methods=["POST"])

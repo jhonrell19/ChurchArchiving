@@ -27,8 +27,7 @@ class PayMongoSandboxCheckoutTests(unittest.TestCase):
         self.mode = "test"
         self.provider_calls = []
         self.session = Mock()
-        self.query = Mock()
-        self.query.filter_by.return_value.with_for_update.return_value.one_or_none.return_value = self.cert
+        self.session.query.return_value.filter_by.return_value.with_for_update.return_value.one_or_none.return_value = self.cert
 
         def call_provider(method, path, payload=None):
             self.provider_calls.append((method, path, payload))
@@ -50,7 +49,7 @@ class PayMongoSandboxCheckoutTests(unittest.TestCase):
         scope = {
             "require_roles": lambda *_: None,
             "request": SimpleNamespace(get_json=lambda silent=True: self.payload),
-            "CertificateRequest": SimpleNamespace(query=self.query),
+            "CertificateRequest": object,
             "current_user_id": lambda: 7,
             "db": SimpleNamespace(session=self.session),
             "_paymongo_mode": lambda: (self.mode, "sk_test_fixture_secret"),
@@ -71,8 +70,7 @@ class PayMongoSandboxCheckoutTests(unittest.TestCase):
             "APP_BASE_URL": "https://example.test",
             "PAYMONGO_METHODS": "qrph",
         }):
-            response, code = self.checkout(42)
-        self.assertEqual(code, 200)
+            response = self.checkout(42)
         self.assertTrue(response["checkoutUrl"].startswith("https://checkout.paymongo.com/"))
         self.assertEqual(self.cert.payment_method, "PAYMONGO_TEST_PENDING")
         self.assertEqual(self.cert.payment_status, "Unpaid")

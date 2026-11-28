@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useFeedback } from '@/components/ui/FeedbackProvider'
 
 type Props = {
@@ -26,11 +26,34 @@ export default function CashReceiptPanel({
   const [receiptNumber, setReceiptNumber] = useState('')
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
+  const [cashEnabled, setCashEnabled] = useState<boolean | null>(null)
+  useEffect(() => {
+    let mounted = true
+    fetch('/api/backend/api/requests/cash-capability', {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(75_000),
+    }).then(async response => {
+      if (!response.ok) throw new Error('Cash capability unavailable')
+      return response.json()
+    }).then(data => {
+      if (mounted) setCashEnabled(data?.enabled === true)
+    }).catch(() => {
+      if (mounted) setCashEnabled(false)
+    })
+    return () => { mounted = false }
+  }, [])
   const cashPaid = paymentStatus === 'Paid' && paymentMethod === 'CASH'
   const unpaid = paymentStatus !== 'Paid'
   const permittedStatus = status === 'Approved' || status === 'Ready'
 
   if (!permittedStatus || (!unpaid && !cashPaid)) return null
+  if (cashEnabled !== true) return (
+    <p role="status" className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+      {cashEnabled === null
+        ? 'Checking parish-office cash recording availability…'
+        : 'Office cash recording is not enabled or the service is unavailable. Ask the Super Admin to verify the migration and cash-receipt setting; never mark this request Paid manually.'}
+    </p>
+  )
 
   const action = cashPaid ? 'reverse' : 'record'
   const submit = async () => {

@@ -73,7 +73,7 @@ export default function RequestTracking({
   const checkoutPending = method.startsWith('PAYMONGO_') && method.endsWith('_PENDING') && !paid
   const reversed = method === 'CASH_REVERSED'
   const steps = [
-    { key: 'submitted' as const, name: 'Request submitted', done: true, detail: 'View the submitted request and certificate details' },
+    { key: 'submitted' as const, name: 'Request submitted', done: true, detail: 'Open Account information & Requested information tables' },
     { key: 'verify' as const, name: 'Staff verification', done: approved, detail: 'Verify the matching record and approve or reject' },
     { key: 'prepare' as const, name: 'Document prepared', done: prepared, detail: 'Generate, review and attach the final document' },
     { key: 'release' as const, name: 'Office release', done: released, detail: 'Check payment and history, then release when eligible' },

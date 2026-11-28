@@ -122,7 +122,7 @@ export default function RequestTracking({
                   type="button"
                   onClick={() => onStepSelect(step.key)}
                   aria-expanded={isSelected}
-                  aria-controls={`staff-workflow-panel-${request.id}`}
+                  aria-controls={step.key === 'submitted' ? `staff-request-details-${request.id}` : `staff-workflow-panel-${request.id}`}
                   aria-current={isCurrent ? 'step' : undefined}
                   className={`flex min-h-40 w-full flex-col rounded-xl border-2 p-4 text-left transition-all hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 ${badge(step.done, isCurrent)} ${isSelected ? 'ring-2 ring-blue-600 ring-offset-2' : ''}`}
                 >

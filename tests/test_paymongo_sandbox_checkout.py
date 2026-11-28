@@ -20,6 +20,7 @@ class PayMongoSandboxCheckoutTests(unittest.TestCase):
             id=42, requester_user_id=7, status="Ready",
             payment_status="Unpaid", payment_method=None, payment_reference=None,
             total_fee=300, base_fee=300, urgent_fee=0,
+            matched_document_id=3,
             requester_email="parishioner@example.test",
             requester_name="Example Parishioner",
         )

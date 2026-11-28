@@ -249,6 +249,7 @@ export default function RequestsPage() {
   const [pricingReady, setPricingReady] = useState(false)
   const [paymentMode, setPaymentMode] = useState<'test' | 'live' | 'unavailable'>('unavailable')
   const [checkoutConfigured, setCheckoutConfigured] = useState(false)
+  const [expiredCheckoutRequestId, setExpiredCheckoutRequestId] = useState<number | null>(null)
   const [serviceFees, setServiceFees] = useState<Record<string, number>>({})
   const [cemeteryFees, setCemeteryFees] = useState<Record<string, number>>({})
   useEffect(() => {
@@ -572,18 +573,33 @@ if (
     }
   }
 
-  const payMongoCheckout = async (requestId: number, expectedMode: 'test' | 'live') => {
-    if (expectedMode === 'test' && !(await confirmAction(
-      'Start a PayMongo SANDBOX checkout? This is a simulated transaction and collects NO real money. A successful test payment cannot release an official certificate.'
+  const payMongoCheckout = async (
+    requestId: number,
+    expectedMode: 'test' | 'live',
+    replaceExpired = false
+  ) => {
+    if ((expectedMode === 'test' || replaceExpired) && !(await confirmAction(
+      replaceExpired
+        ? `PayMongo confirmed the earlier ${expectedMode.toUpperCase()} checkout expired. Start a NEW ${expectedMode === 'test' ? 'TEST checkout (NO real money)' : 'LIVE checkout'} for the SAME certificate request? The old reference remains in the audit history.`
+        : 'Continue with a PayMongo SANDBOX checkout? This is a simulation and collects NO real money. Official certificate release stays blocked.'
     ))) return
     try {
       const res = await fetch(`/api/backend/api/requests/${requestId}/paymongo-checkout`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ expectedMode }),
+        body: JSON.stringify({ expectedMode, replaceExpired }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) { toast.error(data.error || 'Checkout unavailable.'); return }
+      if (!res.ok) {
+        if (data.expired === true && !replaceExpired) {
+          setExpiredCheckoutRequestId(requestId)
+          toast.warning('PayMongo confirmed the old session expired. Select Start New Checkout to confirm a replacement for this same certificate request.')
+        } else {
+          toast.error(data.error || 'Checkout unavailable. The existing request was not changed.')
+        }
+        return
+      }
+      setExpiredCheckoutRequestId(null)
       if (!data.checkoutUrl?.startsWith('https://checkout.paymongo.com/')) {
         toast.error('Invalid payment destination.'); return
       }
@@ -1030,6 +1046,13 @@ if (
                 const canPayOnline = canStartCheckout && paymentMode === 'live'
                 const canSimulateTest = canStartCheckout && paymentMode === 'test' &&
                   req.paymentMethod !== 'PAYMONGO_TEST_RECONCILED'
+                // A pending checkout is not a new payment: PayMongo can return
+                // the SAME active hosted page. A truly expired session requires
+                // explicit separate consent before a replacement is created.
+                const resumeMode: 'test' | 'live' | null = req.paymentMethod === 'PAYMONGO_TEST_PENDING' ? 'test'
+                  : req.paymentMethod === 'PAYMONGO_LIVE_PENDING' ? 'live' : null
+                const canResumeCheckout = eligibleForPayment && pricingReady && checkoutConfigured &&
+                  Boolean(req.paymentReference?.startsWith('cs_')) && resumeMode === paymentMode
 
                 const canDownload =
                   Boolean(req.generatedFile) &&
@@ -1115,7 +1138,11 @@ if (
                         {req.status === 'Approved' && req.paymentStatus !== 'Paid' && (
                           <p className="font-body text-[12px] text-amber-700">
                             {hasUnresolvedCheckout
-                              ? 'A previous checkout is awaiting verification. Do not attempt another payment; contact the parish office.'
+                              ? canResumeCheckout
+                                ? expiredCheckoutRequestId === req.id
+                                  ? 'PayMongo reports that the earlier checkout expired. Confirm a replacement for this same request; do not pay twice.'
+                                  : 'An earlier checkout exists. Use Resume Checkout to reopen that SAME PayMongo session; do not start a separate payment.'
+                                : 'A previous checkout is awaiting verification. Do not attempt another payment; contact the parish office.'
                               : canPayOnline
                                 ? 'Your request is approved. Verified PayMongo live checkout is available.'
                                 : canSimulateTest
@@ -1133,7 +1160,11 @@ if (
                         {req.status === 'Ready' && req.paymentStatus !== 'Paid' && (
                           <p className="font-body text-[12px] text-amber-700">
                             {hasUnresolvedCheckout
-                              ? 'Your document is prepared, but an earlier checkout is still unverified. Do not retry payment; contact parish staff.'
+                              ? canResumeCheckout
+                                ? expiredCheckoutRequestId === req.id
+                                  ? 'The prior PayMongo session was confirmed expired. You may explicitly start a replacement for this same request.'
+                                  : 'Your document is ready; reopen the SAME PayMongo checkout using Resume Checkout. No new session is created if it is still active.'
+                                : 'Your document is prepared, but an earlier checkout is still unverified. Do not retry payment; contact parish staff.'
                               : canPayOnline
                                 ? 'Your document is prepared. Complete the approved live payment before release.'
                                 : canSimulateTest
@@ -1190,6 +1221,19 @@ if (
                             className="rounded-lg border border-slate-200 bg-white px-3 py-2 font-display text-[11px] text-slate-700 hover:bg-slate-50"
                             title="Hide from your personal view without deleting the parish record">
                             Hide From My History
+                          </button>
+                        )}
+                        {canResumeCheckout && resumeMode && (
+                          <button
+                            type="button"
+                            onClick={() => void payMongoCheckout(req.id, resumeMode, expiredCheckoutRequestId === req.id)}
+                            className="inline-flex min-h-11 items-center gap-2 rounded-lg border-2 border-amber-600 bg-amber-50 px-4 py-2 font-display text-[12px] font-semibold text-amber-950 hover:bg-amber-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700"
+                            aria-label={`${expiredCheckoutRequestId === req.id ? 'Start replacement' : 'Resume existing'} ${resumeMode} checkout for request IFI-REQ-${String(req.id).padStart(4, '0')}`}
+                          >
+                            <i aria-hidden="true" className="ti ti-refresh text-[16px]" />
+                            {expiredCheckoutRequestId === req.id
+                              ? `Start New ${resumeMode === 'test' ? 'Test Checkout — No real money' : 'Live Checkout'}`
+                              : `Resume ${resumeMode === 'test' ? 'Test Checkout — No real money' : 'Existing Live Checkout'}`}
                           </button>
                         )}
                         {canSimulateTest && (

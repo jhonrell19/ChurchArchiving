@@ -47,6 +47,7 @@ jobs:
           node tests/test_phase8_roles.cjs
           node tests/test_field_input_validation.cjs
           node tests/test_certificate_payment_guard.cjs
+          node tests/test_parishioner_payment_ui.cjs
           node tests/test_completion_payment_sms.cjs
       - name: PayMongo webhook and Twilio OTP mocked tests
         run: |

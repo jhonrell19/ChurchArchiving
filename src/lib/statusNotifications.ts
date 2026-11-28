@@ -42,6 +42,8 @@ export function deriveEvent(action: NotificationAction, req: NotificationSnapsho
       return { kind: 'payment-test', text: 'Smart Parish TEST: ' + code + ' simulated payment recorded. NO real funds were collected; this does not permit certificate release.' }
     if (req.paymentStatus === 'Paid' && ['PAYMONGO_LIVE', 'CASH'].includes(req.paymentMethod || ''))
       return { kind: 'payment-confirmed', text: 'Smart Parish: Verified payment for ' + code + ' was recorded. Log in to check document and pickup status.' }
+    if (req.paymentStatus === 'Unpaid' && req.paymentMethod === 'PAYMONGO_TEST_RECONCILED')
+      return { kind: 'payment-test-reconciled', text: 'Smart Parish: A previous TEST-only payment for ' + code + ' was corrected. No real funds were received. Please coordinate authorized payment with the parish office.' }
     if (req.paymentStatus === 'Unpaid' && req.paymentMethod === 'CASH_REVERSED')
       return { kind: 'payment-reversed', text: 'Smart Parish: A cash payment record for ' + code + ' was reversed. Contact the parish office for details.' }
   }

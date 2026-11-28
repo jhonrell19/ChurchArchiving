@@ -1,0 +1,223 @@
+{
+  "marriage": [
+    {
+      "key": "bride",
+      "label": "Bride’s maiden full name",
+      "kind": "name",
+      "required": true
+    },
+    {
+      "key": "marriageDate",
+      "label": "Exact marriage date",
+      "kind": "date",
+      "required": true
+    },
+    {
+      "key": "groomMother",
+      "label": "Groom’s mother’s maiden name",
+      "kind": "name",
+      "required": true
+    },
+    {
+      "key": "brideMother",
+      "label": "Bride’s mother’s maiden name",
+      "kind": "name",
+      "required": true
+    },
+    {
+      "key": "groomBirth",
+      "label": "Groom’s birthdate",
+      "kind": "date",
+      "required": false
+    },
+    {
+      "key": "brideBirth",
+      "label": "Bride’s birthdate",
+      "kind": "date",
+      "required": false
+    },
+    {
+      "key": "relationship",
+      "label": "Relationship to the person or couple",
+      "kind": "choice",
+      "required": true,
+      "options": [
+        "Spouse",
+        "Child",
+        "Parent",
+        "Legal guardian",
+        "Other"
+      ]
+    },
+    {
+      "key": "church",
+      "label": "Parish or church",
+      "kind": "text",
+      "required": false
+    },
+    {
+      "key": "book",
+      "label": "Book number",
+      "kind": "text",
+      "required": false
+    },
+    {
+      "key": "page",
+      "label": "Page number",
+      "kind": "text",
+      "required": false
+    },
+    {
+      "key": "line",
+      "label": "Line number",
+      "kind": "text",
+      "required": false
+    },
+    {
+      "key": "priest",
+      "label": "Officiating priest’s name",
+      "kind": "name",
+      "required": false
+    }
+  ],
+  "baptismal": [
+    {
+      "key": "birthDate",
+      "label": "Date of birth",
+      "kind": "date",
+      "required": true
+    },
+    {
+      "key": "baptism",
+      "label": "Approximate baptism date or year",
+      "kind": "yearDate",
+      "required": false
+    },
+    {
+      "key": "birthPlace",
+      "label": "Place of birth",
+      "kind": "text",
+      "required": false
+    },
+    {
+      "key": "godparents",
+      "label": "Godparents’ names",
+      "kind": "text",
+      "required": false
+    },
+    {
+      "key": "relationship",
+      "label": "Relationship to the person or couple",
+      "kind": "choice",
+      "required": true,
+      "options": [
+        "Self",
+        "Parent",
+        "Legal guardian"
+      ]
+    },
+    {
+      "key": "church",
+      "label": "Parish or church",
+      "kind": "text",
+      "required": false
+    },
+    {
+      "key": "book",
+      "label": "Book number",
+      "kind": "text",
+      "required": false
+    },
+    {
+      "key": "page",
+      "label": "Page number",
+      "kind": "text",
+      "required": false
+    },
+    {
+      "key": "line",
+      "label": "Line number",
+      "kind": "text",
+      "required": false
+    },
+    {
+      "key": "priest",
+      "label": "Officiating priest’s name",
+      "kind": "name",
+      "required": false
+    }
+  ],
+  "confirmation": [
+    {
+      "key": "birthDate",
+      "label": "Date of birth",
+      "kind": "date",
+      "required": true
+    },
+    {
+      "key": "confirmation",
+      "label": "Confirmation date or exact year",
+      "kind": "yearDate",
+      "required": true
+    },
+    {
+      "key": "baptism",
+      "label": "Date of baptism",
+      "kind": "date",
+      "required": false
+    },
+    {
+      "key": "birthPlace",
+      "label": "Place of birth",
+      "kind": "text",
+      "required": false
+    },
+    {
+      "key": "sponsor",
+      "label": "Sponsor’s name",
+      "kind": "name",
+      "required": false
+    },
+    {
+      "key": "historicContact",
+      "label": "Historical address or contact on the confirmation record",
+      "kind": "text",
+      "required": false
+    },
+    {
+      "key": "relationship",
+      "label": "Relationship to the person or couple",
+      "kind": "choice",
+      "required": true,
+      "options": [
+        "Self",
+        "Parent",
+        "Legal guardian"
+      ]
+    },
+    {
+      "key": "church",
+      "label": "Parish or church",
+      "kind": "text",
+      "required": false
+    },
+    {
+      "key": "book",
+      "label": "Book number",
+      "kind": "text",
+      "required": false
+    },
+    {
+      "key": "page",
+      "label": "Page number",
+      "kind": "text",
+      "required": false
+    },
+    {
+      "key": "line",
+      "label": "Line number",
+      "kind": "text",
+      "required": false
+    }
+  ]
+}

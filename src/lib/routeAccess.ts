@@ -69,6 +69,7 @@ export function accessRule(pathname: string): AccessRule | null {
       pathname === '/api/auth/change-password' ||
       pathname === '/api/auth/profile' ||
       pathname === '/api/auth/complete-profile' ||
+      pathname === '/api/requests/verification' ||
       pathname === '/api/auth/phone-otp')
     return { kind: 'api', roles: ['USER'] }
 

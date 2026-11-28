@@ -75,13 +75,14 @@ export default function ArchivesPage() {
     return ['All Categories', ...uniqueCategories]
   }, [masses])
 
+  const [status,setStatus] = useState('')
   const [term, setTerm] = useState('')
   const [date, setDate] = useState('')
   useEffect(() => {
     const timer = window.setTimeout(() => setTerm(search.trim().toLowerCase()), 250)
     return () => window.clearTimeout(timer)
   }, [search])
-  const filtered = masses.filter(m => (!date || m.date === date) &&
+  const filtered = masses.filter(m => (!date || m.date === date) && (!status || m.status === status) &&
     (priest === 'All Priests' || m.priest === priest) &&
     (category === 'All Categories' || m.category === category) &&
     (
@@ -103,6 +104,7 @@ export default function ArchivesPage() {
       </p>
 
       <div className="flex flex-col md:flex-row gap-3 mb-6">
+        <label>Status<select className={inputCls} value={status} onChange={e=>setStatus(e.target.value)}><option value="">All statuses</option>{[...new Set(masses.map(m=>m.status))].map(value=><option key={value}>{value}</option>)}</select></label>
         <label className="block">Recording date<input type="date" className={inputCls} value={date} onChange={e => setDate(e.target.value)} /></label>
         <div className="relative flex-1">
           <i
@@ -188,7 +190,7 @@ export default function ArchivesPage() {
 
                 <div className="flex items-center justify-between gap-2 mb-3">
                   <span className="font-display text-[10px] tracking-wider border border-gold/25 text-gold bg-gold/10 px-2 py-0.5 rounded-full">
-                    {m.category || 'General'}
+                    {m.category?.replace(/\bMass\b/g,'Homily') || 'General'}
                   </span>
 
                   <span className="font-body text-[11px] text-[#9ab0c4]">

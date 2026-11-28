@@ -5,7 +5,7 @@ type Request = { id: number; status: string; sacramentType: string; requesterNam
 type RequestList = { requests: Request[]; counts?: Record<string, number> }
 type MonthPoint = {month:string;total:number}
 type Overview = {
-  parishioners:number;staff:number;disabledStaff:number;newUploads:number|null;
+  parishioners:number;staff:number;disabledStaff:number;
   requestsByMonth:MonthPoint[];burialsByMonth:MonthPoint[];burialsAvailable:boolean
 }
 type Audit = { id: number; action: string; user: string }
@@ -80,7 +80,7 @@ export default function SuperAdminOverview({
     </div>}
     <section aria-label="Parish summary">
       <h3 className="role-subtitle mb-3">At a glance</h3>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2">
 
         <Tile label="Pending certificate requests" value={pending ?? (loading?'…':'—')} note="Across all document categories"/>
         <Tile label="Registered parishioners" value={overview?.parishioners ?? (loading?'…':'—')}/>

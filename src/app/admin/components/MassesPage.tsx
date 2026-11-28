@@ -533,7 +533,7 @@ export default function MassesPage({ initialTranscript }: { initialTranscript: n
                       {m.title}
                     </p>
                     <p className="font-body text-slate-600 text-sm">
-                      {m.category || 'No category'} · {m.duration || 'No duration'}
+                      {m.category?.replace(/\bMass\b/g,'Homily') || 'No category'} · {m.duration || 'No duration'}
                     </p>
                   </td>
 

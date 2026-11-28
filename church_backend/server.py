@@ -18,6 +18,7 @@ from flask import (
 )
 
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from docxtpl import DocxTemplate
 
@@ -216,7 +217,20 @@ def current_user_id():
 
 
 
-def serialize_request(r):
+def request_metadata(ids):
+    if not ids:
+        return {}, {}
+    identities = dict(db.session.execute(text("""SELECT request_id, fields FROM certificate_identity
+        WHERE request_id=ANY(:ids)"""), {"ids":ids}).all())
+    histories = {}
+    for rid, status, at in db.session.execute(text("""SELECT request_id,status,changed_at
+        FROM certificate_status_history WHERE request_id=ANY(:ids) ORDER BY id"""), {"ids":ids}):
+        histories.setdefault(rid, []).append({"status":status,"at":at.isoformat()})
+    return identities, histories
+
+
+def serialize_request(r, metadata=None):
+    identities, histories = metadata if metadata is not None else request_metadata([r.id])
     matched_document = None
 
     if r.matched_document_id and getattr(g, 'user_role', None) in {'STAFF', 'BURIAL_ADMIN'}:
@@ -242,6 +256,8 @@ def serialize_request(r):
 
     return {
 
+        "identity": identities.get(r.id),
+        "history": histories.get(r.id, []),
         "id": r.id,
 
 
@@ -464,6 +480,9 @@ def protect_backend_boundary():
 
 
 
+
+    if request.path == "/api/internal/request-code" and request.method == "POST" and g.user_role == "REQUEST_CODE_MAILER":
+        return None
 
     if request.path == "/api/public/calendar" and request.method == "GET" and g.user_role == "PUBLIC_CALENDAR":
         return None
@@ -1892,6 +1911,25 @@ def api_upload_document():
         file.stream.seek(0, os.SEEK_END)
         scan_bytes = file.stream.tell()
         file.stream.seek(0)
+        batch = request.form.get("batch_id")
+        if batch:
+            from uuid import UUID
+            try:
+                batch = str(UUID(batch))
+            except ValueError:
+                return {"error":"Invalid batch identifier"}, 400
+            limits = archive_batch_limits()
+            if extension not in limits["extensions"] or not 0 < scan_bytes <= limits["bytes"]:
+                return {"error":"File type or size exceeds the batch limits."}, 400
+            for scope, bucket, maximum in [("day", datetime.now(ZoneInfo("Asia/Manila")).date().isoformat(), limits["daily"]),
+                                           ("batch", batch, limits["files"])]:
+                reservation = db.session.execute(text("""INSERT INTO archive_batch_usage(user_id,scope,bucket,used)
+                    VALUES(:uid,:scope,:bucket,1) ON CONFLICT(user_id,scope,bucket)
+                    DO UPDATE SET used=archive_batch_usage.used+1 WHERE archive_batch_usage.used<:maximum
+                    RETURNING used"""), {"uid":current_user_id(),"scope":scope,"bucket":bucket,"maximum":maximum}).first()
+                if not reservation:
+                    db.session.rollback()
+                    return {"error": "Upload limit reached for this " + scope}, 429
         if scan_bytes <= 0 or scan_bytes > 15 * 1024 * 1024:
             return {"error": "The scanned file must be between 1 byte and 15 MB."}, 413
         signature = file.stream.read(12)
@@ -2135,6 +2173,21 @@ def api_upload_document():
         app.logger.exception('Archive upload failed')
         return {'error': 'Archive upload failed; check backend logs.'}, 500
 
+
+
+def archive_batch_limits():
+    extensions = {".pdf", ".jpg", ".jpeg", ".png"}
+    configured = os.environ.get("ARCHIVE_BATCH_TYPES", "pdf,jpg,jpeg,png").lower().split(",")
+    return {"files":max(1,int(os.getenv("ARCHIVE_BATCH_FILES", "20"))),
+            "bytes":min(15, max(1,int(os.getenv("ARCHIVE_BATCH_FILE_MB", "10"))))*1024*1024,
+            "daily":max(1,int(os.getenv("ARCHIVE_BATCH_DAILY", "100"))),
+            "extensions":sorted(extensions.intersection("." + ext.strip().lstrip(".") for ext in configured))}
+
+
+@app.get("/api/archive/batch-limits")
+def batch_limits():
+    denied = require_roles("STAFF","BURIAL_ADMIN")
+    return denied or archive_batch_limits()
 
 
 @app.get("/api/archive/storage-status")
@@ -2415,7 +2468,7 @@ def api_audit_logs():
 
         return denied
 
-    logs = AuditLog.query.order_by(AuditLog.id.desc()).limit(20).all()
+    logs = AuditLog.query.filter(AuditLog.document_id.is_(None)).order_by(AuditLog.id.desc()).limit(20).all()
 
 
 
@@ -2441,6 +2494,33 @@ def api_audit_logs():
 
     }
 
+
+
+@app.get("/api/requests/<int:request_id>/identity-proof")
+def read_identity_proof(request_id):
+    denied = require_roles("STAFF", "BURIAL_ADMIN")
+    if denied:
+        return denied
+    record = db.session.get(CertificateRequest, request_id)
+    if not record or not staff_can_access_request(record):
+        return {"error":"Not found"}, 404
+    row = db.session.execute(text("SELECT proof,proof_type FROM certificate_identity WHERE request_id=:id"), {"id":request_id}).first()
+    if not row or not row.proof:
+        return {"error":"Not found"}, 404
+    response = send_file(BytesIO(bytes(row.proof)), mimetype=row.proof_type, as_attachment=True, download_name="identity-proof")
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
+
+
+@app.post("/api/internal/request-code")
+def issue_request_code():
+    from request_codes import issue
+    if g.user_role != "REQUEST_CODE_MAILER" or not current_user_id() or not g.user_email:
+        return {"error": "Verified parishioner required."}, 403
+    code = issue(current_user_id(), g.user_email)
+    if not code:
+        return {"error":"Wait one minute before requesting another code."}, 429
+    return {"code":code}, 200, {"Cache-Control":"no-store"}
 
 
 @app.route("/api/requests", methods=["POST"])
@@ -2611,7 +2691,7 @@ def api_create_request():
         # account holder. Cemetery agreements and ownership records do not
         # require parent names. Treat unused client fields as non-authoritative.
         parents = {"motherFullName": None, "fatherFullName": None}
-        if sacrament_type in MAIN_ADMIN_TYPES:
+        if sacrament_type in {"baptismal", "confirmation"}:
             for key in ("motherFullName", "fatherFullName"):
                 raw = data.get(key)
                 name = " ".join(raw.split()) if isinstance(raw, str) else ""
@@ -2682,6 +2762,18 @@ def api_create_request():
             if not claim_id:
                 return {"error":"An approved claim matching this account, owner and certificate is required."}, 403
 
+        identity = None
+        proof = None
+        if sacrament_type in MAIN_ADMIN_TYPES:
+            from certificate_identity import validate_identity
+            from request_codes import consume
+            try:
+                identity, proof = validate_identity(sacrament_type, data, person_name)
+            except ValueError as exc:
+                return {"error": str(exc)}, 400
+            if not consume(user_id, requester_email, str(data.get("verificationCode", ""))):
+                return {"error":"Invalid or expired email code. Check the code or request another."}, 400
+
         new_request = CertificateRequest(
 
             requester_user_id=user_id,
@@ -2745,6 +2837,14 @@ def api_create_request():
 
 
         db.session.add(new_request)
+        if identity is not None:
+            db.session.flush()
+            db.session.execute(text("""INSERT INTO certificate_identity
+                (request_id, fields, proof, proof_type, verified_email) VALUES
+                (:id, CAST(:fields AS jsonb), :proof, :mime, :email)"""),
+                {"id":new_request.id, "fields":json.dumps(identity), "proof":proof,
+                 "mime":identity.get("proofType"), "email":requester_email})
+            db.session.add(AuditLog(user=requester_email, action=f"Email OTP verified for request #{new_request.id}"))
         if claim_id:
             db.session.flush()
             db.session.execute(text("INSERT INTO request_claim(request_id,claim_id) VALUES(:r,:c)"),
@@ -3002,7 +3102,8 @@ def api_get_requests():
             meta = {"page": page, "pages": pages, "counts": counts}
         else:
             rows = query.order_by(CertificateRequest.id.desc()).all()
-        return {"requests": [serialize_request(row) for row in rows], **meta}
+        metadata = request_metadata([row.id for row in rows])
+        return {"requests": [serialize_request(row, metadata) for row in rows], **meta}
 
     except Exception as e:
 
@@ -3307,6 +3408,13 @@ def api_upload_release_document(request_id):
             return {
                 "error": "Select and verify the archive source record first."
             }, 400
+
+        copy = db.session.execute(text("""SELECT fields, proof IS NOT NULL AS has_proof
+            FROM certificate_identity WHERE request_id=:id"""), {"id":request_id}).first()
+        if copy:
+            kind = "unredacted" if copy.fields.get("unredacted") else "redacted"
+            if request.form.get("reviewed_copy") != kind or (kind == "unredacted" and not copy.has_proof):
+                return {"error":"Review the requested copy and its authorization before preparing release."}, 400
 
         file = request.files.get("file")
 
@@ -5598,6 +5706,26 @@ def paymongo_confirm_internal():
         return {"error": "Mode mismatch"}, 409
     if not re.fullmatch(r"cs_[A-Za-z0-9_-]{1,128}", session_id):
         return {"error": "Invalid checkout reference"}, 400
+    return reconcile_checkout(session_id, pay_mode)
+
+
+@app.post("/api/requests/<int:request_id>/payment-result")
+def request_payment_result(request_id):
+    cert = db.session.get(CertificateRequest, request_id)
+    if g.user_role != "USER" or not cert or cert.requester_user_id != current_user_id():
+        return {"error":"Not found"}, 404
+    if cert.payment_status == "Paid":
+        return {"paymentStatus":"Paid"}
+    try:
+        mode, _ = _paymongo_mode()
+    except ValueError:
+        return {"error":"Payment service unavailable"}, 503
+    if not cert.payment_reference or cert.payment_method != "PAYMONGO_" + mode.upper() + "_PENDING":
+        return {"paymentStatus":cert.payment_status}
+    return reconcile_checkout(cert.payment_reference, mode)
+
+
+def reconcile_checkout(session_id, pay_mode):
     # Lock the request until its ledger insert and payment status commit together.
     # Refuse ambiguous checkout IDs instead of crediting an arbitrary request.
     matching = CertificateRequest.query.filter_by(payment_reference=session_id).with_for_update().limit(2).all()

@@ -1,0 +1,31 @@
+name: Parish workflow checks
+on:
+  pull_request:
+    branches: [staging, master]
+    paths:
+      - 'config/certificate_identity.json'
+      - 'church_backend/certificate_identity.py'
+      - 'church_backend/request_codes.py'
+      - 'src/app/admin/components/BatchArchive.tsx'
+      - 'deploy/migrations/20261128_certificate_workflow.sql'
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      ARCHIVE_POSTGRES_URL: postgresql://parish:fictional@127.0.0.1:5432/parish
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m compileall -q church_backend
+      - run: PYTHONPATH=church_backend python -m unittest discover -s church_backend/tests -p test_certificate_identity_fields.py
+      - run: npm ci
+      - run: npx prisma generate
+      - run: node tests/test_phase8_roles.cjs
+      - run: npx tsc --noEmit

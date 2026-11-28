@@ -39,6 +39,8 @@ function isAllowed(role: Role, method: string, path: string) {
     return true
   }
 
+  if (/^api\/requests\/\d+\/identity-proof$/.test(path)) return m === 'GET' && ['STAFF','BURIAL_ADMIN'].includes(role)
+  if (/^api\/requests\/\d+\/payment-result$/.test(path)) return m === 'POST' && role === 'USER'
   if (path === 'api/appointments') return m === 'GET' || m === 'POST'
   if (path === 'api/claims') return m === 'GET' || (m === 'POST' && role === 'USER')
   if (/^api\/claims\/\d+\/proof$/.test(path)) return m === 'GET' && role !== 'USER'
@@ -168,6 +170,9 @@ async function forward(request: NextRequest, context: { params: Promise<{ path: 
   }
 
   const { path: segments } = await context.params
+  if (segments.some(segment => !segment || segment === '.' || segment === '..' || /[\\/%?#]/.test(segment))) {
+    return NextResponse.json({error:'Invalid path'}, {status:400})
+  }
   const path = segments.join('/')
 
   if (!isAllowed(user.role, request.method, path)) {

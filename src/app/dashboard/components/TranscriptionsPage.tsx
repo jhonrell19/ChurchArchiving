@@ -66,7 +66,7 @@ export default function TranscriptionsPage() {
           <i className="ti ti-file-text text-gold/30 text-5xl mb-3 block" />
 
           <p className="font-display text-navy-mid text-[14px] font-semibold mb-1">
-            No transcribed masses yet
+            No transcribed homilies yet
           </p>
 
           <p className="font-body text-[#9ab0c4] text-[13px]">

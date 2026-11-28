@@ -4,6 +4,7 @@ import { useFeedback } from '@/components/ui/FeedbackProvider'
 
 import { useEffect, useRef, useState } from 'react'
 import { inputCls } from '../data/ui'
+import BatchArchive from './BatchArchive'
 import TemplateDataFields, { type TemplateRecordData } from './TemplateDataFields'
 
 type ArchiveDocument = {
@@ -449,6 +450,7 @@ const records = documents
         </div>
       )}
 
+      {activeTab !== 'burial' && hasLoaded && !storageMessage && <BatchArchive key={activeTab} category={activeTab} onSaved={()=>void loadDocuments()}/>}
       {showForm && (
         <form
           onSubmit={handleUpload}

@@ -17,6 +17,7 @@ RUN pip install --no-cache-dir -r requirements.txt 'gunicorn>=23,<26' \
     && ffmpeg -version >/dev/null && tesseract --version >/dev/null
 COPY church_backend/*.py /app/church_backend/
 COPY church_backend/templates/certificates/ /app/church_backend/templates/certificates/
+COPY config/certificate_identity.json /app/config/certificate_identity.json
 COPY config/parish_fees.json /app/config/parish_fees.json
 COPY prod-ca-2021.crt /app/prod-ca-2021.crt
 COPY deploy/render-start-flask.sh /app/deploy/render-start-flask.sh

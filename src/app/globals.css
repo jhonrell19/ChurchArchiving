@@ -396,3 +396,15 @@ input::placeholder,textarea::placeholder {color:#605351;opacity:1}
   .approval-list tbody td::before {content:attr(data-label);flex-basis:100%;font-size:.85rem;font-weight:650;color:#53616b}
   .approval-list tbody input {max-width:100%}
 }
+
+.administration-photo { position: relative; isolation: isolate; }
+.administration-photo::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: url("/slides/slide4.jpg") center 54% / cover no-repeat;
+  opacity: .15;
+}
+@media print { .administration-photo::before { display: none; } }

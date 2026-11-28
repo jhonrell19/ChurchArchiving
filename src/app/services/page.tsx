@@ -48,7 +48,7 @@ export default async function ServicesPage() {
               <tbody>{services.map(({ day, time, tag }, i) => <tr key={i} className="border-t border-gold/20">
                 <th scope="row" className="break-words p-2 align-top sm:p-4">{day}</th>
                 <td className="break-words p-2 align-top sm:p-4">{time}</td>
-                <td className="break-words p-2 align-top sm:p-4">{tag}</td>
+                <td className="break-words p-2 align-top sm:p-4">{tag.replace(/\bMass\b/g,'Homily')}</td>
               </tr>)}</tbody>
             </table>}
           </div>

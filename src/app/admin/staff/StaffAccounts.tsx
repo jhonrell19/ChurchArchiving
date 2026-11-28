@@ -2,6 +2,7 @@
 import OfficeHeading from '@/components/OfficeHeading'
 import { supervisorProvisioned } from '@/lib/staffProvisioning'
 import PasswordField from '@/components/auth/PasswordField'
+import { sanitizePersonName } from '@/lib/fieldInput'
 
 import { useEffect, useState } from 'react'
 
@@ -87,7 +88,7 @@ export default function StaffAccounts() {
           {(['firstName', 'surname', 'email'] as const).map(key => <label key={key} className="block text-sm font-medium capitalize">
             {key === 'firstName' ? 'First Name' : key === 'surname' ? 'Surname' : 'Email'}
             <input required maxLength={120} type={key === 'email' ? 'email' : 'text'} value={form[key]}
-              onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))}
+              onChange={e => setForm(p => ({ ...p, [key]: key === 'email' ? e.target.value : sanitizePersonName(e.target.value) }))}
               className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 px-3 text-base"/>
           </label>)}
         </div>
@@ -123,7 +124,7 @@ export default function StaffAccounts() {
                 {(['firstName', 'surname'] as const).map(key => <label key={key}>
                   {key === 'firstName' ? 'First name' : 'Surname'}
                   <input required maxLength={100} value={details[key]} className="block min-h-11 w-full rounded border bg-white px-3"
-                    onChange={e => setDetails({ ...details, [key]: e.target.value })}/>
+                    onChange={e => setDetails({ ...details, [key]: sanitizePersonName(e.target.value) })}/>
                 </label>)}
                 <button disabled={busy} className="min-h-11 self-end rounded border bg-white px-4">Save name</button>
               </form>

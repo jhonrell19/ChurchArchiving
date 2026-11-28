@@ -34,6 +34,14 @@ In Church Staff → Certificate requests → click the requester → Step 4 **Of
 
 **No authorized church collection/receipt = do not enable** real cash recording. This is real office cash handling, **not** an automated online payment gateway. Without an authorized receiving account/activated merchant, the site cannot accept real online QR Ph into the church's account.
 
+### Correct an old Paid PayMongo sandbox request before taking cash
+
+If Staff opens Step 4 and the payment says **Test payment recorded — no real funds**, do **not** click release, fake a receipt or edit Supabase. On this PR's code, the Step 4 **Reconcile test payment — no real funds** action appears only for Paid `PAYMONGO_TEST` or `DEMO` on an Approved/Ready request. Authorized staff confirms no real money was collected, enters a 10–500 character audit reason, and confirms the action.
+
+The server retains the original PayMongo test ledger row and writes an audit log containing the previous checkout reference. It clears the active checkout reference so a delayed test webhook cannot re-credit this request, leaves the certificate's **Ready** status and final document untouched, and changes active payment to `Unpaid / PAYMONGO_TEST_RECONCILED`. The request remains ineligible for release. Once authorized staff actually collects the correct amount of cash and provides an official receipt, **Step 4 → Record verified cash payment** becomes available if the cash ledger migration and setting are ready. Refresh the request to verify `Paid / CASH` before the final **Release verified certificate** action. A release requires Ready + final document + a real, allowlisted payment type, and sandbox cannot pass even on staging.
+
+A live PayMongo payment or existing real cash collection cannot be reconciled through this sandbox-only action. A repeated attempt is rejected.
+
 ## 3. textbee SMS via Android phone (Next.js service)
 
 In **ifimarag** → Environment, enter secret values privately (never share them here):

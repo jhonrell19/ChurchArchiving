@@ -7,14 +7,12 @@ import RequestsPage from '../admin/components/RequestsPage'
 import DeceasedRecords from './components/DeceasedRecords'
 import StaffHome from './components/StaffHome'
 
-import HomilyLibrary from '../dashboard/components/ArchivesPage'
 
-type Section = 'homilies' | 'dashboard' | 'archives' | 'requests' | 'deceased'
+type Section = 'dashboard' | 'archives' | 'requests' | 'deceased'
 const links: {page:Section;label:string;icon:string}[] = [
   {page:'dashboard',label:'Overview',icon:'ti-layout-dashboard'},
   {page:'archives',label:'Parish records',icon:'ti-archive'},
   {page:'requests',label:'Certificate requests',icon:'ti-file-certificate'},
-  {page:'homilies',label:'Homily recordings and transcriptions',icon:'ti-video'},
   {page:'deceased',label:'Deceased records',icon:'ti-file-text'},
 ]
 export default function StaffPage() {
@@ -32,7 +30,6 @@ export default function StaffPage() {
     </>}>
 
         {section==='dashboard' && <StaffHome openArchives={()=>navigate('archives')} openRequests={()=>navigate('requests')} openDeceased={()=>navigate('deceased')}/>}
-        {section==='homilies' && <HomilyLibrary/>}
         {section==='archives' && <ArchivesPage/>}
         {section==='requests' && <RequestsPage/>}
         {section==='deceased' && <DeceasedRecords/>}

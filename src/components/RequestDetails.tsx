@@ -29,7 +29,7 @@ export default function RequestDetails({request: r, documentType, office=false}:
     <DetailGroup title={office ? "Account information" : "Requester information"} rows={[
       ['Requester', r.requesterName], ['Email', r.requesterEmail], ['Phone', r.contactNumber],
     ]}/>
-    <DetailGroup title="Request information" rows={[
+    <DetailGroup title={office ? "Requested information" : "Request information"} rows={[
       ['Certificate / document', documentType], [subjectLabel, r.personName],
       ...(isSacramental && (r.sacramentType !== 'marriage' || !r.identity) ? [
         ['Mother’s full name (including maiden name)', r.motherFullName],

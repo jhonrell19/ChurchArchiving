@@ -26,7 +26,7 @@ export default function RequestDetails({request: r, documentType, office=false}:
 
   const specs = identityConfig[r.sacramentType as keyof typeof identityConfig] || []
   return <div className="request-detail-layout">
-    <DetailGroup title="Requester information" rows={[
+    <DetailGroup title={office ? "Account information" : "Requester information"} rows={[
       ['Requester', r.requesterName], ['Email', r.requesterEmail], ['Phone', r.contactNumber],
     ]}/>
     <DetailGroup title="Request information" rows={[

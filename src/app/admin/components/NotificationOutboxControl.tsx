@@ -23,7 +23,11 @@ export default function NotificationOutboxControl() {
     } catch { setNote('Notification outbox is not ready. Database migration may be missing.') }
   }, [])
   useEffect(() => { void refresh() }, [refresh])
-  if (!enabled) return null
+  if (!enabled) return (
+    <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+      {note || 'Automatic SMS/email updates are disabled. Super Admin must apply the notification database migrations and configure the private Render notification settings before enabling delivery.'}
+    </p>
+  )
   const send = async () => {
     setBusy(true)
     setNote('')

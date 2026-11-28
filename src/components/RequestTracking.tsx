@@ -206,7 +206,7 @@ export default function RequestTracking({
             {reconciledTest
               ? 'Earlier test payment was reconciled. No real funds received; actual collection is still required.'
               : 'Sandbox only — not proof of real money received.'}
-          </p>
+          </p>}
           {!paid && Number(request.totalFee || 0) === 0 && <p className="mt-2 text-xs text-slate-700">
             No fee configured. Staff must confirm applicable payment or waiver before release.
           </p>}

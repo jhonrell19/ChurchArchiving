@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS parish_private.cash_receipt_ledger (
     amount_cents bigint NOT NULL,
     original_entry_id bigint REFERENCES parish_private.cash_receipt_ledger(id),
     actor_user_id integer NOT NULL,
-    actor_role text NOT NULL CHECK(actor_role IN ('ADMIN','BURIAL_ADMIN')),
+    actor_role text NOT NULL CHECK(actor_role IN ('ADMIN','BURIAL_ADMIN','STAFF')),
     reason text NOT NULL CHECK(length(trim(reason)) BETWEEN 5 AND 500),
     created_at timestamptz NOT NULL DEFAULT now(),
     CHECK (

@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation'
 import type { ReactNode } from 'react'
 import { parsePhoneNumberFromString } from 'libphonenumber-js/max'
 import InternationalPhoneField from '@/components/auth/InternationalPhoneField'
+import { sanitizePersonName } from '@/lib/fieldInput'
 
 export default function CompleteProfilePage() {
   const router = useRouter()
@@ -71,7 +72,8 @@ export default function CompleteProfilePage() {
   ) => {
     setForm(previous => ({
       ...previous,
-      [event.target.name]: event.target.value,
+      [event.target.name]: ['firstName', 'middleName', 'surname'].includes(event.target.name)
+        ? sanitizePersonName(event.target.value) : event.target.value,
     }))
   }
 

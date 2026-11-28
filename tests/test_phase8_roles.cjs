@@ -84,7 +84,7 @@ assert.match(staffRequests, /item\.history\?\.length/)
 assert.match(backend, /if role in \{"STAFF", "BURIAL_ADMIN"\} and normalized\.startswith\(\("uploads\/masses\/", "uploads\/transcriptions\/"\)\):\s*return False/)
 const massEndpoint = backend.slice(backend.indexOf('def api_get_masses():'),backend.indexOf('def api_create_mass():'))
 assert.match(massEndpoint,/require_roles\("USER", "ADMIN"\)/)
-const requestListEndpoint = backend.slice(backend.indexOf('def api_get_requests():'),backend.indexOf('def api_cancel_request('))
+const requestListEndpoint = backend.slice(backend.indexOf('def api_get_requests():'),backend.indexOf('@app.route("/api/requests/<int:request_id>/cancel"', backend.indexOf('def api_get_requests():')))
 assert.doesNotMatch(requestListEndpoint, /"ADMIN"/)
 
 console.log('PASS: Role-separated menus, staff tracking, Flask and proxy request/Homily guards')

@@ -92,7 +92,10 @@ async function main() {
   }).kind, 'payment-test')
   assert.equal(handlers.deriveEvent('payment', {
     ...approved, paymentStatus: 'Paid', paymentMethod: 'PAYMONGO_TEST_PENDING',
-  }), null)
+  }).kind, 'payment-test')
+  assert.equal(handlers.deriveEvent('payment', {
+    ...approved, paymentStatus: 'Paid', paymentMethod: 'DEMO',
+  }).kind, 'payment-test')
   assert.equal(handlers.deriveEvent('payment', {
     ...approved, paymentStatus: 'Paid', paymentMethod: 'PAYMONGO_LIVE',
   }).kind, 'payment-confirmed')

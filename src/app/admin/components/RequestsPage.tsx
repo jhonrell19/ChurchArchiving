@@ -421,33 +421,37 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
         </label><button>Search requests</button>
       </form>
 
-      <div className="flex gap-2 mb-5 flex-wrap">
-        {FILTERS.map(status => (
-          <button
-            key={status}
-            type="button"
-            onClick={() => { setPage(1); setFilter(status) }}
-            className={`font-display text-sm tracking-wider px-4 py-1.5 rounded-full border transition-all ${
-              filter === status
-                ? 'bg-navy text-white border-navy'
-                : 'bg-white text-navy-mid border-slate-200 hover:border-gold/60'
-            }`}
+      {/* Keep status selection visible while scrolling long certificate queues. */}
+      <div className="sticky top-16 z-20 mb-4 flex flex-wrap items-end justify-between gap-3 rounded-xl border border-slate-200 bg-white/95 p-3 shadow-sm backdrop-blur-sm">
+        <label htmlFor="staff-request-status-filter" className="flex min-w-48 flex-col gap-1 text-sm font-semibold text-slate-800">
+          Filter certificate requests
+          <select
+            id="staff-request-status-filter"
+            aria-label="Filter certificate requests by status"
+            value={filter}
+            onChange={event => {
+              setPage(1)
+              setFilter(event.target.value as ReqStatus)
+              setActiveStep(null)
+            }}
+            className="min-h-11 rounded-lg border border-slate-300 bg-white px-3 py-2 text-base font-semibold text-slate-900 focus-visible:outline-2 focus-visible:outline-blue-600"
           >
-            {status}
-            <span className="ml-1.5 text-xs opacity-70">
-              {status === 'All'
-                ? Object.values(counts).reduce((a, b) => a + b, 0)
-                : counts[status] || 0}
-            </span>
-          </button>
-        ))}
-      </div>
-
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-slate-600">Request tracking is sourced from the parish database; legacy urgent requests remain visible in the main queue.</p>
-        <button type="button" disabled={loading} onClick={() => void loadRequests()}
-          className="min-h-11 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50">
-          <i aria-hidden="true" className="ti ti-refresh mr-2" />Refresh statuses
+            {FILTERS.map(status => (
+              <option key={status} value={status}>
+                {status === 'All' ? 'All requests' : status} ({status === 'All'
+                  ? Object.values(counts).reduce((sum, count) => sum + count, 0)
+                  : counts[status] || 0})
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          disabled={loading}
+          onClick={() => void loadRequests()}
+          className="min-h-11 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+        >
+          <i aria-hidden="true" className="ti ti-refresh mr-2" />Refresh requests
         </button>
       </div>
       <nav className="parish-pager" aria-label="Request pages">
@@ -540,8 +544,8 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
                       >
                         {activeStep.step === 'submitted' && (
                           <div className="space-y-3">
-                            <h3 className="text-lg font-semibold text-slate-900">Step 1 — Request submitted</h3>
-                            <p className="text-sm text-slate-600">Check the requester's information and the certificate details before verifying the archive.</p>
+                            <h3 className="text-lg font-semibold text-slate-900">Step 1 — Account and requested information</h3>
+                            <p className="text-sm text-slate-600">Review both information tables below: the signed-in requester's account details and the information for the person or document being requested.</p>
                             <RequestDetails office={!readOnly} request={item} documentType={toDisplayType(item.sacramentType)} />
                           </div>
                         )}

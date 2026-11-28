@@ -36,10 +36,10 @@ export default function MassMediaPlayer({title, filepath, transcript, summary, o
           : isAudio
             ? <audio key={source} controls autoPlay className="w-full" src={source}>Your browser cannot play this audio.</audio>
             : <video key={source} controls autoPlay playsInline preload="metadata" className="w-full max-h-[70vh] bg-black rounded-lg" src={source}>Your browser cannot play this video.</video>}
-        <section className="space-y-2 py-3"><h3 className="font-semibold">Summary</h3>
+        {(summary !== undefined || transcript !== undefined) && <section className="space-y-2 py-3"><h3 className="font-semibold">Summary</h3>
           <p className="whitespace-pre-wrap">{summary || 'No summary available.'}</p>
           <h3 className="font-semibold">Transcription</h3><p className="whitespace-pre-wrap">{transcript || 'No transcription available.'}</p>
-        </section>
+        </section>}
         <p className="mt-2 text-sm text-slate-600">If playback fails, check that the YouTube video allows embedding, or verify the private media file exists.</p>
       </div>
     </div>

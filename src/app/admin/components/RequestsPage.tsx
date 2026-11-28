@@ -554,6 +554,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
                         <button className="portal-primary-btn" disabled={isBusy || !item.matchedDocumentId} onClick={()=>void updateStatus(item,'Approved')}>Approve</button>
                         <button className="portal-secondary-btn" disabled={isBusy} onClick={()=>void updateStatus(item,'Rejected')}>Reject</button>
                       </>}
+                      {item.status==='Approved' && item.paymentStatus!=='Paid' && <button className="portal-secondary-btn" disabled={isBusy} onClick={()=>void updateStatus(item,'Rejected')}>Reject</button>}
                       {canRelease && <button className="portal-primary-btn" disabled={isBusy} onClick={()=>void updateStatus(item,'Released')}>Release</button>}
                     </div>}
                     {!readOnly && item.status==='Pending' && <details><summary>Verify source record to approve</summary>
@@ -742,7 +743,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
                             onClick={() => void uploadReleaseDocument(item)}
                             className="font-display text-xs tracking-wider bg-violet-600 text-white px-3 py-2 rounded-lg disabled:opacity-40"
                           >
-                            {item.generatedFile ? 'Replace Final Document' : 'Upload Final Document'}
+                            {item.generatedFile ? 'Replace final document' : 'Mark ready with reviewed file'}
                           </button>
                           <span className="font-body text-sm text-slate-500">
                             PDF is recommended. DOCX/JPG/PNG are also accepted.

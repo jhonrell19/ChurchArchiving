@@ -20,12 +20,14 @@ class PayMongoSandboxCheckoutTests(unittest.TestCase):
             id=42, requester_user_id=7, status="Ready",
             payment_status="Unpaid", payment_method=None, payment_reference=None,
             total_fee=300, base_fee=300, urgent_fee=0,
+            matched_document_id=3,
             requester_email="parishioner@example.test",
             requester_name="Example Parishioner",
         )
         self.payload = {"expectedMode": "test"}
         self.mode = "test"
         self.provider_calls = []
+        self.audit = []
         self.session = Mock()
         self.session.query.return_value.filter_by.return_value.with_for_update.return_value.one_or_none.return_value = self.cert
 
@@ -37,6 +39,7 @@ class PayMongoSandboxCheckoutTests(unittest.TestCase):
                     "livemode": False,
                     "payments": [],
                     "checkout_url": "https://checkout.paymongo.com/existing-sandbox",
+                    "reference_number": "PARISH-CERT-42",
                 }}}
             return {"data": {
                 "id": "cs_new_test_fixture",
@@ -56,6 +59,7 @@ class PayMongoSandboxCheckoutTests(unittest.TestCase):
             "_paymongo_api": call_provider,
             "os": os,
             "app": SimpleNamespace(logger=Mock()),
+            "AuditLog": lambda **fields: self.audit.append(fields) or fields,
         }
         node = next(
             node for node in ast.parse(SERVER.read_text(encoding="utf-8")).body
@@ -108,6 +112,46 @@ class PayMongoSandboxCheckoutTests(unittest.TestCase):
         self.assertEqual([call[0] for call in self.provider_calls], ["GET"])
         self.session.commit.assert_not_called()
         self.assertEqual(self.cert.payment_status, "Unpaid")
+
+    def test_expired_session_needs_consent_and_preserves_audit(self):
+        self.cert.payment_reference = "cs_existing_session"
+        self.cert.payment_method = "PAYMONGO_TEST_PENDING"
+        self.provider_calls = []
+        provider = self.checkout.__globals__["_paymongo_api"]
+        def expired_provider(method, path, payload=None):
+            if method == "GET":
+                self.provider_calls.append((method, path, payload))
+                return {"data": {"attributes": {
+                    "status": "expired", "livemode": False, "payments": [],
+                    "reference_number": "PARISH-CERT-42",
+                }}}
+            return provider(method, path, payload)
+        self.checkout.__globals__["_paymongo_api"] = expired_provider
+
+        with patch.dict(os.environ, {"APP_BASE_URL": "https://example.test", "PAYMONGO_METHODS": "qrph"}):
+            result, code = self.checkout(42)
+            self.assertEqual(code, 409)
+            self.assertTrue(result["expired"])
+            self.assertEqual([x[0] for x in self.provider_calls], ["GET"])
+            self.session.commit.assert_not_called()
+            self.assertEqual(self.cert.payment_reference, "cs_existing_session")
+            self.payload["replaceExpired"] = True
+            new = self.checkout(42)
+        self.assertEqual(new["checkoutUrl"], "https://checkout.paymongo.com/new-sandbox")
+        self.assertEqual(self.cert.payment_reference, "cs_new_test_fixture")
+        self.assertEqual(self.cert.payment_status, "Unpaid")
+        self.assertEqual(self.cert.payment_method, "PAYMONGO_TEST_PENDING")
+        self.assertEqual(self.session.commit.call_count, 1)
+        self.assertEqual(len(self.audit), 1)
+        self.assertIn("cs_existing_session", self.audit[0]["action"])
+        self.assertIn("cs_new_test_fixture", self.audit[0]["action"])
+
+    def test_reconciled_sandbox_cannot_start_new_session(self):
+        self.cert.payment_method = "PAYMONGO_TEST_RECONCILED"
+        response, code = self.checkout(42)
+        self.assertEqual(code, 409)
+        self.assertIn("reconciled", response["error"])
+        self.assertFalse(self.provider_calls)
 
     def test_paid_request_never_creates_another_checkout(self):
         self.cert.payment_status = "Paid"

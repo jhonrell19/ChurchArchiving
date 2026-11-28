@@ -5532,26 +5532,51 @@ def certificate_checkout(request_id):
     # if Render settings change between pricing lookup and the POST request.
     if requested_mode not in ("test", "live") or requested_mode != pay_mode:
         return {"error": "Payment mode changed or missing. Refresh the page before attempting checkout."}, 409
+    # Do not reopen a previously reconciled sandbox payment, even through a
+    # direct API call that bypasses the Parishioner button.
+    if cert.payment_method == "PAYMONGO_TEST_RECONCILED":
+        return {"error": "This test payment was reconciled. Coordinate actual payment with the parish office."}, 409
+
+    expired_checkout_reference = None
     if (cert.payment_reference or "").startswith("cs_"):
-        # Do not overwrite possibly paid/pending sessions. Query provider first.
+        # Keep the existing session ID until PayMongo confirms its state.
+        # QR-code expiry does not imply session expiry: active checkouts resume.
         try:
             prior = _paymongo_api("GET", "/v1/checkout_sessions/" + cert.payment_reference)["data"]["attributes"]
             prior_status = str(prior.get("status") or "").lower()
             prior_payments = prior.get("payments") or []
-            has_paid = any(isinstance(p, dict) and p.get("attributes", p).get("status") == "paid" for p in prior_payments)
+            prior_method = "PAYMONGO_" + pay_mode.upper() + "_PENDING"
+            if (cert.payment_method != prior_method or
+                    prior.get("livemode") is not (pay_mode == "live") or
+                    prior.get("reference_number") != "PARISH-CERT-" + str(cert.id)):
+                return {"error": "Previous checkout cannot be verified for this request and payment mode. Contact staff."}, 409
+            has_paid = any(
+                isinstance(p, dict) and
+                str(p.get("attributes", p).get("status") or "").lower() == "paid"
+                for p in prior_payments
+            )
             if has_paid:
                 return {"error": "Prior checkout may be paid. Await payment confirmation; do not retry."}, 409
-            if (prior_status == "active" and prior.get("livemode") is (pay_mode == "live")
-                    and cert.payment_method == "PAYMONGO_" + pay_mode.upper() + "_PENDING"
-                    and not prior_payments):
+            processing = any(
+                isinstance(p, dict) and
+                str(p.get("attributes", p).get("status") or "").lower() in {"pending", "processing"}
+                for p in prior_payments
+            )
+            if processing:
+                return {"error": "A previous payment attempt is still processing. Wait for PayMongo confirmation."}, 409
+            if prior_status == "active":
                 checkout_url = prior.get("checkout_url")
                 if isinstance(checkout_url, str) and checkout_url.startswith("https://checkout.paymongo.com/"):
                     return {"checkoutUrl": checkout_url}
-            if prior_status not in {"expired", "cancelled", "canceled"}:
-                return {"error": "Previous checkout remains active or unverified. Finish it or wait for expiry."}, 409
+                return {"error": "PayMongo did not provide a safe URL for this checkout. Contact staff."}, 409
+            if prior_status != "expired":
+                return {"error": "The previous checkout state is unverified. No new session was created."}, 409
+            if payload.get("replaceExpired") is not True:
+                return {"error": "PayMongo confirms the previous session expired. Confirm before starting a replacement checkout.", "expired": True}, 409
+            expired_checkout_reference = cert.payment_reference
         except Exception:
-            app.logger.exception("Cannot safely reconcile previous PayMongo checkout")
-            return {"error": "Unable to verify prior checkout. Retry later or contact staff."}, 502
+            app.logger.exception("Cannot safely verify previous PayMongo checkout")
+            return {"error": "Unable to verify prior checkout. Do not retry until its state is known."}, 502
     price = int(cert.base_fee or 0)
     urgent = int(cert.urgent_fee or 0)
     total = int(cert.total_fee or 0)
@@ -5602,6 +5627,13 @@ def certificate_checkout(request_id):
             raise ValueError("Unexpected checkout URL")
         cert.payment_reference = sid
         cert.payment_method = "PAYMONGO_" + pay_mode.upper() + "_PENDING"
+        if expired_checkout_reference:
+            db.session.add(AuditLog(
+                user="PAYMONGO_CHECKOUT",
+                action=(f"Replaced provider-confirmed expired {pay_mode.upper()} checkout for request #{cert.id}: "
+                        f"previous={expired_checkout_reference[:128]}, new={str(sid)[:128]}")[:500],
+                document_id=cert.matched_document_id,
+            ))
         db.session.commit()
         return {"checkoutUrl": url}
     except Exception:

@@ -104,6 +104,10 @@ if (
   return m === 'POST' && role === 'USER'
 }
 
+  if (path === 'api/requests/cash-capability') {
+    return m === 'GET' && ['STAFF', 'BURIAL_ADMIN'].includes(role)
+  }
+
   if (/^api\/requests\/\d+\/cash-receipt$/.test(path)) {
     return m === 'POST' && ['STAFF', 'BURIAL_ADMIN'].includes(role)
   }

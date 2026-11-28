@@ -80,6 +80,8 @@ assert.doesNotMatch(staffPage, /HomilyLibrary|page:\s*'homilies'/)
 // The four colored workflow boxes are the only always-visible request controls.
 assert.doesNotMatch(staffRequests, /View status, payment &amp; history/)
 assert.doesNotMatch(staffRequests, /<h3>Status<\/h3>/)
+assert.doesNotMatch(staffRequests, /Open steps|Hide steps|toggleExpanded/)
+assert.match(staffRequests, /Only the four colored milestones are visible/)
 assert.match(staffRequests, /onStepSelect=\{step => setActiveStep/)
 assert.match(staffRequests, /activeStep\.step === 'submitted'/)
 assert.match(staffRequests, /activeStep\.step === 'verify'/)

@@ -1,6 +1,7 @@
 'use client'
 
 import { inputCls } from '../data/ui'
+import { digitsOnly, philippineToday, sanitizePersonName } from '@/lib/fieldInput'
 
 export type MarriagePartyData = {
   first_name?: string
@@ -70,15 +71,22 @@ function Field({
   type?: string
   placeholder?: string
 }) {
+  const isName = /\b(name|first|middle|last)\b/i.test(label) && !/place/i.test(label)
+  const isDigits = label === 'Age' || label === 'Contact #'
   return (
     <div>
       <label className="block font-display text-[10px] tracking-wider text-navy-mid mb-1">
         {label}
       </label>
       <input
-        type={type}
+        type={type === 'text' && isDigits ? 'text' : type}
+        inputMode={isDigits ? 'numeric' : undefined}
+        max={type === 'date' ? philippineToday() : undefined}
+        maxLength={isDigits ? 15 : 150}
         value={value}
-        onChange={event => onChange(event.target.value)}
+        onChange={event => onChange(isName ? sanitizePersonName(event.target.value)
+          : isDigits ? digitsOnly(event.target.value, label === 'Age' ? 3 : 15)
+          : event.target.value)}
         placeholder={placeholder}
         className={inputCls}
       />
@@ -195,7 +203,7 @@ export default function TemplateDataFields({ sacramentType, value, onChange }: P
             <textarea
               rows={4}
               value={sponsors.join('\n')}
-              onChange={event => set('sponsors', event.target.value.split('\n').map(v => v.trim()).filter(Boolean).slice(0, 10))}
+              onChange={event => set('sponsors', event.target.value.split('\n').map(v => sanitizePersonName(v).trim()).filter(Boolean).slice(0, 10))}
               className={`${inputCls} resize-y`}
               placeholder={'Sponsor 1\nSponsor 2\nSponsor 3'}
             />
@@ -236,7 +244,7 @@ export default function TemplateDataFields({ sacramentType, value, onChange }: P
             <textarea
               rows={3}
               value={(value.witnesses || []).join('\n')}
-              onChange={event => set('witnesses', event.target.value.split('\n').map(v => v.trim()).filter(Boolean).slice(0, 6))}
+              onChange={event => set('witnesses', event.target.value.split('\n').map(v => sanitizePersonName(v).trim()).filter(Boolean).slice(0, 6))}
               className={`${inputCls} resize-y`}
             />
           </div>

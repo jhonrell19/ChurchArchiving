@@ -5,6 +5,8 @@ import RequestDetails from '@/components/RequestDetails'
 import RequestTracking, { type RequestWorkflowStep } from '@/components/RequestTracking'
 import { isConfirmedCertificatePayment, isTestCertificatePayment } from '@/lib/certificatePayment'
 import NotificationOutboxControl from './NotificationOutboxControl'
+import CashReceiptPanel from './CashReceiptPanel'
+import TestPaymentReconciliationPanel from './TestPaymentReconciliationPanel'
 
 import { useEffect, useRef, useState } from 'react'
 import { CERT_ICONS } from '../data/ui'
@@ -820,15 +822,36 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
                           <div className="space-y-4">
                             <h3 className="text-lg font-semibold text-slate-900">Step 4 — Payment and office release</h3>
                             <RequestTracking request={item} paymentOnly />
+                            {!readOnly && (
+                              <TestPaymentReconciliationPanel
+                                requestId={item.id}
+                                status={item.status}
+                                paymentStatus={item.paymentStatus}
+                                paymentMethod={item.paymentMethod}
+                                onSaved={loadRequests}
+                              />
+                            )}
+                            {!readOnly && (
+                              <CashReceiptPanel
+                                requestId={item.id}
+                                status={item.status}
+                                paymentStatus={item.paymentStatus}
+                                paymentMethod={item.paymentMethod}
+                                totalFee={item.totalFee}
+                                onSaved={loadRequests}
+                              />
+                            )}
                             {!readOnly && item.status === 'Ready' && (
                               canRelease ? (
                                 <button type="button" className="portal-primary-btn min-h-11" disabled={isBusy}
                                   onClick={() => void updateStatus(item, 'Released')}>Release verified certificate</button>
                               ) : (
                                 <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                                  {isTestCertificatePayment(item.paymentMethod)
-                                    ? 'A simulated payment is recorded, but no real money was received. Do not release this certificate. Contact the parish office to reconcile it before another payment.'
-                                    : 'Release requires a verified source record, reviewed final document and confirmed live payment or official cash receipt.'}
+                                  {item.paymentMethod === 'PAYMONGO_TEST_RECONCILED'
+                                    ? 'The previous test payment was reconciled. No real money was collected. Record an authorized official cash receipt to allow release.'
+                                    : isTestCertificatePayment(item.paymentMethod)
+                                      ? 'A simulated payment is recorded, but no real money was received. Do not release this certificate. Reconcile the test payment above before recording actual cash.'
+                                      : 'Release requires a verified source record, reviewed final document and confirmed live payment or official cash receipt.'}
                                 </p>
                               )
                             )}

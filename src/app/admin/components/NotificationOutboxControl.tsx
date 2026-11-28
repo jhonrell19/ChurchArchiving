@@ -5,6 +5,9 @@ import { useCallback, useEffect, useState } from 'react'
 export default function NotificationOutboxControl() {
   const [enabled, setEnabled] = useState(false)
   const [pending, setPending] = useState(0)
+  const [autoSend, setAutoSend] = useState(false)
+  const [smsConfigured, setSmsConfigured] = useState(false)
+  const [emailConfigured, setEmailConfigured] = useState(false)
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState('')
   const refresh = useCallback(async () => {
@@ -14,10 +17,17 @@ export default function NotificationOutboxControl() {
       if (!res.ok) throw new Error(data.message || 'Outbox unavailable')
       setEnabled(!!data.enabled)
       setPending(Number(data.pending || 0))
+      setAutoSend(data.autoSend === true)
+      setSmsConfigured(data.smsConfigured === true)
+      setEmailConfigured(data.emailConfigured === true)
     } catch { setNote('Notification outbox is not ready. Database migration may be missing.') }
   }, [])
   useEffect(() => { void refresh() }, [refresh])
-  if (!enabled) return null
+  if (!enabled) return (
+    <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+      {note || 'Automatic SMS/email updates are disabled. Super Admin must apply the notification database migrations and configure the private Render notification settings before enabling delivery.'}
+    </p>
+  )
   const send = async () => {
     setBusy(true)
     setNote('')
@@ -39,6 +49,14 @@ export default function NotificationOutboxControl() {
         <div>
           <h3 className="text-base font-semibold text-emerald-950">SMS &amp; email notification queue</h3>
           <p className="mt-1 text-sm text-emerald-900">{pending} queued request update(s) for this office.</p>
+          <p className="mt-1 text-sm font-medium text-emerald-950">
+            {autoSend
+              ? 'Automatic dispatch is on. Status, approved payment and release updates are queued after a successful server change.'
+              : 'Automatic dispatch is off. Staff must send queued updates until Render is configured.'}
+          </p>
+          <p className="mt-1 text-xs text-emerald-900">
+            textbee SMS: {smsConfigured ? 'configured' : 'not configured'} · Email: {emailConfigured ? 'configured' : 'not configured'}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" onClick={() => void refresh()}
@@ -53,7 +71,8 @@ export default function NotificationOutboxControl() {
       </div>
       <p className="mt-2 text-xs text-emerald-900">
         Only opted-in users with verified mobile numbers receive SMS.
-        The txtBee phone must be online with sufficient SIM allowance.
+        The textbee phone must be online with sufficient SIM allowance. Provider acceptance does not guarantee delivery.
+        Users must opt in and verify their mobile number. A failed message never cancels a request or a payment.
       </p>
       {note && <p role="status" className="mt-2 text-sm text-emerald-950">{note}</p>}
     </section>

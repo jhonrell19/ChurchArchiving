@@ -69,6 +69,7 @@ export default function RequestTracking({
   const method = request.paymentMethod || ''
   const isSandbox = isTestCertificatePayment(method)
   const recordedTestPayment = request.paymentStatus === 'Paid' && isSandbox
+  const reconciledTest = method === 'PAYMONGO_TEST_RECONCILED' && request.paymentStatus === 'Unpaid'
   const paid = isConfirmedCertificatePayment(request.paymentStatus, method)
   const checkoutPending = method.startsWith('PAYMONGO_') && method.endsWith('_PENDING') && !paid
   const reversed = method === 'CASH_REVERSED'
@@ -81,11 +82,13 @@ export default function RequestTracking({
   const nextIndex = steps.findIndex(step => !step.done)
   const paymentLabel = recordedTestPayment
     ? 'Test payment recorded — no real funds collected'
+    : reconciledTest ? 'Previous sandbox payment reconciled — real payment required'
     : paid ? 'Payment confirmed'
     : reversed ? 'Cash receipt reversed — payment required'
       : checkoutPending ? 'Checkout started — awaiting verified payment'
         : 'Payment not yet confirmed'
   const paymentType = method === 'CASH' ? 'Cash recorded by staff'
+    : reconciledTest ? 'Old PayMongo sandbox test — excluded from payments'
     : isSandbox ? 'PayMongo sandbox / demonstration'
       : method === 'PAYMONGO_LIVE' ? 'PayMongo verified online'
         : checkoutPending ? 'PayMongo checkout initiated'
@@ -200,7 +203,9 @@ export default function RequestTracking({
             )}
           </dl>
           {isSandbox && <p className="mt-2 text-sm font-semibold text-amber-900">
-            Sandbox only — not proof of real money received.
+            {reconciledTest
+              ? 'Earlier test payment was reconciled. No real funds received; actual collection is still required.'
+              : 'Sandbox only — not proof of real money received.'}
           </p>}
           {!paid && Number(request.totalFee || 0) === 0 && <p className="mt-2 text-xs text-slate-700">
             No fee configured. Staff must confirm applicable payment or waiver before release.

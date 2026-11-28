@@ -1859,8 +1859,21 @@ def api_upload_document():
 
 
         if not person_name or not sacrament_type:
-
             return {"error": "Person name and document type are required"}, 400
+        person_name = person_name.strip()
+        if not (2 <= len(person_name) <= 150 and any(c.isalpha() for c in person_name)
+                and all(c.isalpha() or unicodedata.category(c).startswith("M")
+                        or c in " .-'’" for c in person_name)):
+            return {"error": "Record holder name must contain letters only, with spaces, hyphens, apostrophes or periods."}, 400
+        if date_of_record:
+            from datetime import date
+            try:
+                record_date = date.fromisoformat(date_of_record)
+                if (record_date.isoformat() != date_of_record or
+                        record_date > datetime.now(ZoneInfo("Asia/Manila")).date()):
+                    raise ValueError()
+            except ValueError:
+                return {"error": "Choose a valid past archive date using the calendar."}, 400
 
 
 

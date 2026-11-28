@@ -250,6 +250,8 @@ export default function RequestsPage() {
   const [paymentMode, setPaymentMode] = useState<'test' | 'live' | 'unavailable'>('unavailable')
   const [checkoutConfigured, setCheckoutConfigured] = useState(false)
   const [expiredCheckoutRequestId, setExpiredCheckoutRequestId] = useState<number | null>(null)
+  const [verifyingCheckoutId, setVerifyingCheckoutId] = useState<number | null>(null)
+  const [paymentNeedsVerificationId, setPaymentNeedsVerificationId] = useState<number | null>(null)
   const [serviceFees, setServiceFees] = useState<Record<string, number>>({})
   const [cemeteryFees, setCemeteryFees] = useState<Record<string, number>>({})
   useEffect(() => {
@@ -594,11 +596,15 @@ if (
         if (data.expired === true && !replaceExpired) {
           setExpiredCheckoutRequestId(requestId)
           toast.warning('PayMongo confirmed the old session expired. Select Start New Checkout to confirm a replacement for this same certificate request.')
+        } else if (typeof data.error === 'string' && data.error.includes('Prior checkout may be paid')) {
+          setPaymentNeedsVerificationId(requestId)
+          toast.warning('PayMongo reports a prior paid attempt. Use Verify Existing Payment instead of opening another checkout.')
         } else {
           toast.error(data.error || 'Checkout unavailable. The existing request was not changed.')
         }
         return
       }
+      setPaymentNeedsVerificationId(null)
       setExpiredCheckoutRequestId(null)
       if (!data.checkoutUrl?.startsWith('https://checkout.paymongo.com/')) {
         toast.error('Invalid payment destination.'); return
@@ -607,6 +613,42 @@ if (
     } catch (error) {
       console.warn('PayMongo checkout error:', error)
       toast.error('Unable to reach payment checkout.')
+    }
+  }
+
+  const verifyExistingCheckout = async (requestId: number) => {
+    if (verifyingCheckoutId !== null) return
+    setVerifyingCheckoutId(requestId)
+    try {
+      // Reuse the authenticated, server-verified reconciliation endpoint.
+      // This never creates a checkout and cannot mark a payment Paid unless
+      // PayMongo confirms matching ID, amount, currency, and environment.
+      const res = await fetch(`/api/backend/api/requests/${requestId}/payment-result`, {
+        method: 'POST',
+        cache: 'no-store',
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setPaymentNeedsVerificationId(requestId)
+        toast.warning(data.error || 'PayMongo could not verify the original transaction. No new checkout was created; contact parish staff.')
+        return
+      }
+      await loadRequests()
+      if (data.paymentStatus === 'Paid' && data.paymentMethod === 'PAYMONGO_TEST') {
+        setPaymentNeedsVerificationId(null)
+        toast.success('Existing sandbox payment verified and recorded. NO real money was collected; official release remains blocked.')
+      } else if (data.paymentStatus === 'Paid' && data.paymentMethod === 'PAYMONGO_LIVE') {
+        setPaymentNeedsVerificationId(null)
+        toast.success('PayMongo verified the existing live payment. Refresh request tracking for the updated status.')
+      } else {
+        setPaymentNeedsVerificationId(requestId)
+        toast.warning('Payment has not been independently confirmed. Do not retry checkout or pay again; ask the parish office to review this transaction.')
+      }
+    } catch {
+      setPaymentNeedsVerificationId(requestId)
+      toast.error('Payment verification could not reach the parish service. Do not retry payment; contact staff.')
+    } finally {
+      setVerifyingCheckoutId(null)
     }
   }
 
@@ -1139,7 +1181,9 @@ if (
                           <p className="font-body text-[12px] text-amber-700">
                             {hasUnresolvedCheckout
                               ? canResumeCheckout
-                                ? expiredCheckoutRequestId === req.id
+                                ? paymentNeedsVerificationId === req.id
+                                  ? 'PayMongo reports a prior paid attempt. Verify the existing payment before any further checkout.'
+                                : expiredCheckoutRequestId === req.id
                                   ? 'PayMongo reports that the earlier checkout expired. Confirm a replacement for this same request; do not pay twice.'
                                   : 'An earlier checkout exists. Use Resume Checkout to reopen that SAME PayMongo session; do not start a separate payment.'
                                 : 'A previous checkout is awaiting verification. Do not attempt another payment; contact the parish office.'
@@ -1161,7 +1205,9 @@ if (
                           <p className="font-body text-[12px] text-amber-700">
                             {hasUnresolvedCheckout
                               ? canResumeCheckout
-                                ? expiredCheckoutRequestId === req.id
+                                ? paymentNeedsVerificationId === req.id
+                                  ? 'A payment attempt may have succeeded. Click Verify Existing Payment; do not open another checkout.'
+                                : expiredCheckoutRequestId === req.id
                                   ? 'The prior PayMongo session was confirmed expired. You may explicitly start a replacement for this same request.'
                                   : 'Your document is ready; reopen the SAME PayMongo checkout using Resume Checkout. No new session is created if it is still active.'
                                 : 'Your document is prepared, but an earlier checkout is still unverified. Do not retry payment; contact parish staff.'
@@ -1224,6 +1270,20 @@ if (
                           </button>
                         )}
                         {canResumeCheckout && resumeMode && (
+                          <button
+                            type="button"
+                            disabled={verifyingCheckoutId !== null}
+                            onClick={() => void verifyExistingCheckout(req.id)}
+                            className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 font-display text-[12px] font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+                            aria-label={`Verify existing ${resumeMode} payment for request IFI-REQ-${String(req.id).padStart(4, '0')}`}
+                          >
+                            <i className="ti ti-shield-check text-[16px]" aria-hidden="true" />
+                            {verifyingCheckoutId === req.id
+                              ? 'Verifying payment…'
+                              : `Verify Existing ${resumeMode === 'test' ? 'Test Payment — No real money' : 'Live Payment'}`}
+                          </button>
+                        )}
+                        {canResumeCheckout && resumeMode && paymentNeedsVerificationId !== req.id && (
                           <button
                             type="button"
                             onClick={() => void payMongoCheckout(req.id, resumeMode, expiredCheckoutRequestId === req.id)}

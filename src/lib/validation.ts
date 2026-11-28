@@ -2,7 +2,7 @@ import { parsePhoneNumberFromString, type CountryCode } from 'libphonenumber-js/
 
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 export const PH_PHONE_RE = /^09\d{9}$/
-export const NAME_RE = /^[\\p{L}\\p{M} .'’\\-]{2,80}$/u
+export const NAME_RE = /^[\p{L}\p{M} .'’\-]{2,80}$/u
 
 export function normalizeEmail(value: unknown) {
   return typeof value === 'string'

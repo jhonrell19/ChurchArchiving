@@ -5,6 +5,7 @@ import RequestDetails from '@/components/RequestDetails'
 import RequestTracking, { type RequestWorkflowStep } from '@/components/RequestTracking'
 import { isConfirmedCertificatePayment, isTestCertificatePayment } from '@/lib/certificatePayment'
 import NotificationOutboxControl from './NotificationOutboxControl'
+import CashReceiptPanel from './CashReceiptPanel'
 
 import { useEffect, useRef, useState } from 'react'
 import { CERT_ICONS } from '../data/ui'
@@ -820,6 +821,16 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
                           <div className="space-y-4">
                             <h3 className="text-lg font-semibold text-slate-900">Step 4 — Payment and office release</h3>
                             <RequestTracking request={item} paymentOnly />
+                            {!readOnly && (
+                              <CashReceiptPanel
+                                requestId={item.id}
+                                status={item.status}
+                                paymentStatus={item.paymentStatus}
+                                paymentMethod={item.paymentMethod}
+                                totalFee={item.totalFee}
+                                onSaved={loadRequests}
+                              />
+                            )}
                             {!readOnly && item.status === 'Ready' && (
                               canRelease ? (
                                 <button type="button" className="portal-primary-btn min-h-11" disabled={isBusy}

@@ -1000,10 +1000,16 @@ if (
                 const displayType = toDisplayType(req.sacramentType)
                 const testPayment = req.paymentStatus === 'Paid' && isTestCertificatePayment(req.paymentMethod)
                 const confirmedPayment = isConfirmedCertificatePayment(req.paymentStatus, req.paymentMethod)
-                const canPayOnline =
+                const eligibleForPayment =
                   req.paymentStatus !== 'Paid' &&
                   req.totalFee > 0 &&
                   (req.status === 'Approved' || req.status === 'Ready')
+                const hasUnresolvedCheckout = Boolean(req.paymentReference?.startsWith('cs_')) &&
+                  req.paymentMethod !== 'PAYMONGO_TEST_RECONCILED'
+                // Never offer a real-money-looking checkout when only PayMongo
+                // sandbox is configured or the live pricing mode is unavailable.
+                const canPayOnline = eligibleForPayment && pricingReady &&
+                  paymentMode === 'live' && !hasUnresolvedCheckout
 
                 const canDownload =
                   Boolean(req.generatedFile) &&
@@ -1088,7 +1094,11 @@ if (
 
                         {req.status === 'Approved' && req.paymentStatus !== 'Paid' && (
                           <p className="font-body text-[12px] text-amber-700">
-                            Your request is approved. PayMongo {paymentMode === 'live' ? 'checkout' : 'test checkout'} is available.
+                            {hasUnresolvedCheckout
+                              ? 'A previous checkout is awaiting verification. Do not attempt another payment; contact the parish office.'
+                              : canPayOnline
+                                ? 'Your request is approved. Verified PayMongo live checkout is available.'
+                                : 'Your request is approved. Online payment is not available; coordinate actual payment with the parish office.'}
                           </p>
                         )}
 
@@ -1100,7 +1110,11 @@ if (
 
                         {req.status === 'Ready' && req.paymentStatus !== 'Paid' && (
                           <p className="font-body text-[12px] text-amber-700">
-                            Your document is ready, but payment is required before release.
+                            {hasUnresolvedCheckout
+                              ? 'Your document is prepared, but an earlier checkout is still unverified. Do not retry payment; contact parish staff.'
+                              : canPayOnline
+                                ? 'Your document is prepared. Complete the approved live payment before release.'
+                                : 'Your document is prepared. Pay the authorized parish cashier in person and obtain an official receipt before release. Online payment is unavailable.'}
                           </p>
                         )}
 
@@ -1113,6 +1127,12 @@ if (
                         {req.status === 'Released' && confirmedPayment && (
                           <p className="font-body text-[12px] text-green-700">
                             Your document has been released and is available for download.
+                          </p>
+                        )}
+
+                        {req.paymentStatus === 'Unpaid' && req.paymentMethod === 'PAYMONGO_TEST_RECONCILED' && ['Approved','Ready'].includes(req.status) && (
+                          <p role="status" className="font-body text-[12px] text-amber-800">
+                            The previous sandbox transaction was reconciled; no real money was received. Arrange an authorized cash payment with the parish office before release.
                           </p>
                         )}
 

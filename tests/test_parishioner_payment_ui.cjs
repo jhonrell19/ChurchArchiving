@@ -1,0 +1,22 @@
+// Offline regression: verify UI never presents PayMongo sandbox as live payments.
+const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const view = fs.readFileSync('src/app/dashboard/components/RequestsPage.tsx','utf8')
+const backend = fs.readFileSync('church_backend/server.py','utf8')
+const tracker = fs.readFileSync('src/components/RequestTracking.tsx','utf8')
+
+// Pricing must be confirmed as LIVE before rendering a payable online checkout.
+assert.match(view, /const canPayOnline = eligibleForPayment && pricingReady &&/)
+assert.match(view, /paymentMode === 'live' && !hasUnresolvedCheckout/)
+assert.match(view, /const hasUnresolvedCheckout = Boolean\(req\.paymentReference\?\.startsWith\('cs_'\)\)/)
+assert.match(view, /canPayOnline && \(\s*<button/)
+assert.match(view, /Pay Online \{formatPeso\(req\.totalFee\)\}/)
+assert.match(view, /Online payment is not available; coordinate actual payment with the parish office/)
+assert.match(view, /Pay the authorized parish cashier in person and obtain an official receipt/)
+assert.match(view, /A previous checkout is awaiting verification\. Do not attempt another payment/)
+assert.match(view, /The previous sandbox transaction was reconciled; no real money was received/)
+assert.match(view, /This is a test payment, not real money/)
+assert.match(tracker, /Test payment recorded — no real funds collected/)
+assert.match(backend, /Prior checkout may be paid\. Await payment confirmation; do not retry/)
+assert.match(backend, /Official release requires a verified real cash receipt or live payment/)
+console.log('PASS: live-only online checkout, no sandbox payment CTA, safe pending-session messaging and cash-office instructions')

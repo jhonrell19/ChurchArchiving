@@ -35,5 +35,6 @@ jobs:
           test "$(sudo -u postgres psql -At parish_workflow_ci -c 'SELECT count(*) FROM parish_private.certificate_status_history')" = 2
       - run: npm ci
       - run: npx prisma generate
+      - run: node tests/test_independent_sessions.cjs
       - run: node tests/test_phase8_roles.cjs
       - run: npx tsc --noEmit

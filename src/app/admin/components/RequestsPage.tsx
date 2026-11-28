@@ -235,6 +235,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
 
       setSearchResults(prev => ({ ...prev, [item.id]: [] }))
       await loadRequests()
+      setActiveStep({ requestId: item.id, step: 'verify' })
     } catch (error) {
       console.warn('Select source record error:', error)
       toast.error('Unable to select this archive record right now.')
@@ -293,6 +294,8 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
       }
 
       await loadRequests()
+      if (status === 'Approved') setActiveStep({ requestId: item.id, step: 'prepare' })
+      if (status === 'Released') setActiveStep({ requestId: item.id, step: 'release' })
     } catch (err) {
       console.warn('Update status error:', err)
       toast.error('Unable to update this request right now.')
@@ -344,6 +347,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
 
       setReleaseFiles(prev => ({ ...prev, [item.id]: null }))
       await loadRequests()
+      setActiveStep({ requestId: item.id, step: 'release' })
     } catch (error) {
       console.warn('Release document upload error:', error)
       toast.error('Unable to upload the final document right now.')
@@ -415,7 +419,12 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
         <p className="font-body text-slate-500 text-[14px] mt-1">{readOnly ? "Review certificate requests and verify requester information." : description}</p>
       </div>
 
-      {!readOnly && <NotificationOutboxControl />}
+      {!readOnly && (
+        <details className="mb-4 rounded-lg border border-slate-200 bg-white px-4 py-3">
+          <summary className="cursor-pointer text-sm font-semibold text-slate-700">Notification management</summary>
+          <div className="pt-3"><NotificationOutboxControl /></div>
+        </details>
+      )}
       <form className="request-search" onSubmit={event => {
         event.preventDefault()
         setPage(1)
@@ -562,7 +571,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
                         {activeStep.step === 'verify' && (
                           <div className="space-y-4">
                             <h3 className="text-lg font-semibold text-slate-900">Step 2 — Staff verification</h3>
-                            {item.matchedDocument && (
+                            {item.status !== 'Pending' && item.matchedDocument && (
                               <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
                                 Matching archive: <strong>{item.matchedDocument.personName}</strong>
                                 <a href={backendFileUrl(item.matchedDocument.filepath)} target="_blank" rel="noopener noreferrer" className="ml-3 underline">Preview source record</a>
@@ -800,6 +809,10 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
                               </div>
                             ) : <p className="text-sm text-slate-700">
                               {item.status === 'Released' ? 'The final document has already been released.' : 'Staff must approve a verified request before preparing the final document.'}
+                              {item.status === 'Released' && item.generatedFile && (
+                                <a href={backendFileUrl(item.generatedFile)} target="_blank" rel="noopener noreferrer"
+                                  className="ml-2 font-semibold underline">Review final document</a>
+                              )}
                             </p>}
                           </div>
                         )}

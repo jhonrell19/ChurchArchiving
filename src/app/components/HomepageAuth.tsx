@@ -1,5 +1,6 @@
 'use client'
 import PasswordField from '@/components/auth/PasswordField'
+import { digitsOnly, isValidPersonName, sanitizePersonName } from '@/lib/fieldInput'
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
@@ -82,6 +83,10 @@ export default function HomepageAuth() {
     if (register.password !== register.confirmPassword) {
       inform('Passwords do not match. Please re-enter them.'); return
     }
+    if (!isValidPersonName(register.firstName, 80) || !isValidPersonName(register.surname, 80) ||
+        (register.middleName && !isValidPersonName(register.middleName, 80))) {
+      inform('Names must use letters, spaces, apostrophes, periods or hyphens.'); return
+    }
     if (register.phoneNumber && !/^09\d{9}$/.test(register.phoneNumber.trim())) {
       inform('Enter an 11-digit Philippine mobile number starting with 09, or leave it blank.'); return
     }
@@ -143,17 +148,17 @@ export default function HomepageAuth() {
     </form> : <form onSubmit={signUp} className="portal-auth-form">
       <div className="portal-auth-name-grid">
         <label htmlFor="portal-first-name">First name *
-          <input className={fieldClass} id="portal-first-name" required autoComplete="given-name" value={register.firstName} onChange={e=>setRegister(p=>({...p,firstName:e.target.value}))}/>
+          <input className={fieldClass} id="portal-first-name" required autoComplete="given-name" value={register.firstName} maxLength={80} onChange={e=>setRegister(p=>({...p,firstName:sanitizePersonName(e.target.value)}))}/>
         </label>
         <label htmlFor="portal-surname">Surname *
-          <input className={fieldClass} id="portal-surname" required autoComplete="family-name" value={register.surname} onChange={e=>setRegister(p=>({...p,surname:e.target.value}))}/>
+          <input className={fieldClass} id="portal-surname" required autoComplete="family-name" value={register.surname} maxLength={80} onChange={e=>setRegister(p=>({...p,surname:sanitizePersonName(e.target.value)}))}/>
         </label>
       </div>
       <label htmlFor="portal-middle-name">Middle name (optional)
-        <input className={fieldClass} id="portal-middle-name" autoComplete="additional-name" value={register.middleName} onChange={e=>setRegister(p=>({...p,middleName:e.target.value}))}/>
+        <input className={fieldClass} id="portal-middle-name" autoComplete="additional-name" value={register.middleName} maxLength={80} onChange={e=>setRegister(p=>({...p,middleName:sanitizePersonName(e.target.value)}))}/>
       </label>
       <label htmlFor="portal-phone">Mobile number (optional)
-        <input className={fieldClass} id="portal-phone" type="tel" inputMode="numeric" autoComplete="tel-national" pattern="09[0-9]{9}" maxLength={11} placeholder="09XXXXXXXXX" value={register.phoneNumber} onChange={e=>setRegister(p=>({...p,phoneNumber:e.target.value}))}/>
+        <input className={fieldClass} id="portal-phone" type="tel" inputMode="numeric" autoComplete="tel-national" pattern="09[0-9]{9}" maxLength={11} placeholder="09XXXXXXXXX" value={register.phoneNumber} onChange={e=>setRegister(p=>({...p,phoneNumber:digitsOnly(e.target.value, 11)}))}/>
       </label>
       <label htmlFor="portal-register-email">Email address *
         <input className={fieldClass} id="portal-register-email" type="email" required autoComplete="email" value={register.email} onChange={e=>setRegister(p=>({...p,email:e.target.value}))}/>

@@ -2,6 +2,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { digitsOnly } from '@/lib/fieldInput'
 
 const FEE_FIELDS = [
   { code: 'baptismal', label: 'Baptismal Certificate' },
@@ -162,15 +163,15 @@ export default function CertificateFeesEditor() {
                 <span className="text-slate-600">₱</span>
                 <input
                   id={`fee-${field.code}`}
-                  type="number"
-                  min="0"
-                  max="1000000"
-                  step="1"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={7}
                   value={values[field.code]}
                   onChange={event => {
                     setValues(previous => previous ? {
                       ...previous,
-                      [field.code]: event.target.value,
+                      [field.code]: digitsOnly(event.target.value, 7),
                     } : previous)
                   }}
                   className="w-28 rounded-lg border border-slate-300 p-2 text-right text-sm text-navy-mid"

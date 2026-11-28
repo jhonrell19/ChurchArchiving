@@ -29,9 +29,13 @@ class CertificateIdentityTest(unittest.TestCase):
         self.assertEqual(fields["proofType"], "application/pdf")
         self.assertTrue(proof.startswith(b"%PDF-"))
 
-    def test_confirmation_year_and_relationship(self):
-        data = {"identity":{"birthDate":"2000-01-01","confirmation":"2015","relationship":"Self"}}
-        self.assertEqual(validate_identity("confirmation",data,"Ana Rivera")[0]["confirmation"], "2015")
+    def test_confirmation_calendar_date_and_relationship(self):
+        data = {"identity":{"birthDate":"2000-01-01","confirmation":"2015-05-12","relationship":"Self"}}
+        self.assertEqual(validate_identity("confirmation",data,"Ana Rivera")[0]["confirmation"], "2015-05-12")
+        data["identity"]["confirmation"] = "2015"
+        with self.assertRaises(ValueError):
+            validate_identity("confirmation",data,"Ana Rivera")
+        data["identity"]["confirmation"] = "2015-05-12"
         data["identity"]["relationship"] = "Unknown"
         with self.assertRaises(ValueError):
             validate_identity("confirmation",data,"Ana Rivera")

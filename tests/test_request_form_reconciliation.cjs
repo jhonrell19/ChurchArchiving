@@ -47,7 +47,8 @@ assert.match(userPage, /recordDetails: \['Certificate of Ownership', 'Land Agree
 assert.match(userPage, /'Agreement \/ Lot Reference \(if known\)'/)
 assert.doesNotMatch(userPage, /Burial Admin will verify|Contact the Burial Office/)
 assert.match(userPage, /Parish confirmation required/)
-assert.match(userPage, /placeholder="e\.g\. 2018 or 2018-06-15 \(if known\)"/)
+assert.match(userPage, /type="date"\s+max=\{philippineToday\(\)\}/)
+assert.doesNotMatch(userPage, /placeholder="e\.g\. 2018 or 2018-06-15 \(if known\)"/)
 
 assert.match(server, /if sacrament_type in MAIN_ADMIN_TYPES:/)
 assert.match(server, /"motherFullName": None, "fatherFullName": None/)

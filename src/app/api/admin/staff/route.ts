@@ -7,6 +7,7 @@ import { isSupervisor } from '@/lib/portalConfig'
 import { createPasswordResetToken } from '@/lib/accountTokens'
 import { appBaseUrl, isTransactionalEmailConfigured, sendTransactionalEmail } from '@/lib/email'
 import { EMAIL_RE, normalizeEmail, validatePassword } from '@/lib/validation'
+import { isValidPersonName } from '@/lib/fieldInput'
 
 const respond = (value: object, status = 200) =>
   NextResponse.json(value, { status, headers: { 'Cache-Control': 'no-store' } })
@@ -43,8 +44,8 @@ export async function POST(req: NextRequest) {
   const email = normalizeEmail(data?.email)
   const firstName = typeof data?.firstName === 'string' ? data.firstName.trim() : ''
   const surname = typeof data?.surname === 'string' ? data.surname.trim() : ''
-  if (!email || !EMAIL_RE.test(email) || !firstName || firstName.length > 100 ||
-      !surname || surname.length > 100) {
+  if (!email || !EMAIL_RE.test(email) || !isValidPersonName(firstName, 100) ||
+      !isValidPersonName(surname, 100)) {
     return respond({ message: 'Enter a valid email, first name, and surname.' }, 400)
   }
   if (await prisma.user.findUnique({ where: { email }, select: { id: true } })) {
@@ -104,7 +105,7 @@ export async function PATCH(req: NextRequest) {
   const enabled = body.accountEnabled
   const firstName = typeof body.firstName === 'string' ? body.firstName.trim() : ''
   const surname = typeof body.surname === 'string' ? body.surname.trim() : ''
-  if (nameChange && (!firstName || !surname || firstName.length > 100 || surname.length > 100)) {
+  if (nameChange && (!isValidPersonName(firstName, 100) || !isValidPersonName(surname, 100))) {
     return respond({ message: 'Enter a first name and surname of up to 100 characters each.' }, 400)
   }
   if (passwordChange) {

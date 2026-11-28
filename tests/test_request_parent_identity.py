@@ -58,8 +58,17 @@ class RequestIdentityTests(unittest.TestCase):
         for key in ['motherFullName', 'fatherFullName']:
             for invalid in [None, '  ', '123', 'X' * 151]:
                 self.assertEqual(self.client.post('/requests', json={**payload, key: invalid}).status_code, 400)
-        saved = self.client.post('/requests', json=payload)
+        # Reject letter/number swaps and free-form years at the HTTP boundary.
+        self.assertEqual(self.client.post('/requests', json={**payload, 'personName': 'Ana 123'}).status_code, 400)
+        self.assertEqual(self.client.post('/requests', json={**payload, 'recordDateHint': '2018'}).status_code, 400)
+        self.assertEqual(self.client.post('/requests', json={**payload, 'recordDateHint': '2099-01-01'}).status_code, 400)
+        self.assertEqual(self.client.post('/requests', json={**payload, 'recordDateHint': '2023-02-29'}).status_code, 400)
+        self.assertEqual(self.client.post('/requests', json={
+            **payload, 'identity': {**payload['identity'], 'page': '12A'}
+        }).status_code, 400)
+        saved = self.client.post('/requests', json={**payload, 'recordDateHint': '2000-02-29'})
         self.assertEqual(saved.status_code, 201, saved.json)
+        self.assertEqual(saved.json['request']['recordDateHint'], '2000-02-29')
         self.assertEqual(saved.json['request']['motherFullName'], payload['motherFullName'])
         self.assertNotIn('requesterAddress', saved.json['request'])
         self.uid = 2

@@ -4,6 +4,7 @@ import { useFeedback } from '@/components/ui/FeedbackProvider'
 import RequestDetails from '@/components/RequestDetails'
 
 import identityConfig from '../../../../config/certificate_identity.json'
+import { digitsOnly, isValidPastCalendarDate, isValidPersonName, philippineToday, sanitizePersonName } from '@/lib/fieldInput'
 import { useEffect, useState } from 'react'
 import { REQUEST_ICONS, STATUS_STYLE, inputCls } from '../data/ui'
 
@@ -429,7 +430,8 @@ export default function RequestsPage() {
   const handleChange = (name: 'motherFullName' | 'fatherFullName' | 'personName' | 'purpose' | 'notes' | 'recordDateHint' | 'recordDetails', value: string) => {
     setFormData(prev => ({
       ...prev,
-      [name]: value,
+      [name]: ['personName', 'motherFullName', 'fatherFullName'].includes(name)
+        ? sanitizePersonName(value) : value,
     }))
   }
 
@@ -448,6 +450,19 @@ export default function RequestsPage() {
       const missing = specs.find(field => field.required && !identity[field.key]?.trim())
       if (missing) { setIdentityMessage('Enter ' + missing.label + '.'); return }
       if (!/^\d{6}$/.test(code)) { setIdentityMessage('Enter the six-digit code from your account email.'); return }
+      for (const field of specs) {
+        const input = (identity[field.key] || '').trim()
+        if (!input) continue
+        if (field.kind === 'name' && !isValidPersonName(input)) {
+          setIdentityMessage('Enter a valid name for ' + field.label + '.'); return
+        }
+        if ((field.kind === 'date' || field.kind === 'yearDate') && !isValidPastCalendarDate(input)) {
+          setIdentityMessage('Select a valid past date for ' + field.label + '.'); return
+        }
+        if (['page', 'line'].includes(field.key) && !/^\d+$/.test(input)) {
+          setIdentityMessage('Use numbers only for ' + field.label + '.'); return
+        }
+      }
       if (unredacted && (!proof || proof.size > 3*1024*1024)) {
         setIdentityMessage('Attach a PDF, JPG or PNG up to 3 MB for an unredacted copy.'); return
       }
@@ -455,16 +470,21 @@ export default function RequestsPage() {
     if (needsParentNames) {
       for (const name of [formData.motherFullName, formData.fatherFullName]) {
         const value = name.trim()
-        if (value.length < 2 || !/\p{L}/u.test(value) || !/^[\p{L}\p{M} .'’-]+$/u.test(value)) {
+        if (!isValidPersonName(value)) {
           setIdentityMessage('Enter valid full names for both parents.')
           toast.warning('Enter both parents’ full names of the person on the record using letters, spaces, periods, hyphens or apostrophes.')
           return
         }
       }
     }
-    if (!formData.personName.trim()) {
+    if (!isValidPersonName(formData.personName)) {
       setIdentityMessage('Enter the full name on the record.')
       toast.warning('Please enter the name on record.')
+      return
+    }
+
+    if (formData.recordDateHint && !isValidPastCalendarDate(formData.recordDateHint)) {
+      toast.warning('Choose a valid past date from the calendar.')
       return
     }
 
@@ -774,6 +794,7 @@ if (
                 </label>
                 <input
                   value={formData.personName}
+                  maxLength={150} required autoComplete="off"
                   onChange={e => handleChange('personName', e.target.value)}
                   placeholder={activeType === 'Certificate of Ownership' ? 'Name of registered lot holder' : activeType === 'Land Agreement' ? 'Name of applicant or agreement holder' : 'Name written on church record'}
                   className={inputCls}
@@ -784,14 +805,22 @@ if (
                 {specs.map(field => <label key={field.key}>{field.label} {field.required ? '*' : '(optional)'}
                   {field.options ? <select className={inputCls} value={identity[field.key]||''} onChange={e=>setIdentity({...identity,[field.key]:e.target.value})}>
                     <option value="">Select relationship</option>{field.options.map(v=><option key={v}>{v}</option>)}</select>
-                  : <input required={field.required} maxLength={180} type={field.kind==='date'?'date':'text'} className={inputCls}
-                    placeholder={field.kind==='yearDate'?'YYYY or YYYY-MM-DD':undefined}
-                    value={identity[field.key]||''} onChange={e=>setIdentity({...identity,[field.key]:e.target.value})}/>}
+                  : <input required={field.required} maxLength={180}
+                    type={field.kind==='date' || field.kind==='yearDate' ? 'date' : 'text'}
+                    inputMode={['page', 'line'].includes(field.key) ? 'numeric' : undefined}
+                    max={field.kind==='date' || field.kind==='yearDate' ? philippineToday() : undefined}
+                    className={inputCls} value={identity[field.key]||''}
+                    onChange={e => setIdentity(previous => ({
+                      ...previous, [field.key]:
+                        field.kind === 'name' ? sanitizePersonName(e.target.value)
+                        : ['page', 'line'].includes(field.key) ? digitsOnly(e.target.value, 12)
+                        : e.target.value,
+                    }))}/>}
                 </label>)}
                 <label><input type="checkbox" checked={unredacted} onChange={e=>{setUnredacted(e.target.checked);setProof(null)}}/> Request an unredacted copy</label>
                 {unredacted && <label>Valid ID or authorization document (up to 3 MB)<input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={e=>setProof(e.target.files?.[0]||null)}/></label>}
                 <label>Email verification code<input className={inputCls} inputMode="numeric" autoComplete="one-time-code" maxLength={6}
-                  value={code} onChange={e=>setCode(e.target.value)}/></label>
+                  value={code} onChange={e=>setCode(digitsOnly(e.target.value, 6))}/></label>
                 <button type="button" disabled={sending} onClick={()=>void sendCode()} className="portal-secondary-btn">{sending?'Sending…':'Email me a code'}</button>
                 <p role="status" className="sm:col-span-2">{identityMessage}</p>
               </section>}
@@ -818,7 +847,7 @@ if (
 
               <div>
   {process.env.NEXT_PUBLIC_PARISH_RELATIVE_CLAIMS === 'enabled' && activeType !== 'Land Agreement' && <label className="block mb-3">Approved claim number for a relative
-  <input type="number" min="1" className={inputCls} value={claimId} onChange={e=>setClaimId(e.target.value)}/><a className="underline" href="/claims">Manage relationship claims</a></label>}
+  <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={10} className={inputCls} value={claimId} onChange={e=>setClaimId(digitsOnly(e.target.value, 10))}/><a className="underline" href="/claims">Manage relationship claims</a></label>}
 <label
     htmlFor="request-purpose"
     className="block font-display text-[11px] tracking-wider text-navy-mid mb-1.5"
@@ -848,12 +877,11 @@ if (
 
               <div>
                 <label className="block font-display text-[11px] tracking-wider text-navy-mid mb-1.5">
-                  {activeType === 'Certificate of Ownership' ? 'Agreement Date / Year (if known)' : 'Approximate Record Date / Year'}
+                  {activeType === 'Certificate of Ownership' ? 'Approximate Agreement Date (if known)' : 'Approximate Record Date (if known)'}
                 </label>
                 <input
-                  type="text"
-                  maxLength={100}
-                  placeholder="e.g. 2018 or 2018-06-15 (if known)"
+                  type="date"
+                  max={philippineToday()}
                   value={formData.recordDateHint}
                   onChange={e => handleChange('recordDateHint', e.target.value)}
                   className={inputCls}
@@ -900,7 +928,7 @@ if (
                     {activeType === 'Land Agreement' ? 'Agreement / Lot Reference (if known)' : 'Lot / Reservation Reference'}
                   </label>
                   <input
-                    value={formData.recordDetails}
+                    value={formData.recordDetails} maxLength={500}
                     onChange={e => handleChange('recordDetails', e.target.value)}
                     placeholder="Agreement number, section, block, or lot reference (if known)"
                     className={inputCls}
@@ -913,7 +941,7 @@ if (
                   Notes
                 </label>
                 <textarea
-                  rows={3}
+                  rows={3} maxLength={180}
                   value={formData.notes}
                   onChange={e => handleChange('notes', e.target.value)}
                   placeholder="Additional details for the parish staff"

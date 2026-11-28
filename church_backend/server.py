@@ -2763,13 +2763,13 @@ def api_create_request():
         proof = None
         if sacrament_type in MAIN_ADMIN_TYPES:
             from certificate_identity import validate_identity
-            from request_codes import consume
             try:
                 identity, proof = validate_identity(sacrament_type, data, person_name)
             except ValueError as exc:
                 return {"error": str(exc)}, 400
-            if not consume(user_id, requester_email, str(data.get("verificationCode", ""))):
-                return {"error":"Invalid or expired email code. Check the code or request another."}, 400
+            # A signed-in, email-verified parishioner is already authenticated.
+            # Staff independently verify the archive match before approval/release.
+            # Do not require a second email OTP merely to submit a request.
 
         new_request = CertificateRequest(
 
@@ -2838,7 +2838,7 @@ def api_create_request():
             db.session.flush()
             db.session.add(CertificateIdentity(request_id=new_request.id, fields=identity,
                 proof=proof, proof_type=identity.get("proofType"), verified_email=requester_email))
-            db.session.add(AuditLog(user=requester_email, action=f"Email OTP verified for request #{new_request.id}"))
+            db.session.add(AuditLog(user=requester_email, action=f"Certificate identity details submitted for staff review, request #{new_request.id}"))
         if claim_id:
             db.session.flush()
             db.session.execute(text("INSERT INTO request_claim(request_id,claim_id) VALUES(:r,:c)"),

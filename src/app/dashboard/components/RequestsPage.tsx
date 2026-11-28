@@ -285,24 +285,13 @@ export default function RequestsPage() {
   const isSacrament = SACRAMENTAL_TYPES.has(activeType)
   const needsParentNames = isSacrament && activeType !== 'Marriage'
   const [identity, setIdentity] = useState<Record<string,string>>({})
-  const [code,setCode] = useState('')
   const [unredacted,setUnredacted] = useState(false)
   const [proof,setProof] = useState<File|null>(null)
   const [identityMessage,setIdentityMessage] = useState('')
-  const [sending,setSending] = useState(false)
   const specs: {key:string;label:string;kind:string;required:boolean;options?:string[]}[] =
     identityConfig[toBackendType(activeType) as keyof typeof identityConfig] || []
-  async function sendCode() {
-    setSending(true)
-    try {
-      const res = await fetch('/api/requests/verification',{method:'POST'})
-      const data = await res.json()
-      setIdentityMessage(data.message || data.error || 'Email service unavailable.')
-    } catch { setIdentityMessage('Email service unavailable. Please try again.') }
-    finally { setSending(false) }
-  }
   function clearIdentity() {
-    setIdentity({}); setCode(''); setProof(null); setUnredacted(false); setIdentityMessage('')
+    setIdentity({}); setProof(null); setUnredacted(false); setIdentityMessage('')
   }
   const needsAvailableCemeteryLot = activeType === 'Land Agreement' &&
     formData.purpose === NEW_LAND_AGREEMENT_PURPOSE
@@ -449,7 +438,6 @@ export default function RequestsPage() {
     if (isSacrament) {
       const missing = specs.find(field => field.required && !identity[field.key]?.trim())
       if (missing) { setIdentityMessage('Enter ' + missing.label + '.'); return }
-      if (!/^\d{6}$/.test(code)) { setIdentityMessage('Enter the six-digit code from your account email.'); return }
       for (const field of specs) {
         const input = (identity[field.key] || '').trim()
         if (!input) continue
@@ -526,7 +514,7 @@ if (
         },
         body: JSON.stringify({
           identity: isSacrament ? {...identity,unredacted} : undefined,
-          verificationCode:isSacrament ? code : undefined, proofBase64,
+          proofBase64,
           sacramentType: toBackendType(activeType),
           personName: formData.personName.trim(),
           motherFullName: needsParentNames ? formData.motherFullName.trim() : undefined,
@@ -819,10 +807,10 @@ if (
                 </label>)}
                 <label><input type="checkbox" checked={unredacted} onChange={e=>{setUnredacted(e.target.checked);setProof(null)}}/> Request an unredacted copy</label>
                 {unredacted && <label>Valid ID or authorization document (up to 3 MB)<input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={e=>setProof(e.target.files?.[0]||null)}/></label>}
-                <label>Email verification code<input className={inputCls} inputMode="numeric" autoComplete="one-time-code" maxLength={6}
-                  value={code} onChange={e=>setCode(digitsOnly(e.target.value, 6))}/></label>
-                <button type="button" disabled={sending} onClick={()=>void sendCode()} className="portal-secondary-btn">{sending?'Sending…':'Email me a code'}</button>
-                <p role="status" className="sm:col-span-2">{identityMessage}</p>
+                <p className="sm:col-span-2 text-sm text-slate-600">
+                  No extra email code is needed. Parish staff will verify the matching record before processing your request.
+                </p>
+                {identityMessage && <p role="alert" className="sm:col-span-2 text-sm text-red-700">{identityMessage}</p>}
               </section>}
               {needsParentNames && (
                 <div className="md:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-4">

@@ -35,7 +35,7 @@ const config = JSON.parse(fs.readFileSync('config/certificate_identity.json','ut
 const server = fs.readFileSync('church_backend/server.py','utf8')
 assert.match(form, /type="date"\s+max=\{philippineToday\(\)\}\s+value=\{formData\.recordDateHint\}/)
 assert.match(form, /sanitizePersonName\(value\)/)
-assert.match(form, /setCode\(digitsOnly\(e\.target\.value,\s*6\)\)/)
+assert.doesNotMatch(form, /setCode|Email me a code|Email verification code/, 'Certificate requests use the already-verified account')
 assert.match(form, /setClaimId\(digitsOnly\(e\.target\.value,\s*10\)\)/)
 for (const fields of Object.values(config))
   for (const field of fields)

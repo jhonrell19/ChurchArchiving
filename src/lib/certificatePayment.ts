@@ -12,7 +12,7 @@ export const isTestCertificatePayment = (paymentMethod?: string | null): boolean
 export const isConfirmedCertificatePayment = (
   paymentStatus?: string | null,
   paymentMethod?: string | null,
-): boolean => paymentStatus === 'Paid' && !isTestCertificatePayment(paymentMethod)
+): boolean => paymentStatus === 'Paid' && ['CASH', 'PAYMONGO_LIVE'].includes((paymentMethod || '').toUpperCase())
 
 export const certificatePaymentLabel = (
   paymentStatus?: string | null,

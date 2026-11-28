@@ -65,10 +65,13 @@ class RequestIdentityTests(unittest.TestCase):
         self.uid = 2
         self.assertEqual(self.client.get('/requests?page=1').json['requests'], [])
         self.assertEqual(self.client.post('/requests', json={**payload, 'motherFullName': 'Rosa Sample'}).status_code, 201)
-        for self.role in ['ADMIN', 'STAFF']:
-            data = self.client.get('/requests?q=dela%20cruz&page=1').json
-            self.assertEqual(data['counts'], {'Pending': 1})
-            self.assertEqual(data['requests'][0]['requesterUserId'], 1)
+        self.role = 'STAFF'
+        data = self.client.get('/requests?q=dela%20cruz&page=1').json
+        self.assertEqual(data['counts'], {'Pending': 1})
+        self.assertEqual(data['requests'][0]['requesterUserId'], 1)
+        # Super Admin manages policy and aggregates, not personal request records.
+        self.role = 'ADMIN'
+        self.assertEqual(self.client.get('/requests?q=dela%20cruz&page=1').status_code, 403)
         self.role = 'BURIAL_ADMIN'
         self.assertEqual(self.client.get('/requests?q=Reyes&page=1').json['requests'], [])
         record = db.session.get(CertificateRequest, 1)

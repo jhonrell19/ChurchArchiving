@@ -28,7 +28,7 @@ export async function GET() {
     const smsConfigured = process.env.PARISH_NOTIFICATION_SMS === 'enabled' &&
       process.env.PHONE_OTP_PROVIDER === 'textbee' && Boolean(process.env.TEXTBEE_API_KEY?.trim())
     const emailConfigured = process.env.PARISH_NOTIFICATION_EMAIL === 'enabled' &&
-      Boolean(process.env.RESEND_API_KEY?.trim())
+      Boolean(process.env.RESEND_API_KEY?.trim() && process.env.EMAIL_FROM?.trim())
     return json({ enabled: true, pending, offices, autoSend, smsConfigured, emailConfigured })
   } catch {
     return json({ message: 'Notification outbox is unavailable.' }, 503)

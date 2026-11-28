@@ -31,7 +31,7 @@ class CashReceiptsTest(unittest.TestCase):
             "text": lambda sql: sql,
             "re": __import__("re"),
             "os": os,
-            "g": SimpleNamespace(user_role="ADMIN", user_id="101", user_email="fixture@example.test"),
+            "g": SimpleNamespace(user_role="STAFF", user_id="101", user_email="fixture@example.test"),
             "current_user_id": lambda: 101,
             "staff_can_access_request": lambda _: True,
             "AuditLog": lambda **kw: kw,
@@ -62,6 +62,7 @@ class CashReceiptsTest(unittest.TestCase):
             self.assertEqual(self.handler(42)[1], 200)
             self.assertEqual(self.cert.payment_status, "Paid")
             self.assertEqual(self.rows[0]["amount"], 10000)
+            self.assertEqual(self.rows[0]["role"], "STAFF")
             self.request_data.update(action="reverse", receiptNumber="REV-00000001",
                                      reason="Fictional administrative correction")
             self.assertEqual(self.handler(42)[1], 200)

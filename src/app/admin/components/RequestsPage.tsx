@@ -114,6 +114,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
   const [requests, setRequests] = useState<CertificateRequest[]>([])
   const [filter, setFilter] = useState<ReqStatus>('All')
   const [activeStep, setActiveStep] = useState<{ requestId: number; step: RequestWorkflowStep } | null>(null)
+  const [expandedRequestId, setExpandedRequestId] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<number | null>(null)
   const [searchingId, setSearchingId] = useState<number | null>(null)
@@ -433,6 +434,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
               setPage(1)
               setFilter(event.target.value as ReqStatus)
               setActiveStep(null)
+              setExpandedRequestId(null)
             }}
             className="min-h-11 rounded-lg border border-slate-300 bg-white px-3 py-2 text-base font-semibold text-slate-900 focus-visible:outline-2 focus-visible:outline-blue-600"
           >
@@ -484,9 +486,19 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
                   item.isUrgent ? 'border-orange-200' : 'border-slate-200'
                 }`}
               >
-                <div className="flex items-center justify-between px-5 py-4 gap-4">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+                  onClick={() => {
+                    setExpandedRequestId(current => current === item.id ? null : item.id)
+                    setActiveStep(null)
+                  }}
+                  aria-expanded={expandedRequestId === item.id}
+                  aria-controls={`staff-request-content-${item.id}`}
+                  aria-label={`${expandedRequestId === item.id ? 'Collapse' : 'Expand'} request from ${item.requesterName || 'unknown requester'}, IFI-REQ-${String(item.id).padStart(4, '0')}`}
+                >
+                  <span className="flex items-center gap-3 min-w-0">
+                    <span
                       className={`w-10 h-10 rounded-lg border flex items-center justify-center flex-shrink-0 ${
                         item.isUrgent
                           ? 'bg-orange-50 border-orange-200'
@@ -498,13 +510,13 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
                           item.isUrgent ? 'text-orange-600' : 'text-gold'
                         } text-[17px]`}
                       />
-                    </div>
+                    </span>
 
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-display text-navy-mid text-base font-semibold">
+                    <span className="min-w-0">
+                      <span className="flex items-center gap-2 flex-wrap">
+                        <span className="font-display text-navy-mid text-base font-semibold">
                           {item.requesterName || 'Requester unavailable'}
-                        </p>
+                        </span>
                         <span className="font-display text-xs tracking-wider text-slate-500">
                           IFI-REQ-{item.id.toString().padStart(4, '0')}
                         </span>
@@ -513,19 +525,32 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
                             Urgent
                           </span>
                         )}
-                      </div>
-                      <p className="font-body text-slate-500 text-sm mt-0.5">
+                      </span>
+                      <span className="block font-body text-slate-500 text-sm mt-0.5">
                         {toDisplayType(item.sacramentType)}
                         {item.createdAt ? ` · Submitted ${item.createdAt.slice(0, 10)}` : ''}
-                      </p>
-                    </div>
-                  </div>
+                      </span>
+                    </span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-2 text-sm font-semibold text-slate-700">
+                    <span className="hidden sm:inline">{expandedRequestId === item.id ? 'Hide request' : 'View request'}</span>
+                    <i aria-hidden="true" className={`ti ${expandedRequestId === item.id ? 'ti-chevron-up' : 'ti-chevron-down'} text-xl`} />
+                  </span>
+                </button>
 
-                </div>
-
-                <div className="border-t border-slate-100 px-5 py-5 bg-slate-50/60 space-y-4">
-
-                    {/* Only the four colored milestones are visible until staff opens a step. */}
+                {expandedRequestId === item.id && (
+                <div id={`staff-request-content-${item.id}`} className="border-t border-slate-100 px-5 py-5 bg-slate-50/60 space-y-4">
+                  {/* Opening the requester row reveals both information tables and the four workflow buttons together. */}
+                  <section
+                    id={`staff-request-details-${item.id}`}
+                    aria-label="Account information and Requested information"
+                    className={`rounded-xl border bg-white p-4 sm:p-5 ${activeStep?.requestId === item.id && activeStep.step === 'submitted'
+                      ? 'border-blue-400 ring-2 ring-blue-200'
+                      : 'border-slate-200'}`}
+                  >
+                    <RequestDetails office={!readOnly} request={item} documentType={toDisplayType(item.sacramentType)} />
+                  </section>
+                  {/* Workflow actions stay collapsed until their colored tile is selected. */}
                     <RequestTracking
                       request={item}
                       selectedStep={activeStep?.requestId === item.id ? activeStep.step : null}
@@ -536,20 +561,12 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
                         )
                       }}
                     />
-                    {activeStep?.requestId === item.id && (
+                    {activeStep?.requestId === item.id && activeStep.step !== 'submitted' && (
                       <section
                         id={`staff-workflow-panel-${item.id}`}
                         aria-label={`Open workflow step: ${activeStep.step}`}
                         className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm"
                       >
-                        {activeStep.step === 'submitted' && (
-                          <div className="space-y-3">
-                            <h3 className="text-lg font-semibold text-slate-900">Step 1 — Account and requested information</h3>
-                            <p className="text-sm text-slate-600">Review both information tables below: the signed-in requester's account details and the information for the person or document being requested.</p>
-                            <RequestDetails office={!readOnly} request={item} documentType={toDisplayType(item.sacramentType)} />
-                          </div>
-                        )}
-
                         {activeStep.step === 'verify' && (
                           <div className="space-y-4">
                             <h3 className="text-lg font-semibold text-slate-900">Step 2 — Staff verification</h3>
@@ -834,6 +851,7 @@ export default function RequestsPage({ urgentOnly = false, office = 'main', read
                       </section>
                     )}
                 </div>
+                )}
               </div>
             )
           })

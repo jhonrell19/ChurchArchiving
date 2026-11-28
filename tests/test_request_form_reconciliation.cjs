@@ -29,12 +29,18 @@ assert.match(userPage, /motherFullName: needsParentNames \?/)
 assert.match(userPage, /fatherFullName: needsParentNames \?/)
 assert.match(userPage, /if \(needsParentNames\) \{/)
 
-const requesterRows = details.slice(
-  details.indexOf('title="Requester information"'),
-  details.indexOf('title="Request information"'),
-)
+const accountHeading = 'title={office ? "Account information" : "Requester information"}'
+const requestedHeading = 'title={office ? "Requested information" : "Request information"}'
+const accountStart = details.indexOf(accountHeading)
+const requestedStart = details.indexOf(requestedHeading)
+assert.ok(accountStart >= 0 && requestedStart > accountStart,
+  'Staff must retain separate Account information and Requested information tables')
+const requesterRows = details.slice(accountStart, requestedStart)
+assert.match(requesterRows, /r\.requesterName/)
+assert.match(requesterRows, /r\.requesterEmail/)
+assert.match(requesterRows, /r\.contactNumber/)
 assert.doesNotMatch(requesterRows, /motherFullName|fatherFullName/)
-const requestRows = details.slice(details.indexOf('title="Request information"'))
+const requestRows = details.slice(requestedStart)
 assert.match(requestRows, /isSacramental/)
 assert.match(requestRows, /r\.motherFullName/)
 assert.match(requestRows, /r\.fatherFullName/)

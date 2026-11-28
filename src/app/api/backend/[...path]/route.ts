@@ -36,7 +36,13 @@ function isAllowed(role: Role, method: string, path: string) {
   }
 
   if (path.startsWith('files/') || path.startsWith('download/')) {
-    return true
+    const filePath = path.replace(/^(files|download)\//, '')
+    const homilyMedia = filePath.startsWith('uploads/masses/') ||
+      filePath.startsWith('uploads/transcriptions/')
+    // Flask also validates each file path against its owning record.
+    if (role === 'ADMIN') return m === 'GET' && homilyMedia
+    if (role === 'STAFF' || role === 'BURIAL_ADMIN') return m === 'GET' && !homilyMedia
+    return m === 'GET'
   }
 
   if (/^api\/requests\/\d+\/identity-proof$/.test(path)) return m === 'GET' && ['STAFF','BURIAL_ADMIN'].includes(role)
@@ -80,7 +86,7 @@ function isAllowed(role: Role, method: string, path: string) {
 
   if (path === 'api/requests') {
     if (m === 'POST') return role === 'USER'
-    if (m === 'GET') return ['USER', 'ADMIN', 'STAFF', 'BURIAL_ADMIN'].includes(role)
+    if (m === 'GET') return ['USER', 'STAFF', 'BURIAL_ADMIN'].includes(role)
     return false
   }
 
@@ -89,7 +95,7 @@ function isAllowed(role: Role, method: string, path: string) {
   }
 
   if (/^api\/requests\/\d+$/.test(path)) {
-    return m === 'GET' && ['USER', 'ADMIN', 'STAFF', 'BURIAL_ADMIN'].includes(role)
+    return m === 'GET' && ['USER', 'STAFF', 'BURIAL_ADMIN'].includes(role)
   }
 
 if (
@@ -111,7 +117,7 @@ if (
   }
 
   if (/^api\/requests\/\d+\/download$/.test(path)) {
-    return m === 'GET' && ['USER', 'ADMIN', 'STAFF', 'BURIAL_ADMIN'].includes(role)
+    return m === 'GET' && ['USER', 'STAFF', 'BURIAL_ADMIN'].includes(role)
   }
 
   if (path === 'api/office/audit-logs') return m === 'GET' && role === 'ADMIN'
@@ -122,7 +128,7 @@ if (
   }
 
   if (path === 'api/masses') {
-    if (m === 'GET') return ['USER', 'ADMIN', 'STAFF', 'BURIAL_ADMIN'].includes(role)
+    if (m === 'GET') return role === 'USER' || role === 'ADMIN'
     return role === 'ADMIN'
   }
 
